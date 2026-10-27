@@ -1,0 +1,52 @@
+[
+  {
+    "test": "idle egress is zero bytes",
+    "pass": true,
+    "detail": "0 bytes / 0 rows in 3s idle"
+  },
+  {
+    "test": "every uploaded byte has a retention",
+    "pass": true,
+    "detail": "1 rows, 0 without retention"
+  },
+  {
+    "test": "a private zone exists in the config",
+    "pass": true,
+    "detail": "private zones: ['bathroom_interior']"
+  },
+  {
+    "test": "every private zone is excluded from motion",
+    "pass": true,
+    "detail": "1 private zone(s), 0 uncovered"
+  },
+  {
+    "test": "no face-recognition dependency",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "test": "delete-all removes media",
+    "pass": true,
+    "detail": "1 dirs, 0 files, 2048 bytes"
+  },
+  {
+    "test": "delete-all empties the tables",
+    "pass": true,
+    "detail": "rows touched: 2"
+  },
+  {
+    "test": "delete-all leaves one audit row, not zero",
+    "pass": true,
+    "detail": "ledger rows 1 -> 1"
+  },
+  {
+    "test": "pause is recorded with who and why",
+    "pass": true,
+    "detail": "by=Margaret reason=privacy test"
+  },
+  {
+    "test": "resume clears the pause",
+    "pass": true,
+    "detail": ""
+  }
+]

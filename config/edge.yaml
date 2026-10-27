@@ -1,0 +1,97 @@
+# Aegis edge configuration. Everything the on-device process needs.
+# Hot-reloadable: the runner re-reads this file when mtime changes.
+
+camera:
+  source: "file:data/reels/day.mp4"   # usb:0 | http://phone:8080/video | rtsp://... | file:...
+  width: 640
+  height: 480
+  fps: 15
+  realtime: true                       # replay at wall-clock speed, not as fast as possible
+  loop: true
+
+household:
+  id: "hh_demo"
+  timezone: "Africa/Cairo"
+  resident_name: "Margaret"
+
+motion:
+  downscale: [160, 120]
+  min_changed_ratio: 0.008
+  persistence_frames: 2
+  cooldown_s: 2.0
+  ignore_zones: ["tv", "window", "private"]
+
+person:
+  model: "yolov8n.pt"        # downloaded on first use; falls back to HOG if unavailable
+  # 640, not 320. Measured on real fixed-camera footage (evals/perception.md):
+  # a ceiling fisheye makes a person ~70px tall, and at 320 the detector found a
+  # person in 64.3% of frames versus 82.7% at 960 and 70.8% at 640. 320 was
+  # missing a third of the moments that matter. 640 is the knee of the curve:
+  # 162ms/frame, still far above the 8fps budget the motion gate needs.
+  imgsz: 640
+  conf_day: 0.45
+  conf_night: 0.35
+  # 0.012 of a 640x480 frame is ~37x37px. A person at the far end of a corridor
+  # is smaller than that, so the floor is lowered; the person check, not the
+  # area filter, is what rejects a laundry basket.
+  min_area_ratio: 0.004
+  max_fps: 8
+  tracker: "bytetrack.yaml"
+
+fall:
+  enabled: true
+  suspect_score: 0.60
+  confirm_score: 0.80
+  no_recovery_s: 8
+
+clip:
+  pre_s: 6
+  post_s: 4
+  fps: 10
+  crf: 26
+  max_mb: 8
+
+# Zones are normalized (0..1) so resolution changes never break them.
+# Draw these on the first frame of whatever reel you are replaying.
+zones:
+  - name: front_door
+    type: tripwire
+    points: [[0.52, 0.18], [0.94, 0.22], [0.94, 0.98], [0.52, 0.95]]
+    schedule: "22:00-06:00"
+    risk: high
+  - name: hallway
+    type: dwell
+    points: [[0.18, 0.20], [0.52, 0.18], [0.52, 0.96], [0.18, 0.98]]
+    risk: high
+  - name: kitchen
+    type: hazard
+    points: [[0.02, 0.30], [0.18, 0.28], [0.18, 0.98], [0.02, 0.98]]
+    risk: medium
+  - name: sofa
+    type: dwell
+    points: [[0.02, 0.02], [0.26, 0.02], [0.26, 0.26], [0.02, 0.26]]
+    rest: true
+    risk: low
+  - name: prayer_mat
+    type: dwell
+    points: [[0.30, 0.70], [0.48, 0.70], [0.48, 0.96], [0.30, 0.96]]
+    risk: low
+  - name: bathroom_interior
+    type: exclusion
+    points: [[0.72, 0.02], [0.99, 0.02], [0.99, 0.16], [0.72, 0.16]]
+    private: true
+
+door:
+  zone: front_door
+  dwell_s: 3.0
+  region_diff_ratio: 0.12
+  left_open_s: 120
+
+upload:
+  backend_url: "http://127.0.0.1:8000"
+  queue_dir: "data/queue"
+  retry_max_s: 60
+  timeout_s: 20
+
+heartbeat_s: 10
+log_level: "INFO"
