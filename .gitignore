@@ -1,0 +1,36 @@
+# secrets — never commit
+.env
+.env.*
+!.env.example
+
+# database
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+
+# captured media + licensed footage (not redistributable)
+data/footage/
+data/media/
+data/queue/
+data/reels/
+*.mp4
+*.mov
+*.jpg
+*.jpeg
+*.png
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# node
+node_modules/
+.next/
+out/
+
+# os / editor
+.DS_Store
+Thumbs.db
