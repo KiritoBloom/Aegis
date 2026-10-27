@@ -1,0 +1,62 @@
+[
+  {
+    "id": "contradiction_floor",
+    "said": "I'm fine, I dropped the remote.",
+    "transcript": "I'm fine. I dropped the remote.",
+    "class": "affirmative",
+    "expect": "contradiction",
+    "got": "contradiction",
+    "expect_delta": 0,
+    "delta": 0,
+    "why": "Says she is fine from the floor. The camera disagrees. Must not resolve.",
+    "ok": true
+  },
+  {
+    "id": "contradiction_still",
+    "said": "I am okay, really.",
+    "transcript": "I am okay. Really.",
+    "class": "affirmative",
+    "expect": "contradiction",
+    "got": "contradiction",
+    "expect_delta": 0,
+    "delta": 0,
+    "why": "Motionless for 22s while claiming to be fine is the same contradiction.",
+    "ok": true
+  },
+  {
+    "id": "negated_affirmative",
+    "said": "I'm not okay, I can't get up.",
+    "transcript": "I'm not okay, I can't get up.",
+    "class": "help",
+    "expect": "escalated",
+    "got": "escalated",
+    "expect_delta": 1,
+    "delta": 1,
+    "why": "Contains the word 'okay'. Negation must be read first.",
+    "ok": true
+  },
+  {
+    "id": "help_explicit",
+    "said": "Please help me, I need help.",
+    "transcript": "Please help me, me, I need help.",
+    "class": "help",
+    "expect": "escalated",
+    "got": "escalated",
+    "expect_delta": 1,
+    "delta": 1,
+    "why": "The highest-value word in the system escalates even if she looks calm.",
+    "ok": true
+  },
+  {
+    "id": "self_recovered",
+    "said": "I'm fine, I just tripped. I'm up now.",
+    "transcript": "I'm fine. I just tripped. I'm I'm up now.",
+    "class": "affirmative",
+    "expect": "self_recovered",
+    "got": "self_recovered",
+    "expect_delta": -1,
+    "delta": -1,
+    "why": "The only path down: she says fine AND she is on her feet and moving.",
+    "ok": true
+  }
+]

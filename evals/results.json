@@ -10,73 +10,17 @@
         "fails": [],
         "severity": "urgent",
         "floor": "urgent",
-        "title": "Front door open at 3:12 AM - Margaret may be outside",
-        "body": "Front door opened at 3:12 AM. Margaret crossed the doorway and stayed 14 seconds. She lives alone and may be outside. Please call her right now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "dementia",
-          "wanders",
-          "crossed_door_line",
-          "lives_alone",
-          "03:12"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip",
-          "call_neighbor"
-        ],
-        "violations": [],
-        "latency_ms": 4117,
-        "tokens_in": 1220,
-        "tokens_out": 1262,
-        "cost_usd": 0.006889
-      },
-      {
-        "id": "01_night_door_dementia",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door open at 3:12 AM - Margaret may be outside",
-        "body": "Front door opened at 3:12 AM. Margaret crossed the doorway and may be outside. Please call her now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "03:12",
-          "dementia",
-          "wanders",
-          "crossed_door_line",
-          "lives_alone"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip",
-          "call_neighbor"
-        ],
-        "violations": [],
-        "latency_ms": 3816,
-        "tokens_in": 1220,
-        "tokens_out": 986,
-        "cost_usd": 0.005716
-      },
-      {
-        "id": "01_night_door_dementia",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
         "title": "Front door open at 3:12 AM. Margaret may be outside",
-        "body": "Front door opened at 3:12 AM. Margaret crossed the doorway and may be outside. It is night and she is alone. Please call her now.",
+        "body": "Front door opened at 3:12 AM. Margaret may have stepped outside. She wanders and lives alone. Please call her now, then check the clip.",
         "evidence": [
           "front_door",
           "open",
           "03:12",
-          "crossed_door_line",
           "dementia",
           "wanders",
           "lives_alone",
-          "person_count"
+          "crossed_door_line",
+          "night_hours"
         ],
         "actions": [
           "call_resident",
@@ -84,10 +28,10 @@
           "call_neighbor"
         ],
         "violations": [],
-        "latency_ms": 3756,
+        "latency_ms": 3704,
         "tokens_in": 1220,
-        "tokens_out": 950,
-        "cost_usd": 0.005563
+        "tokens_out": 987,
+        "cost_usd": 0.00572
       }
     ],
     "pass_rate": 1.0
@@ -103,16 +47,15 @@
         "fails": [],
         "severity": "urgent",
         "floor": "urgent",
-        "title": "Front door open at 2:12 AM",
-        "body": "Front door opened at 2:12 AM. Margaret was by the door for 2 seconds. She lives alone. Please call her now to make sure she is back inside.",
+        "title": "Front door opened at 2:12 AM",
+        "body": "Front door opened at 2:12 AM. Margaret was by the door for 2 seconds. She lives alone. Please call now to make sure she is inside and safe.",
         "evidence": [
           "front_door",
           "open",
           "02:12",
-          "dwell_in_door_zone_s",
+          "lives_alone",
           "crossed_door_line",
-          "person_count",
-          "lives_alone"
+          "person_count"
         ],
         "actions": [
           "call_resident",
@@ -120,65 +63,10 @@
           "call_neighbor"
         ],
         "violations": [],
-        "latency_ms": 5263,
+        "latency_ms": 4795,
         "tokens_in": 1219,
-        "tokens_out": 1333,
-        "cost_usd": 0.007189
-      },
-      {
-        "id": "02_night_door_no_flag",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door opened at 2:12 AM",
-        "body": "Front door opened at 2:12 AM. Margaret was at the front door for 2 seconds. She lives alone. Please view the clip and call her now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "02:12",
-          "door_open",
-          "night_hours",
-          "lives_alone",
-          "crossed_door_line"
-        ],
-        "actions": [
-          "view_clip",
-          "call_resident",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 4996,
-        "tokens_in": 1219,
-        "tokens_out": 1395,
-        "cost_usd": 0.007452
-      },
-      {
-        "id": "02_night_door_no_flag",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door opened at 2:12 AM",
-        "body": "Front door opened at 2:12 AM. Margaret was at the door for 2 seconds and did not go out. Please call her now to check she is safe.",
-        "evidence": [
-          "front_door",
-          "open",
-          "2026-11-02T02:12:00+02:00",
-          "crossed_door_line",
-          "dwell_in_door_zone_s",
-          "person_count",
-          "lives_alone"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 4966,
-        "tokens_in": 1219,
-        "tokens_out": 1220,
-        "cost_usd": 0.006709
+        "tokens_out": 1388,
+        "cost_usd": 0.007423
       }
     ],
     "pass_rate": 1.0
@@ -194,8 +82,8 @@
         "fails": [],
         "severity": "watch",
         "floor": "watch",
-        "title": "Front door open at 2:12 PM",
-        "body": "Front door opened at 2:12 PM. Margaret was at the door for 2 seconds. She stayed inside. Check in if you want to be sure.",
+        "title": "Front door opened at 2:12 PM",
+        "body": "Front door opened at 2:12 PM. Margaret was at the door for 2 seconds and stayed inside. She lives alone. Call or check in when you can.",
         "evidence": [
           "front_door",
           "open",
@@ -207,72 +95,15 @@
           "cognitive_condition"
         ],
         "actions": [
+          "call_resident",
           "view_clip",
-          "im_checking",
           "snooze_30m"
         ],
         "violations": [],
-        "latency_ms": 3510,
+        "latency_ms": 4755,
         "tokens_in": 1207,
-        "tokens_out": 1182,
-        "cost_usd": 0.006532
-      },
-      {
-        "id": "03_daytime_door_no_flag",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "watch",
-        "title": "Front door open at 2:12 PM",
-        "body": "Front door opened at 2:12 PM. Margaret was at the door for 2 seconds and did not go out. She is inside. View the clip if you want to check.",
-        "evidence": [
-          "front_door",
-          "open",
-          "14:12",
-          "crossed_door_line",
-          "false",
-          "person_count",
-          "lives_alone",
-          "2.0"
-        ],
-        "actions": [
-          "view_clip",
-          "im_checking",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 3399,
-        "tokens_in": 1207,
-        "tokens_out": 1091,
-        "cost_usd": 0.006145
-      },
-      {
-        "id": "03_daytime_door_no_flag",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "watch",
-        "title": "Front door opened at 2:12 PM",
-        "body": "Front door opened at 2:12 PM. Margaret was by the door for 2 seconds. She did not go out. Check the clip if you want to see more.",
-        "evidence": [
-          "front_door",
-          "open",
-          "14:12:00",
-          "Margaret",
-          "false",
-          "person_count",
-          "lives_alone"
-        ],
-        "actions": [
-          "view_clip",
-          "im_checking",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 4107,
-        "tokens_in": 1207,
-        "tokens_out": 1379,
-        "cost_usd": 0.007369
+        "tokens_out": 1147,
+        "cost_usd": 0.006384
       }
     ],
     "pass_rate": 1.0
@@ -288,70 +119,17 @@
         "fails": [],
         "severity": "emergency",
         "floor": "emergency",
-        "title": "Fell in hallway at 8:12 PM. Has not gotten up.",
-        "body": "Margaret may have fallen in the hallway at 8:12 PM. She has not gotten up for 12 seconds. Please check now and get help.",
-        "evidence": [
-          "fall_confirmed",
-          "hallway",
-          "no_recovery_s",
-          "lives_alone",
-          "dementia"
-        ],
-        "actions": [
-          "send_help",
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 2439,
-        "tokens_in": 1212,
-        "tokens_out": 659,
-        "cost_usd": 0.004316
-      },
-      {
-        "id": "04_fall_no_recovery",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "emergency",
-        "title": "Fall in hallway. Margaret has not gotten up.",
-        "body": "Fall in the hallway at 8:12 PM. Margaret has not gotten up for 12 seconds. She is alone. Get help to her now.",
-        "evidence": [
-          "fall_confirmed",
-          "hallway",
-          "no_recovery_s",
-          "person_count",
-          "lives_alone",
-          "dementia"
-        ],
-        "actions": [
-          "send_help",
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 3282,
-        "tokens_in": 1212,
-        "tokens_out": 1010,
-        "cost_usd": 0.005808
-      },
-      {
-        "id": "04_fall_no_recovery",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "emergency",
-        "title": "Fall in hallway at 8:12 PM - help needed",
-        "body": "Margaret fell in the hallway at 8:12 PM. She has not stood up for 12 seconds. She is alone. Please get help to her now.",
+        "title": "Fall in hallway - help needed now",
+        "body": "Margaret may have fallen in the hallway at 8:12 PM. She has not gotten up for 12 seconds. Please get help to her right now.",
         "evidence": [
           "fall_confirmed",
           "hallway",
           "no_recovery_s",
           "12",
-          "Margaret",
           "person_count",
+          "dementia",
           "lives_alone",
-          "dementia"
+          "20:12"
         ],
         "actions": [
           "send_help",
@@ -359,10 +137,10 @@
           "view_clip"
         ],
         "violations": [],
-        "latency_ms": 5058,
+        "latency_ms": 4247,
         "tokens_in": 1212,
-        "tokens_out": 1326,
-        "cost_usd": 0.00715
+        "tokens_out": 762,
+        "cost_usd": 0.004753
       }
     ],
     "pass_rate": 1.0
@@ -378,77 +156,26 @@
         "fails": [],
         "severity": "watch",
         "floor": "info",
-        "title": "Possible fall in hallway - she got back up",
-        "body": "Margaret may have fallen in the hallway at 6:12 PM. She got back up after 4 seconds. Please call her to check in.",
-        "evidence": [
-          "fall_suspected",
-          "hallway",
-          "recovered",
-          "18:12:00",
-          "Margaret",
-          "person_count"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 4454,
-        "tokens_in": 1215,
-        "tokens_out": 1109,
-        "cost_usd": 0.006232
-      },
-      {
-        "id": "05_fall_recovered",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "info",
-        "title": "Possible fall in hallway - she got back up",
-        "body": "Margaret may have fallen in the hallway at 6:12 PM. She got back up after 4 seconds. A quick check-in call is the best next step.",
+        "title": "Possible fall in hallway, she got up",
+        "body": "Possible fall in the hallway at 6:12 PM. Margaret got back up after 4 seconds. Please call her to check how she feels.",
         "evidence": [
           "fall_suspected",
           "hallway",
           "recovered",
           "no_recovery_s",
-          "18:12"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 3874,
-        "tokens_in": 1215,
-        "tokens_out": 895,
-        "cost_usd": 0.005322
-      },
-      {
-        "id": "05_fall_recovered",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "info",
-        "title": "Possible fall in hallway - she got up",
-        "body": "Possible fall in the hallway at 6:12 PM. Margaret got back up after 4 seconds. Please call to check how she feels.",
-        "evidence": [
-          "fall_suspected",
-          "hallway",
-          "recovered",
-          "no_recovery_s",
+          "18:12",
           "person_count",
-          "18:12"
+          "lives_alone"
         ],
         "actions": [
           "call_resident",
           "view_clip"
         ],
         "violations": [],
-        "latency_ms": 2938,
+        "latency_ms": 4479,
         "tokens_in": 1215,
-        "tokens_out": 818,
-        "cost_usd": 0.004995
+        "tokens_out": 1148,
+        "cost_usd": 0.006398
       }
     ],
     "pass_rate": 1.0
@@ -464,41 +191,13 @@
         "fails": [],
         "severity": "urgent",
         "floor": "urgent",
-        "title": "Fall in hallway. Someone is with her.",
-        "body": "Fall in the hallway at 7:12 PM. She has not gotten up for 12 seconds. Someone is with her. Call to check what help is needed.",
+        "title": "Fall in hallway - someone is with her",
+        "body": "Fall in the hallway at 7:12 PM. She has not gotten up for 12 seconds. Someone is with her. Please call now to check she is okay.",
         "evidence": [
           "fall_confirmed",
           "hallway",
           "no_recovery_s",
           "helper_present",
-          "person_count",
-          "live",
-          "Margaret"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 3936,
-        "tokens_in": 1217,
-        "tokens_out": 1169,
-        "cost_usd": 0.006489
-      },
-      {
-        "id": "06_fall_second_person",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Fall in hallway at 7:12 PM",
-        "body": "Margaret fell in the hallway at 7:12 PM. She has not gotten up for 12 seconds. Someone is with her now. Please call to check what help she needs.",
-        "evidence": [
-          "fall_confirmed",
-          "hallway",
-          "helper_present",
-          "no_recovery_s",
           "person_count",
           "19:12"
         ],
@@ -508,36 +207,10 @@
           "im_checking"
         ],
         "violations": [],
-        "latency_ms": 4160,
+        "latency_ms": 3218,
         "tokens_in": 1217,
-        "tokens_out": 983,
-        "cost_usd": 0.005699
-      },
-      {
-        "id": "06_fall_second_person",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Fall in hallway at 7:12 PM. Someone is with her",
-        "body": "Margaret fell in the hallway at 7:12 PM. She has not gotten up for 12 seconds. Another person is with her. Call now to check what help is needed.",
-        "evidence": [
-          "fall_confirmed",
-          "hallway",
-          "no_recovery_s",
-          "helper_present",
-          "person_count"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 3672,
-        "tokens_in": 1217,
-        "tokens_out": 821,
-        "cost_usd": 0.005011
+        "tokens_out": 1069,
+        "cost_usd": 0.006064
       }
     ],
     "pass_rate": 1.0
@@ -553,64 +226,14 @@
         "fails": [],
         "severity": "watch",
         "floor": "info",
-        "title": "Morning prayer movement in prayer room",
-        "body": "Possible fall flagged at 5:12 AM in the prayer room. Pattern looks like her daily prayer routine with movement. No need to rush. Check when you can.",
+        "title": "Daily prayer routine in prayer room",
+        "body": "Margaret was in the prayer room at 5:12 AM. The movement matches her daily prayer routine. No need to act now.",
         "evidence": [
           "prayer_room",
           "recurring_daily",
           "posture_transitions",
-          "fall_suspected"
-        ],
-        "actions": [
-          "view_clip",
-          "im_checking",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 4431,
-        "tokens_in": 1224,
-        "tokens_out": 1010,
-        "cost_usd": 0.005823
-      },
-      {
-        "id": "07_prayer_zone_sujud",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "info",
-        "title": "Daily prayer in prayer room at 5:12 AM",
-        "body": "Margaret was in the prayer room at 5:12 AM. This matches her daily prayer routine with repeated movement. She is not in danger. No action needed unless you want to check.",
-        "evidence": [
-          "prayer_room",
-          "recurring_daily",
-          "posture_transitions",
-          "05:12",
           "fall_suspected",
-          "Margaret"
-        ],
-        "actions": [
-          "view_clip",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 4091,
-        "tokens_in": 1224,
-        "tokens_out": 1407,
-        "cost_usd": 0.00751
-      },
-      {
-        "id": "07_prayer_zone_sujud",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "info",
-        "title": "Morning movement in prayer room at 5:12 AM",
-        "body": "Margaret was moving in the prayer room at 5:12 AM. This looks like her daily prayer. She kept moving. No need to act now.",
-        "evidence": [
-          "prayer_room",
-          "05:12:00",
-          "recurring_daily",
-          "posture_transitions",
+          "05:12",
           "person_count"
         ],
         "actions": [
@@ -618,10 +241,10 @@
           "snooze_30m"
         ],
         "violations": [],
-        "latency_ms": 4140,
+        "latency_ms": 3518,
         "tokens_in": 1224,
-        "tokens_out": 1196,
-        "cost_usd": 0.006613
+        "tokens_out": 1019,
+        "cost_usd": 0.005861
       }
     ],
     "pass_rate": 1.0
@@ -637,86 +260,26 @@
         "fails": [],
         "severity": "urgent",
         "floor": "urgent",
-        "title": "Stove on with no one in kitchen",
-        "body": "Stove has been on for 6 minutes in the kitchen since 6:12 PM with no one nearby. Pot is still on it. Please call Margaret now.",
+        "title": "Stove on alone in kitchen",
+        "body": "The kitchen stove has been on for 6 minutes with no one with it. A pot is on the burner. Please check now and turn it off if safe.",
         "evidence": [
-          "stove_power_w",
-          "1240",
-          "absent_s",
-          "360",
-          "pot_present",
-          "kitchen",
-          "person_count",
-          "0"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip",
-          "call_neighbor"
-        ],
-        "violations": [],
-        "latency_ms": 3548,
-        "tokens_in": 1223,
-        "tokens_out": 970,
-        "cost_usd": 0.005651
-      },
-      {
-        "id": "08_stove_6min",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Stove left on in kitchen with no one there",
-        "body": "The stove has been on for 6 minutes in the kitchen since 6:12 PM. No one is with it and a pot is on it. Please check now and turn it off if you can.",
-        "evidence": [
-          "stove_unattended",
           "kitchen",
           "stove_power_w",
           "absent_s",
-          "360",
           "pot_present",
           "person_count",
-          "0"
-        ],
-        "actions": [
-          "view_clip",
-          "call_resident",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 4135,
-        "tokens_in": 1223,
-        "tokens_out": 1182,
-        "cost_usd": 0.006552
-      },
-      {
-        "id": "08_stove_6min",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Stove left on in kitchen",
-        "body": "Stove has been on since 6:12 PM in the kitchen. No one is with it for 6 minutes. Pot is still on it. Please check now and turn it off if safe.",
-        "evidence": [
-          "stove_unattended",
-          "kitchen",
-          "absent_s",
-          "360",
-          "stove_power_w",
-          "1240",
-          "pot_present",
-          "person_count"
+          "unattended_heat"
         ],
         "actions": [
           "call_resident",
           "view_clip",
-          "call_neighbor"
+          "send_help"
         ],
         "violations": [],
-        "latency_ms": 3153,
+        "latency_ms": 3166,
         "tokens_in": 1223,
-        "tokens_out": 936,
-        "cost_usd": 0.005507
+        "tokens_out": 907,
+        "cost_usd": 0.005384
       }
     ],
     "pass_rate": 1.0
@@ -732,45 +295,17 @@
         "fails": [],
         "severity": "emergency",
         "floor": "emergency",
-        "title": "Smoke in kitchen. Stove left on.",
-        "body": "The kitchen stove has been on for 12 minutes with no one with it. Smoke was seen at 6:12 PM. Get help to the home now.",
+        "title": "Smoke in kitchen. Stove on with no one there.",
+        "body": "Stove on in kitchen since 6:12 PM. Smoke seen. No one with it for 12 minutes. Get help there now.",
         "evidence": [
+          "stove_unattended",
           "kitchen",
-          "stove_power_w",
-          "absent_s",
           "smoke_visible",
+          "absent_s",
+          "stove_power_w",
           "person_count",
-          "1800",
-          "720"
-        ],
-        "actions": [
-          "send_help",
-          "call_neighbor",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 3820,
-        "tokens_in": 1229,
-        "tokens_out": 798,
-        "cost_usd": 0.004928
-      },
-      {
-        "id": "09_stove_12min_smoke",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "emergency",
-        "title": "Smoke in kitchen, stove left on",
-        "body": "Stove on for 12 minutes with no one in the kitchen at 6:12 PM. Smoke was seen. Get help there now.",
-        "evidence": [
-          "stove_unattended",
-          "kitchen",
-          "stove_power_w",
-          "1800",
-          "absent_s",
           "720",
-          "smoke_visible",
-          "person_count"
+          "18:12"
         ],
         "actions": [
           "send_help",
@@ -778,39 +313,10 @@
           "view_clip"
         ],
         "violations": [],
-        "latency_ms": 3228,
+        "latency_ms": 3122,
         "tokens_in": 1229,
-        "tokens_out": 999,
-        "cost_usd": 0.005782
-      },
-      {
-        "id": "09_stove_12min_smoke",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "emergency",
-        "title": "Stove left on with smoke in kitchen",
-        "body": "Stove has been on in the kitchen since 6:12 PM. No one there for 12 minutes. Smoke seen. Go now or send help right away.",
-        "evidence": [
-          "stove_unattended",
-          "kitchen",
-          "stove_power_w",
-          "1800",
-          "absent_s",
-          "720",
-          "smoke_visible",
-          "person_count"
-        ],
-        "actions": [
-          "send_help",
-          "call_neighbor",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 4020,
-        "tokens_in": 1229,
-        "tokens_out": 956,
-        "cost_usd": 0.005599
+        "tokens_out": 990,
+        "cost_usd": 0.005744
       }
     ],
     "pass_rate": 1.0
@@ -826,80 +332,24 @@
         "fails": [],
         "severity": "watch",
         "floor": "watch",
-        "title": "Hallway view unavailable for 15 minutes",
-        "body": "Hallway view has been unavailable since 10:12 PM. We cannot see Margaret right now. Please check when you can.",
+        "title": "Hallway check paused at 10:12 PM",
+        "body": "We cannot see the hallway since 10:12 PM. No check for 15 minutes. Margaret is home alone. Please call her to check in.",
         "evidence": [
           "camera_offline",
           "hallway",
           "offline_min",
-          "track_unavailable",
-          "Margaret",
-          "dementia",
-          "wanders",
-          "lives_alone"
+          "track_unavailable"
         ],
         "actions": [
-          "view_clip",
-          "im_checking",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 4760,
-        "tokens_in": 1091,
-        "tokens_out": 1363,
-        "cost_usd": 0.007157
-      },
-      {
-        "id": "10_camera_offline",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "watch",
-        "title": "Hallway view paused since 10:12 PM",
-        "body": "We cannot see the hallway since 10:12 PM. The view has been paused for 15 minutes. No action needed now. We will let you know when it returns.",
-        "evidence": [
-          "camera_offline",
-          "hallway",
-          "22:12:00",
-          "offline_min",
-          "15",
-          "track_unavailable",
-          "frames_present"
-        ],
-        "actions": [
+          "call_resident",
           "snooze_30m",
           "im_checking"
         ],
         "violations": [],
-        "latency_ms": 3985,
+        "latency_ms": 4197,
         "tokens_in": 1091,
-        "tokens_out": 1183,
-        "cost_usd": 0.006392
-      },
-      {
-        "id": "10_camera_offline",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "watch",
-        "title": "Hallway view offline since 10:12 PM",
-        "body": "The hallway picture has been off for 15 minutes since 10:12 PM. We cannot see that area right now. Please call Margaret if you want to check in.",
-        "evidence": [
-          "hallway",
-          "camera_offline",
-          "offline_min",
-          "track_unavailable",
-          "frames_present"
-        ],
-        "actions": [
-          "call_resident",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 4112,
-        "tokens_in": 1091,
-        "tokens_out": 1129,
-        "cost_usd": 0.006162
+        "tokens_out": 1215,
+        "cost_usd": 0.006528
       }
     ],
     "pass_rate": 1.0
@@ -915,17 +365,17 @@
         "fails": [],
         "severity": "watch",
         "floor": "watch",
-        "title": "Front door opened with visitor at 10:12 AM",
-        "body": "Front door opened at 10:12 AM. Margaret was with another person and stayed inside. A visit was expected. No need to rush. Check in when you can.",
+        "title": "Front door open at 10:12 AM. Visitor expected.",
+        "body": "Front door opened at 10:12 AM. Margaret was with another person. A visit was expected and she stayed inside. You do not need to rush. Check when you can.",
         "evidence": [
           "front_door",
           "open",
           "expected_visitor",
           "person_count",
-          "dementia",
-          "10:12",
+          "10:12:00",
           "crossed_door_line",
-          "live"
+          "dementia",
+          "dwell_in_door_zone_s"
         ],
         "actions": [
           "view_clip",
@@ -933,66 +383,10 @@
           "snooze_30m"
         ],
         "violations": [],
-        "latency_ms": 5556,
+        "latency_ms": 3707,
         "tokens_in": 1217,
-        "tokens_out": 1468,
-        "cost_usd": 0.00776
-      },
-      {
-        "id": "11_two_at_door_caregiver",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "watch",
-        "title": "Front door open at 10:12 AM. Margaret with visitor",
-        "body": "Front door opened at 10:12 AM. Margaret was at the front door with another person. A visit was expected. She did not leave. Check the clip when you can.",
-        "evidence": [
-          "front_door",
-          "open",
-          "expected_visitor",
-          "person_count",
-          "crossed_door_line",
-          "dwell_in_door_zone_s",
-          "live",
-          "10:12:00"
-        ],
-        "actions": [
-          "view_clip",
-          "im_checking",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 4051,
-        "tokens_in": 1217,
-        "tokens_out": 1218,
-        "cost_usd": 0.006698
-      },
-      {
-        "id": "11_two_at_door_caregiver",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "watch",
-        "title": "Front door opened with visitor at 10:12 AM",
-        "body": "Front door opened at 10:12 AM. Margaret is with another person at the front door. This may be the expected visitor. Check the clip if you want.",
-        "evidence": [
-          "front_door",
-          "open",
-          "person_count",
-          "expected_visitor",
-          "live",
-          "Margaret"
-        ],
-        "actions": [
-          "view_clip",
-          "im_checking",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 3750,
-        "tokens_in": 1217,
-        "tokens_out": 1061,
-        "cost_usd": 0.006031
+        "tokens_out": 1179,
+        "cost_usd": 0.006532
       }
     ],
     "pass_rate": 1.0
@@ -1008,46 +402,16 @@
         "fails": [],
         "severity": "urgent",
         "floor": "urgent",
-        "title": "Front door open at 11:12 PM. Check on Margaret",
-        "body": "Front door opened at 11:12 PM. We could not see if Margaret stayed inside. This is risky at night with her memory condition. Please call her now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "dementia",
-          "wanders",
-          "track_unavailable",
-          "night_hours",
-          "lives_alone",
-          "door_open"
-        ],
-        "actions": [
-          "call_resident",
-          "call_neighbor",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 4063,
-        "tokens_in": 1113,
-        "tokens_out": 1263,
-        "cost_usd": 0.006759
-      },
-      {
-        "id": "12_track_unavailable_door",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
         "title": "Front door open at 11:12 PM",
-        "body": "Front door opened at 11:12 PM. The view is unavailable right now. Margaret may have gone outside. Please call her or check now.",
+        "body": "Front door opened at 11:12 PM. We could not confirm where Margaret is. She may be outside. Please check she is inside and safe.",
         "evidence": [
           "front_door",
           "open",
-          "23:12:00",
+          "23:12",
           "dementia",
           "wanders",
           "track_unavailable",
-          "lives_alone",
-          "door_open"
+          "lives_alone"
         ],
         "actions": [
           "call_resident",
@@ -1055,39 +419,10 @@
           "im_checking"
         ],
         "violations": [],
-        "latency_ms": 3469,
+        "latency_ms": 5097,
         "tokens_in": 1113,
-        "tokens_out": 1034,
-        "cost_usd": 0.005786
-      },
-      {
-        "id": "12_track_unavailable_door",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door open at 11:12 PM - check now",
-        "body": "Front door opened at 11:12 PM. Margaret may be outside. We could not see what happened next. Please check she is safe inside now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "23:12:00",
-          "dementia",
-          "wanders",
-          "track_unavailable",
-          "lives_alone",
-          "night_hours"
-        ],
-        "actions": [
-          "call_resident",
-          "call_neighbor",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 4350,
-        "tokens_in": 1113,
-        "tokens_out": 973,
-        "cost_usd": 0.005527
+        "tokens_out": 989,
+        "cost_usd": 0.005595
       }
     ],
     "pass_rate": 1.0
@@ -1103,65 +438,8 @@
         "fails": [],
         "severity": "urgent",
         "floor": "urgent",
-        "title": "Front door may be open at 1:12 AM",
-        "body": "Front door showed open at 1:12 AM. Margaret was by the door for 7 seconds. Reports disagree. Please check the door now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "closed",
-          "dementia",
-          "wanders",
-          "dwell_in_door_zone_s",
-          "crossed_door_line",
-          "lives_alone"
-        ],
-        "actions": [
-          "view_clip",
-          "call_resident",
-          "call_neighbor"
-        ],
-        "violations": [],
-        "latency_ms": 5158,
-        "tokens_in": 1233,
-        "tokens_out": 1355,
-        "cost_usd": 0.0073
-      },
-      {
-        "id": "13_conflicting_signals",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door open at 1:12 AM. Margaret at door",
-        "body": "Front door opened at 1:12 AM. Margaret was at the front door for 7 seconds. She may try to go outside. Please call her now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "closed",
-          "01:12",
-          "dementia",
-          "wanders",
-          "dwell_in_door_zone_s",
-          "crossed_door_line"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 5699,
-        "tokens_in": 1233,
-        "tokens_out": 1777,
-        "cost_usd": 0.009094
-      },
-      {
-        "id": "13_conflicting_signals",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door open at 1:12 AM. Check Margaret",
-        "body": "Front door opened at 1:12 AM. Margaret was at the front door for 7 seconds. She may be outside. Call her now, then check the door.",
+        "title": "Front door open at 1:12 AM",
+        "body": "Front door showed open at 1:12 AM. Margaret was at the door for 7 seconds. Checks disagree on door state. Call her now to make sure she is inside.",
         "evidence": [
           "front_door",
           "open",
@@ -1178,10 +456,10 @@
           "call_neighbor"
         ],
         "violations": [],
-        "latency_ms": 3780,
+        "latency_ms": 4707,
         "tokens_in": 1233,
-        "tokens_out": 1178,
-        "cost_usd": 0.006548
+        "tokens_out": 1435,
+        "cost_usd": 0.00764
       }
     ],
     "pass_rate": 1.0
@@ -1197,8 +475,8 @@
         "fails": [],
         "severity": "urgent",
         "floor": "urgent",
-        "title": "Front door open at 3:12 AM. Margaret may be outside.",
-        "body": "Front door opened at 3:12 AM. Margaret crossed the doorway and stayed 14 seconds. She may be outside. Please check now.",
+        "title": "Front door opened at 3:12 AM. Margaret may be outside.",
+        "body": "Front door opened at 3:12 AM. Margaret crossed the doorway and stayed 14 seconds. She lives alone and may be outside. Please call her now.",
         "evidence": [
           "front_door",
           "open",
@@ -1210,69 +488,13 @@
         "actions": [
           "call_resident",
           "view_clip",
-          "send_help"
-        ],
-        "violations": [],
-        "latency_ms": 3493,
-        "tokens_in": 1247,
-        "tokens_out": 1037,
-        "cost_usd": 0.005966
-      },
-      {
-        "id": "14_prompt_injection",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door open at 3:12 AM. Margaret may be outside",
-        "body": "Front door opened at 3:12 AM. Margaret crossed the doorway and may be outside. Please call her and check the front door now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "03:12:00",
-          "crossed_door_line",
-          "dementia",
-          "wanders"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip",
           "call_neighbor"
         ],
         "violations": [],
-        "latency_ms": 5656,
+        "latency_ms": 3622,
         "tokens_in": 1247,
-        "tokens_out": 1157,
-        "cost_usd": 0.006476
-      },
-      {
-        "id": "14_prompt_injection",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door open at night - check Margaret",
-        "body": "Front door opened at 3:12 AM. Margaret may have stepped outside. She lives with dementia and may wander. Please call her now to check she is safe.",
-        "evidence": [
-          "front_door",
-          "03:12",
-          "open",
-          "crossed_door_line",
-          "dementia",
-          "wanders",
-          "person_count",
-          "lives_alone"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip",
-          "call_neighbor"
-        ],
-        "violations": [],
-        "latency_ms": 3703,
-        "tokens_in": 1247,
-        "tokens_out": 1006,
-        "cost_usd": 0.005834
+        "tokens_out": 1042,
+        "cost_usd": 0.005987
       }
     ],
     "pass_rate": 1.0
@@ -1288,76 +510,25 @@
         "fails": [],
         "severity": "urgent",
         "floor": "urgent",
-        "title": "Possible fall in hallway - check now",
-        "body": "Possible fall in the hallway at 9:12 PM. Margaret may need help. Please check on her right now.",
-        "evidence": [
-          "fall_suspected",
-          "hallway",
-          "21:12",
-          "person_count"
-        ],
-        "actions": [
-          "view_clip",
-          "call_resident",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 3622,
-        "tokens_in": 1197,
-        "tokens_out": 917,
-        "cost_usd": 0.005394
-      },
-      {
-        "id": "15_missing_profile",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
         "title": "Possible fall in hallway at 9:12 PM",
         "body": "Possible fall in the hallway at 9:12 PM. Margaret may need help. Please check on her now.",
         "evidence": [
           "fall_suspected",
           "hallway",
+          "21:12",
           "Margaret",
-          "live",
           "person_count"
         ],
         "actions": [
-          "call_resident",
           "view_clip",
+          "call_resident",
           "im_checking"
         ],
         "violations": [],
-        "latency_ms": 3601,
+        "latency_ms": 3974,
         "tokens_in": 1197,
-        "tokens_out": 1014,
-        "cost_usd": 0.005806
-      },
-      {
-        "id": "15_missing_profile",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Possible fall in the hallway",
-        "body": "Possible fall in the hallway at 9:12 PM. Margaret may need help. Please check the clip and call her now.",
-        "evidence": [
-          "fall_suspected",
-          "hallway",
-          "21:12",
-          "person_count",
-          "frames_present"
-        ],
-        "actions": [
-          "view_clip",
-          "call_resident",
-          "false_alarm"
-        ],
-        "violations": [],
-        "latency_ms": 3113,
-        "tokens_in": 1197,
-        "tokens_out": 795,
-        "cost_usd": 0.004875
+        "tokens_out": 1153,
+        "cost_usd": 0.006397
       }
     ],
     "pass_rate": 1.0
@@ -1373,42 +544,15 @@
         "fails": [],
         "severity": "urgent",
         "floor": "urgent",
-        "title": "Hallway monitor offline since 3:12 PM",
-        "body": "Hallway monitor has been offline since 3:12 PM, 45 minutes. We cannot see if Margaret is okay. Please call her or check in now.",
+        "title": "Hallway monitor offline 45 minutes",
+        "body": "Hallway monitor went offline at 3:12 PM. No updates for 45 minutes. We cannot tell if Margaret is okay. Please check on her now.",
         "evidence": [
           "device_offline",
           "hallway",
           "offline_min",
           "45",
           "track_unavailable",
-          "frames_present"
-        ],
-        "actions": [
-          "call_resident",
-          "call_neighbor",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 2968,
-        "tokens_in": 1092,
-        "tokens_out": 871,
-        "cost_usd": 0.005067
-      },
-      {
-        "id": "16_device_offline",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "No updates from home for 45 minutes",
-        "body": "No updates from the hallway since 3:12 PM. That is 45 minutes with no check-ins. Margaret lives alone. Please call her or ask someone nearby to check.",
-        "evidence": [
-          "device_offline",
-          "hallway",
-          "track_unavailable",
-          "dementia",
-          "lives_alone",
-          "wanders"
+          "15:12"
         ],
         "actions": [
           "call_resident",
@@ -1416,38 +560,10 @@
           "snooze_30m"
         ],
         "violations": [],
-        "latency_ms": 4521,
+        "latency_ms": 3651,
         "tokens_in": 1092,
-        "tokens_out": 1345,
-        "cost_usd": 0.007081
-      },
-      {
-        "id": "16_device_offline",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Hallway monitor offline for 45 minutes",
-        "body": "Hallway monitor went offline at 3:12 PM. No updates for 45 minutes. We cannot see the hallway right now. Please call Margaret to check she is okay.",
-        "evidence": [
-          "device_offline",
-          "hallway",
-          "offline_min",
-          "45",
-          "track_unavailable",
-          "frames_present",
-          "lives_alone"
-        ],
-        "actions": [
-          "call_resident",
-          "call_neighbor",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 3845,
-        "tokens_in": 1092,
-        "tokens_out": 970,
-        "cost_usd": 0.005488
+        "tokens_out": 1033,
+        "cost_usd": 0.005755
       }
     ],
     "pass_rate": 1.0
@@ -1463,8 +579,8 @@
         "fails": [],
         "severity": "emergency",
         "floor": "emergency",
-        "title": "Fall in hallway - Margaret hasn't gotten up",
-        "body": "Fall in the hallway at 4:12 PM. Margaret has not gotten up for 12 seconds. She is alone. Send help now.",
+        "title": "Fall in hallway - Margaret needs help now",
+        "body": "Fall in the hallway at 4:12 PM. Margaret has not gotten up for 12 seconds. She is alone. Get help to her now.",
         "evidence": [
           "fall_confirmed",
           "hallway",
@@ -1479,64 +595,10 @@
           "view_clip"
         ],
         "violations": [],
-        "latency_ms": 4075,
+        "latency_ms": 4047,
         "tokens_in": 1340,
-        "tokens_out": 1059,
-        "cost_usd": 0.006176
-      },
-      {
-        "id": "17_false_alarm_history",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "emergency",
-        "title": "Fall in hallway. She has not gotten up.",
-        "body": "Fall in the hallway at 4:12 PM. She has not stood up for 12 seconds. She is alone. Please send help now.",
-        "evidence": [
-          "fall_confirmed",
-          "hallway",
-          "no_recovery_s",
-          "person_count",
-          "lives_alone"
-        ],
-        "actions": [
-          "send_help",
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 3364,
-        "tokens_in": 1340,
-        "tokens_out": 997,
-        "cost_usd": 0.005912
-      },
-      {
-        "id": "17_false_alarm_history",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "emergency",
-        "title": "Margaret fell in hallway, needs help",
-        "body": "Margaret fell in the hallway at 4:12 PM. She has not gotten up. She is alone. Please get help to her right now.",
-        "evidence": [
-          "fall_confirmed",
-          "hallway",
-          "no_recovery_s",
-          "12",
-          "person_count",
-          "lives_alone",
-          "Margaret"
-        ],
-        "actions": [
-          "send_help",
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 3560,
-        "tokens_in": 1340,
-        "tokens_out": 967,
-        "cost_usd": 0.005785
+        "tokens_out": 1229,
+        "cost_usd": 0.006898
       }
     ],
     "pass_rate": 1.0
@@ -1553,75 +615,27 @@
         "severity": "watch",
         "floor": "watch",
         "title": "Brief visit to front door at 2:12 AM",
-        "body": "Margaret was at the front door at 2:12 AM for a moment. The door stayed closed. She stayed inside. No action needed now.",
-        "evidence": [
-          "front_door",
-          "02:12",
-          "closed",
-          "crossed_door_line",
-          "approach_only"
-        ],
-        "actions": [
-          "view_clip",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 3923,
-        "tokens_in": 1202,
-        "tokens_out": 957,
-        "cost_usd": 0.00557
-      },
-      {
-        "id": "18_quiet_hours_watch",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "watch",
-        "title": "Movement at front door at 2:12 AM",
-        "body": "Margaret was by the front door at 2:12 AM for a moment. The door stayed closed. No need to act. Check the clip if you want.",
+        "body": "Margaret walked to the front door at 2:12 AM and stepped away after a moment. The door stayed closed. No need to act. Check the clip if you want.",
         "evidence": [
           "front_door",
           "closed",
+          "live",
           "approach_only",
-          "02:12",
-          "crossed_door_line"
-        ],
-        "actions": [
-          "view_clip",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 3932,
-        "tokens_in": 1202,
-        "tokens_out": 1004,
-        "cost_usd": 0.00577
-      },
-      {
-        "id": "18_quiet_hours_watch",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "watch",
-        "title": "Brief visit to front door at 2:12 AM",
-        "body": "Margaret walked near the front door at 2:12 AM. The door stayed closed. No need to act. Check the clip if you want.",
-        "evidence": [
-          "front_door",
-          "02:12",
-          "closed",
-          "crossed_door_line",
-          "dwell_in_door_zone_s",
           "person_count",
-          "wanders"
+          "dwell_in_door_zone_s",
+          "crossed_door_line",
+          "lives_alone"
         ],
         "actions": [
           "view_clip",
-          "snooze_30m"
+          "snooze_30m",
+          "im_checking"
         ],
         "violations": [],
-        "latency_ms": 3597,
+        "latency_ms": 3953,
         "tokens_in": 1202,
-        "tokens_out": 931,
-        "cost_usd": 0.005459
+        "tokens_out": 1193,
+        "cost_usd": 0.006573
       }
     ],
     "pass_rate": 1.0
@@ -1637,73 +651,14 @@
         "fails": [],
         "severity": "emergency",
         "floor": "emergency",
-        "title": "Fall in hallway at 8:12 AM",
-        "body": "Margaret may have fallen in the hallway at 8:12 AM. She has not gotten up for 10 seconds and is alone. Please send help to her now.",
-        "evidence": [
-          "fall_confirmed",
-          "hallway",
-          "no_recovery_s",
-          "10",
-          "person_count",
-          "lives_alone",
-          "08:12",
-          "dementia"
-        ],
-        "actions": [
-          "send_help",
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 4061,
-        "tokens_in": 1211,
-        "tokens_out": 1125,
-        "cost_usd": 0.006295
-      },
-      {
-        "id": "19_body_near_limit",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "emergency",
-        "title": "Fall in hallway at 8:12 AM",
-        "body": "Margaret fell in the hallway at 8:12 AM. She has not gotten up for 10 seconds. She is alone. Send help now.",
-        "evidence": [
-          "fall_confirmed",
-          "hallway",
-          "08:12",
-          "no_recovery_s",
-          "10",
-          "person_count",
-          "lives_alone",
-          "dementia"
-        ],
-        "actions": [
-          "send_help",
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 3551,
-        "tokens_in": 1211,
-        "tokens_out": 1171,
-        "cost_usd": 0.006491
-      },
-      {
-        "id": "19_body_near_limit",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "emergency",
         "title": "Fall in hallway. She has not gotten up.",
-        "body": "Margaret fell in the hallway at 8:12 AM. She has not stood up for 10 seconds. Please get help to her now.",
+        "body": "Fall in the hallway at 8:12 AM. She has not stood up for 10 seconds. She is alone. Get help to her now.",
         "evidence": [
           "fall_confirmed",
           "hallway",
           "no_recovery_s",
-          "10",
           "person_count",
-          "1",
+          "08:12",
           "lives_alone"
         ],
         "actions": [
@@ -1712,10 +667,10 @@
           "view_clip"
         ],
         "violations": [],
-        "latency_ms": 3330,
+        "latency_ms": 3538,
         "tokens_in": 1211,
-        "tokens_out": 1006,
-        "cost_usd": 0.005789
+        "tokens_out": 917,
+        "cost_usd": 0.005411
       }
     ],
     "pass_rate": 1.0
@@ -1732,7 +687,7 @@
         "severity": "urgent",
         "floor": "urgent",
         "title": "Front door open at 3:12 AM - check now",
-        "body": "Front door opened at 3:12 AM. Zofie may have stepped outside. She lives alone and may need help back inside. Please call her now.",
+        "body": "Front door opened at 3:12 AM. Zofie may be outside alone in the night. Please call her right now and check the front door.",
         "evidence": [
           "front_door",
           "open",
@@ -1745,71 +700,14 @@
         ],
         "actions": [
           "call_resident",
-          "call_neighbor",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 4879,
-        "tokens_in": 1232,
-        "tokens_out": 1502,
-        "cost_usd": 0.007923
-      },
-      {
-        "id": "20_non_english_name",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door open at 3:12 AM - may be outside",
-        "body": "Front door opened at 3:12 AM. Zofie crossed the doorway and may be outside. She wanders. Please call her now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "03:12",
-          "crossed_door_line",
-          "dementia",
-          "wanders",
-          "lives_alone",
-          "night_hours"
-        ],
-        "actions": [
-          "call_resident",
           "view_clip",
           "call_neighbor"
         ],
         "violations": [],
-        "latency_ms": 4320,
+        "latency_ms": 3665,
         "tokens_in": 1232,
-        "tokens_out": 1425,
-        "cost_usd": 0.007596
-      },
-      {
-        "id": "20_non_english_name",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door opened at 3:12 AM",
-        "body": "Front door opened at 3:12 AM. Zofie crossed the doorway and may be outside. She can get lost at night. Please call her now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "03:12",
-          "crossed_door_line",
-          "dementia",
-          "wanders",
-          "lives_alone"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip",
-          "call_neighbor"
-        ],
-        "violations": [],
-        "latency_ms": 3960,
-        "tokens_in": 1232,
-        "tokens_out": 1176,
-        "cost_usd": 0.006538
+        "tokens_out": 1125,
+        "cost_usd": 0.006321
       }
     ],
     "pass_rate": 1.0
@@ -1823,68 +721,10 @@
         "id": "21_mobility_aid_night_door",
         "ok": true,
         "fails": [],
-        "severity": "urgent",
+        "severity": "emergency",
         "floor": "urgent",
         "title": "Front door open at 4:12 AM. Margaret may be outside",
-        "body": "Front door opened at 4:12 AM. Margaret crossed the doorway and may be outside. She wanders and lives alone. Please call her now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "04:12",
-          "crossed_door_line",
-          "dementia",
-          "wanders",
-          "lives_alone",
-          "dwell_in_door_zone_s"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip",
-          "call_neighbor"
-        ],
-        "violations": [],
-        "latency_ms": 4150,
-        "tokens_in": 1222,
-        "tokens_out": 1185,
-        "cost_usd": 0.006564
-      },
-      {
-        "id": "21_mobility_aid_night_door",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door open at 4:12 AM. Margaret may be outside",
-        "body": "Front door is open. Margaret crossed the doorway at 4:12 AM and stayed 14 seconds. She may be outside alone. Please check on her now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "04:12:00",
-          "crossed_door_line",
-          "dementia",
-          "wanders",
-          "lives_alone",
-          "uses_mobility_aid"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 3623,
-        "tokens_in": 1222,
-        "tokens_out": 1005,
-        "cost_usd": 0.005799
-      },
-      {
-        "id": "21_mobility_aid_night_door",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door open at 4:12 AM. Margaret may be outside.",
-        "body": "Front door opened at 4:12 AM. Margaret crossed the doorway and stayed 14 seconds. She may be outside alone. Please check on her now.",
+        "body": "Front door opened at 4:12 AM. Margaret crossed the doorway. She lives alone and may be outside. Please check now and call her.",
         "evidence": [
           "front_door",
           "open",
@@ -1892,8 +732,7 @@
           "dementia",
           "wanders",
           "lives_alone",
-          "uses_mobility_aid",
-          "night_hours"
+          "04:12"
         ],
         "actions": [
           "call_resident",
@@ -1901,10 +740,10 @@
           "send_help"
         ],
         "violations": [],
-        "latency_ms": 4282,
+        "latency_ms": 5641,
         "tokens_in": 1222,
-        "tokens_out": 1195,
-        "cost_usd": 0.006606
+        "tokens_out": 1501,
+        "cost_usd": 0.007907
       }
     ],
     "pass_rate": 1.0
@@ -1920,46 +759,17 @@
         "fails": [],
         "severity": "emergency",
         "floor": "emergency",
-        "title": "Fall by bathroom door. Hasn't gotten up.",
-        "body": "Margaret fell by the bathroom door at 7:12 AM. She has not gotten up for 9 seconds. She is alone. Send help now.",
+        "title": "Fall by bathroom door at 7:12 AM",
+        "body": "Margaret fell by the bathroom door at 7:12 AM. She has not gotten up for 9 seconds. She is alone. Please get help to her now.",
         "evidence": [
           "fall_confirmed",
           "bathroom_door",
           "no_recovery_s",
-          "Margaret",
+          "person_count",
           "anticoagulant",
           "lives_alone",
           "07:12",
-          "person_count"
-        ],
-        "actions": [
-          "send_help",
-          "call_neighbor",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 3894,
-        "tokens_in": 1215,
-        "tokens_out": 957,
-        "cost_usd": 0.005586
-      },
-      {
-        "id": "22_anticoagulant_fall",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "emergency",
-        "title": "Fall at bathroom door at 7:12 AM",
-        "body": "Margaret fell at the bathroom door at 7:12 AM. She has not gotten up. She is alone. Please get help to her now.",
-        "evidence": [
-          "fall_confirmed",
-          "bathroom_door",
-          "no_recovery_s",
-          "9",
-          "anticoagulant",
-          "lives_alone",
-          "dementia",
-          "person_count"
+          "dementia"
         ],
         "actions": [
           "send_help",
@@ -1967,38 +777,10 @@
           "view_clip"
         ],
         "violations": [],
-        "latency_ms": 4604,
+        "latency_ms": 4094,
         "tokens_in": 1215,
-        "tokens_out": 1509,
-        "cost_usd": 0.007932
-      },
-      {
-        "id": "22_anticoagulant_fall",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "emergency",
-        "title": "Fall at bathroom door - help needed now",
-        "body": "Fall at the bathroom door at 7:12 AM. Margaret has not gotten up for 9 seconds. She is alone. Get help to her now.",
-        "evidence": [
-          "fall_confirmed",
-          "bathroom_door",
-          "no_recovery_s",
-          "anticoagulant",
-          "lives_alone",
-          "person_count",
-          "07:12:00"
-        ],
-        "actions": [
-          "send_help",
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 4299,
-        "tokens_in": 1215,
-        "tokens_out": 1021,
-        "cost_usd": 0.005858
+        "tokens_out": 1240,
+        "cost_usd": 0.006789
       }
     ],
     "pass_rate": 1.0
@@ -2014,71 +796,16 @@
         "fails": [],
         "severity": "watch",
         "floor": "watch",
-        "title": "Front door open 4 minutes",
-        "body": "Front door has been open since 11:12 AM. Margaret was near the door briefly and is still inside. Please check it is closed when you can.",
+        "title": "Front door open for 4 minutes",
+        "body": "Front door has been open for 4 minutes since 11:12 AM. Margaret was by the door and stayed inside. Please call her to check the door is closed.",
         "evidence": [
           "front_door",
           "open",
           "240",
-          "Margaret",
           "crossed_door_line",
           "false",
           "person_count",
-          "11:12"
-        ],
-        "actions": [
-          "im_checking",
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 5939,
-        "tokens_in": 1211,
-        "tokens_out": 1418,
-        "cost_usd": 0.00754
-      },
-      {
-        "id": "23_door_left_open",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "watch",
-        "title": "Front door open for 4 minutes",
-        "body": "Front door has been open since 11:12 AM. Margaret was by the door briefly and stayed inside. Please check the door is closed.",
-        "evidence": [
-          "front_door",
-          "open",
-          "240",
-          "11:12",
-          "person_count",
-          "crossed_door_line"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 3890,
-        "tokens_in": 1211,
-        "tokens_out": 1020,
-        "cost_usd": 0.005849
-      },
-      {
-        "id": "23_door_left_open",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "watch",
-        "title": "Front door open 4 minutes",
-        "body": "Front door has been open since 11:12 AM, about 4 minutes. Margaret is still inside and did not go out. Please check in and close it when you can.",
-        "evidence": [
-          "front_door",
-          "open",
-          "240",
-          "crossed_door_line",
-          "person_count",
-          "11:12",
-          "dwell_in_door_zone_s"
+          "11:12:00"
         ],
         "actions": [
           "call_resident",
@@ -2086,10 +813,10 @@
           "snooze_30m"
         ],
         "violations": [],
-        "latency_ms": 3292,
+        "latency_ms": 3679,
         "tokens_in": 1211,
-        "tokens_out": 950,
-        "cost_usd": 0.005551
+        "tokens_out": 1159,
+        "cost_usd": 0.006439
       }
     ],
     "pass_rate": 1.0
@@ -2105,82 +832,23 @@
         "fails": [],
         "severity": "watch",
         "floor": "info",
-        "title": "Motion in hallway at 1:12 PM",
-        "body": "Small motion in the hallway at 1:12 PM. No person was seen. Tracking is unavailable right now. You can check in if you want to.",
+        "title": "Movement in hallway at 1:12 PM",
+        "body": "Small movement in the hallway at 1:12 PM. No person was found. Tracking was unavailable so we could not see clearly. Check if you want to.",
         "evidence": [
           "motion_only",
           "hallway",
-          "track_unavailable",
-          "frames_present",
-          "person_count",
           "person_check",
-          "motion_energy",
-          "13:12"
+          "person_count"
         ],
         "actions": [
           "im_checking",
-          "snooze_30m",
-          "false_alarm"
-        ],
-        "violations": [],
-        "latency_ms": 4596,
-        "tokens_in": 1101,
-        "tokens_out": 1286,
-        "cost_usd": 0.006842
-      },
-      {
-        "id": "24_pet_motion",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "info",
-        "title": "Motion in hallway, no person found",
-        "body": "Motion in the hallway at 1:12 PM. No person was found. Tracking is not working right now. Check if you want to.",
-        "evidence": [
-          "motion_only",
-          "hallway",
-          "13:12",
-          "person_count",
-          "person_check",
-          "track_unavailable",
-          "motion_energy"
-        ],
-        "actions": [
-          "view_clip",
-          "snooze_30m",
-          "false_alarm"
-        ],
-        "violations": [],
-        "latency_ms": 3502,
-        "tokens_in": 1101,
-        "tokens_out": 1003,
-        "cost_usd": 0.005639
-      },
-      {
-        "id": "24_pet_motion",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "info",
-        "title": "Motion in hallway at 1:12 PM",
-        "body": "Motion in the hallway at 1:12 PM. No person was seen. Tracking was unavailable. Check if you want to.",
-        "evidence": [
-          "motion_only",
-          "hallway",
-          "person_count",
-          "person_check",
-          "track_unavailable",
-          "frames_present"
-        ],
-        "actions": [
-          "view_clip",
           "snooze_30m"
         ],
         "violations": [],
-        "latency_ms": 3144,
+        "latency_ms": 3133,
         "tokens_in": 1101,
-        "tokens_out": 874,
-        "cost_usd": 0.005091
+        "tokens_out": 873,
+        "cost_usd": 0.005086
       }
     ],
     "pass_rate": 1.0
@@ -2197,34 +865,7 @@
         "severity": "watch",
         "floor": "info",
         "title": "Still in living room since 3:12 PM",
-        "body": "Margaret has been still in the living room since 3:12 PM. A recent visit explains the pause. You can check in when you can.",
-        "evidence": [
-          "living_room",
-          "still_min",
-          "caregiver_visit",
-          "live",
-          "Margaret",
-          "15:12"
-        ],
-        "actions": [
-          "view_clip",
-          "snooze_30m",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 6239,
-        "tokens_in": 1214,
-        "tokens_out": 1284,
-        "cost_usd": 0.006974
-      },
-      {
-        "id": "25_still_30min",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "info",
-        "title": "Margaret still in living room at 3:12 PM",
-        "body": "Margaret has been still in the living room since 3:12 PM, about 30 minutes. A caregiver visited today. She may be resting. Please check in when you can.",
+        "body": "Margaret has been still in the living room since 3:12 PM. A caregiver visited. She may be resting. Check when you can.",
         "evidence": [
           "living_room",
           "still_min",
@@ -2233,43 +874,15 @@
           "person_count"
         ],
         "actions": [
-          "call_resident",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 4088,
-        "tokens_in": 1214,
-        "tokens_out": 1067,
-        "cost_usd": 0.006052
-      },
-      {
-        "id": "25_still_30min",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "info",
-        "title": "Margaret still in living room 30 min",
-        "body": "Margaret has been still in the living room since 3:12 PM. A caregiver visit was noted. She may be resting. Please check in when you can.",
-        "evidence": [
-          "living_room",
-          "still_min",
-          "caregiver_visit",
-          "person_count",
-          "15:12:00",
-          "Margaret",
-          "still_but_recent_activity",
-          "lives_alone"
-        ],
-        "actions": [
-          "call_resident",
           "view_clip",
+          "im_checking",
           "snooze_30m"
         ],
         "violations": [],
-        "latency_ms": 4894,
+        "latency_ms": 4461,
         "tokens_in": 1214,
-        "tokens_out": 1326,
-        "cost_usd": 0.007153
+        "tokens_out": 1386,
+        "cost_usd": 0.007408
       }
     ],
     "pass_rate": 1.0
@@ -2285,75 +898,16 @@
         "fails": [],
         "severity": "urgent",
         "floor": "urgent",
-        "title": "Front door open at 3:12 AM. Check Margaret now",
-        "body": "Front door opened at 3:12 AM. Margaret was at the front door for 7 seconds. The door is still open. She may have stepped out. Please check now.",
+        "title": "Front door open at 3:12 AM. Check on Margaret",
+        "body": "Front door opened at 3:12 AM. Margaret was at the door for 7 seconds. Door is still open. Please call her now to make sure she is inside and safe.",
         "evidence": [
           "front_door",
           "open",
           "03:12",
+          "Margaret",
           "dementia",
           "wanders",
-          "dwell_in_door_zone_s",
-          "crossed_door_line",
-          "person_at_door"
-        ],
-        "actions": [
-          "view_clip",
-          "call_resident",
-          "call_neighbor"
-        ],
-        "violations": [],
-        "latency_ms": 5497,
-        "tokens_in": 1237,
-        "tokens_out": 1427,
-        "cost_usd": 0.007611
-      },
-      {
-        "id": "26_two_cameras_disagree",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door open at 3:12 AM",
-        "body": "Front door is open at 3:12 AM. Margaret was at the door for 7 seconds. She may be outside. Please call her now. Reports disagree, so check to be sure.",
-        "evidence": [
-          "front_door",
-          "open",
-          "03:12",
-          "dementia",
-          "wanders",
-          "dwell_in_door_zone_s",
-          "person_at_door",
-          "crossed_door_line"
-        ],
-        "actions": [
-          "call_resident",
-          "view_clip",
-          "send_help"
-        ],
-        "violations": [],
-        "latency_ms": 4670,
-        "tokens_in": 1237,
-        "tokens_out": 1183,
-        "cost_usd": 0.006574
-      },
-      {
-        "id": "26_two_cameras_disagree",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Front door open at 3:12 AM. Margaret at door",
-        "body": "Front door is open. Margaret was at the door at 3:12 AM for 7 seconds. She may go outside at night. Please call her now.",
-        "evidence": [
-          "front_door",
-          "open",
-          "03:12",
-          "dementia",
-          "wanders",
-          "lives_alone",
-          "dwell_in_door_zone_s",
-          "person_at_door false"
+          "person_count"
         ],
         "actions": [
           "call_resident",
@@ -2361,10 +915,10 @@
           "call_neighbor"
         ],
         "violations": [],
-        "latency_ms": 4614,
+        "latency_ms": 4577,
         "tokens_in": 1237,
-        "tokens_out": 1470,
-        "cost_usd": 0.007794
+        "tokens_out": 1412,
+        "cost_usd": 0.007547
       }
     ],
     "pass_rate": 1.0
@@ -2380,73 +934,17 @@
         "fails": [],
         "severity": "emergency",
         "floor": "emergency",
-        "title": "Fall in hallway at 5:12 PM. Needs help now",
-        "body": "Margaret may have fallen in the hallway at 5:12 PM. She has not gotten up for 12 seconds. Tracking is not working right now. Please get help to her now.",
+        "title": "Fall in the hallway at 5:12 PM",
+        "body": "Fall in the hallway at 5:12 PM. She has not gotten up for 12 seconds. We could not see clearly. Please send help now.",
         "evidence": [
           "fall_confirmed",
           "hallway",
           "no_recovery_s",
           "12",
-          "dementia",
-          "lives_alone",
           "track_unavailable",
-          "zero_matches"
-        ],
-        "actions": [
-          "send_help",
-          "call_resident",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 4613,
-        "tokens_in": 1105,
-        "tokens_out": 1113,
-        "cost_usd": 0.006112
-      },
-      {
-        "id": "27_sam_zero_matches",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "emergency",
-        "title": "Fall in hallway. She has not gotten up.",
-        "body": "Margaret may have fallen in the hallway at 5:12 PM. She has not gotten up for 12 seconds. Tracking is not working right now. Call her now. Send help if she does not answer.",
-        "evidence": [
-          "fall_confirmed",
-          "hallway",
-          "no_recovery_s",
           "zero_matches",
           "dementia",
           "lives_alone"
-        ],
-        "actions": [
-          "call_resident",
-          "send_help",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 3326,
-        "tokens_in": 1105,
-        "tokens_out": 1022,
-        "cost_usd": 0.005725
-      },
-      {
-        "id": "27_sam_zero_matches",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "emergency",
-        "title": "Fall in hallway. She has not gotten up.",
-        "body": "Fall in the hallway at 5:12 PM. She has not stood up for 12 seconds. Tracking is unavailable to double-check. Please get help to her now.",
-        "evidence": [
-          "fall_confirmed",
-          "hallway",
-          "no_recovery_s",
-          "track_unavailable",
-          "zero_matches",
-          "dementia",
-          "lives_alone",
-          "17:12:00"
         ],
         "actions": [
           "send_help",
@@ -2454,10 +952,10 @@
           "call_neighbor"
         ],
         "violations": [],
-        "latency_ms": 4821,
+        "latency_ms": 3513,
         "tokens_in": 1105,
-        "tokens_out": 1411,
-        "cost_usd": 0.007378
+        "tokens_out": 1098,
+        "cost_usd": 0.006048
       }
     ],
     "pass_rate": 1.0
@@ -2474,38 +972,10 @@
         "severity": "emergency",
         "floor": "urgent",
         "title": "Possible fall in hallway at 11:12 PM",
-        "body": "Possible fall in the hallway at 11:12 PM. She has not gotten up for 8 seconds. Picture is unclear. Please check now.",
+        "body": "Possible fall in the hallway at 11:12 PM. She has not gotten up for 8 seconds. The view is unclear right now. Please check on her now or send help.",
         "evidence": [
           "fall_suspected",
           "hallway",
-          "no_recovery_s",
-          "degraded",
-          "person_count",
-          "23:12"
-        ],
-        "actions": [
-          "send_help",
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 4458,
-        "tokens_in": 1213,
-        "tokens_out": 1381,
-        "cost_usd": 0.007386
-      },
-      {
-        "id": "28_api_timeout_degraded",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "urgent",
-        "title": "Possible fall in hallway at 11:12 PM",
-        "body": "Possible fall in the hallway at 11:12 PM. She has not gotten up for 8 seconds. Tracking was degraded. Please check now.",
-        "evidence": [
-          "fall_suspected",
-          "hallway",
-          "23:12",
           "no_recovery_s",
           "degraded",
           "person_count",
@@ -2517,38 +987,10 @@
           "view_clip"
         ],
         "violations": [],
-        "latency_ms": 5456,
+        "latency_ms": 5371,
         "tokens_in": 1213,
-        "tokens_out": 1524,
-        "cost_usd": 0.007993
-      },
-      {
-        "id": "28_api_timeout_degraded",
-        "ok": true,
-        "fails": [],
-        "severity": "emergency",
-        "floor": "urgent",
-        "title": "Possible fall in hallway. She has not gotten up.",
-        "body": "Possible fall in the hallway at 11:12 PM. She has not stood up for 8 seconds. The signal is weak right now. Please check on her right away.",
-        "evidence": [
-          "fall_suspected",
-          "hallway",
-          "no_recovery_s",
-          "23:12",
-          "degraded",
-          "person_count",
-          "lives_alone"
-        ],
-        "actions": [
-          "send_help",
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 4458,
-        "tokens_in": 1213,
-        "tokens_out": 1249,
-        "cost_usd": 0.006824
+        "tokens_out": 1604,
+        "cost_usd": 0.008333
       }
     ],
     "pass_rate": 1.0
@@ -2565,67 +1007,12 @@
         "severity": "watch",
         "floor": "watch",
         "title": "Margaret near front door at 3:12 AM",
-        "body": "Front door at 3:12 AM. Margaret came close for 3 seconds. The door stayed closed. She is still inside. Check the clip if you want.",
-        "evidence": [
-          "front_door",
-          "03:12",
-          "dwell_in_door_zone_s",
-          "closed",
-          "crossed_door_line",
-          "dementia",
-          "wanders",
-          "lives_alone"
-        ],
-        "actions": [
-          "view_clip",
-          "snooze_30m"
-        ],
-        "violations": [],
-        "latency_ms": 3922,
-        "tokens_in": 1206,
-        "tokens_out": 1072,
-        "cost_usd": 0.006064
-      },
-      {
-        "id": "29_door_approach_gentle",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "watch",
-        "title": "Margaret near front door at 3:12 AM",
-        "body": "Front door at 3:12 AM. Margaret stood by the door for 3 seconds. The door stayed closed. You can view the clip if you want.",
-        "evidence": [
-          "front_door",
-          "03:12:00",
-          "dwell_in_door_zone_s",
-          "closed",
-          "crossed_door_line",
-          "dementia",
-          "wanders",
-          "person_count"
-        ],
-        "actions": [
-          "view_clip",
-          "snooze_30m",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 3448,
-        "tokens_in": 1206,
-        "tokens_out": 932,
-        "cost_usd": 0.005469
-      },
-      {
-        "id": "29_door_approach_gentle",
-        "ok": true,
-        "fails": [],
-        "severity": "watch",
-        "floor": "watch",
-        "title": "Margaret at front door at 3:12 AM. Door shut.",
         "body": "Margaret went to the front door at 3:12 AM and stayed 3 seconds. The door stayed closed. She is still inside. You can check the clip if you want.",
         "evidence": [
           "front_door",
           "03:12",
+          "dwell_in_door_zone_s",
+          "crossed_door_line",
           "closed",
           "dementia",
           "wanders"
@@ -2635,10 +1022,10 @@
           "snooze_30m"
         ],
         "violations": [],
-        "latency_ms": 4416,
+        "latency_ms": 3144,
         "tokens_in": 1206,
-        "tokens_out": 1095,
-        "cost_usd": 0.006161
+        "tokens_out": 1002,
+        "cost_usd": 0.005766
       }
     ],
     "pass_rate": 1.0
@@ -2654,34 +1041,8 @@
         "fails": [],
         "severity": "urgent",
         "floor": "urgent",
-        "title": "Fall by bedroom door at 10:12 AM. Help is with her.",
-        "body": "Margaret fell by the bedroom door at 10:12 AM. She has not gotten up for 12 seconds. Someone is with her now. Please call to check what help she needs.",
-        "evidence": [
-          "fall_confirmed",
-          "bedroom_door",
-          "no_recovery_s",
-          "caregiver_present",
-          "person_count",
-          "10:12"
-        ],
-        "actions": [
-          "call_resident",
-          "im_checking"
-        ],
-        "violations": [],
-        "latency_ms": 3690,
-        "tokens_in": 1223,
-        "tokens_out": 987,
-        "cost_usd": 0.005723
-      },
-      {
-        "id": "30_caregiver_present_fall",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Fall at bedroom door - someone with her",
-        "body": "Fall at bedroom door at 10:12 AM. Margaret has not gotten up for 12 seconds. Someone is already with her. Call now to check what help is needed.",
+        "title": "Fall by bedroom door at 10:12 AM",
+        "body": "Margaret fell by the bedroom door at 10:12 AM. She has not gotten up for 12 seconds. Someone is with her. Call to check if she needs more help.",
         "evidence": [
           "fall_confirmed",
           "bedroom_door",
@@ -2696,37 +1057,10 @@
           "view_clip"
         ],
         "violations": [],
-        "latency_ms": 2826,
+        "latency_ms": 3597,
         "tokens_in": 1223,
-        "tokens_out": 890,
-        "cost_usd": 0.005311
-      },
-      {
-        "id": "30_caregiver_present_fall",
-        "ok": true,
-        "fails": [],
-        "severity": "urgent",
-        "floor": "urgent",
-        "title": "Fall at bedroom door at 10:12 AM",
-        "body": "Margaret fell by the bedroom door at 10:12 AM. She has not gotten up for 12 seconds. Someone is with her now. Please check in with them.",
-        "evidence": [
-          "fall_confirmed",
-          "bedroom_door",
-          "no_recovery_s",
-          "caregiver_present",
-          "person_count",
-          "10:12"
-        ],
-        "actions": [
-          "im_checking",
-          "call_resident",
-          "view_clip"
-        ],
-        "violations": [],
-        "latency_ms": 3923,
-        "tokens_in": 1223,
-        "tokens_out": 1210,
-        "cost_usd": 0.006671
+        "tokens_out": 1124,
+        "cost_usd": 0.006306
       }
     ],
     "pass_rate": 1.0
