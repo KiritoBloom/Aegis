@@ -901,6 +901,8 @@ async def worker_loop() -> None:
                         await fail_open(incident, exc)
                     else:
                         db.set_status(incident["id"], "enriching")
+                finally:
+                    db.release_lease(incident["id"])
         except Exception as exc:  # noqa: BLE001
             log.exception("worker loop error: %s", exc)
         await asyncio.sleep(1.0)
@@ -945,6 +947,16 @@ async def retention_loop() -> None:
 
 async def fail_open(incident: dict, exc: Exception) -> None:
     """Last resort: notify from the template, record why, release the queue."""
+    # A fail-open row is a *replacement* for a decision that never arrived. If
+    # one did arrive, writing this anyway is how a good model decision gets
+    # buried under a template: an incident was once found `notified` with
+    # attempts=4 and a phase-9 row on top of a phase-2 row that had succeeded.
+    current = db.get_incident(incident["id"]) or {}
+    if (current.get("decision") or {}).get("model") not in (None, "", "template"):
+        db.set_status(incident["id"], "notified", current.get("severity"))
+        db.record_failure(incident["id"], f"{type(exc).__name__}:already_decided")
+        log.warning("fail-open skipped %s: a decision already exists", incident["id"])
+        return
     floor = policy.evaluate(incident, PROFILE, local_hour=incident_hour(incident))
     decision = policy.template_decision(floor, incident, PROFILE,
                                         now_local().strftime("%H:%M"))

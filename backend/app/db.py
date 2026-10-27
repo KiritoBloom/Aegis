@@ -127,6 +127,7 @@ MIGRATIONS = [
     ("outbound_requests", "latency_ms", "INTEGER"),
     ("outbound_requests", "model", "TEXT"),
     ("outbound_requests", "contains_audio", "INTEGER DEFAULT 0"),
+    ("incidents", "enrich_lease", "REAL"),
     ("decisions", "packet_json", "TEXT"),
 ]
 
@@ -450,37 +451,67 @@ def bump_attempt(incident_id: str) -> int:
     return int(row["attempts"]) if row else 0
 
 
-def pending_for_processing(limit: int = 10, grace_s: float = 8.0) -> list[dict]:
-    """Incidents ready for enrichment.
+def pending_for_processing(limit: int = 10, grace_s: float = 8.0,
+                           lease_s: float = 180.0) -> list[dict]:
+    """Claim incidents ready for enrichment.
 
     An incident is not ready until its clip has arrived, or until the grace
     window expires — otherwise the worker races the upload and enriches an
     incident with `no_clip`, which silently loses the SAM stage.
+
+    This **claims** what it returns. §8.5 asks for a lease, and without one two
+    workers enrich the same incident: the second one overwrites a good model
+    decision with a fail-open template row, which is how an incident ended up
+    `notified` with `attempts=4` and a phase-9 decision on top of a phase-2
+    decision that had already succeeded. The claim is a single conditional
+    UPDATE, so it is atomic across processes; `lease_s` bounds how long a claim
+    survives a crashed worker before the incident is offered again.
     """
     cutoff = time.time() - grace_s
+    lease_cutoff = time.time() - lease_s
+    claimed: list[dict] = []
     with connect() as conn:
+        # BEGIN IMMEDIATE takes the write lock before the read, so two processes
+        # cannot both decide a row is free and both claim it.
+        conn.execute("BEGIN IMMEDIATE")
         rows = conn.execute(
             "SELECT * FROM incidents WHERE status IN ('detected','enriching') "
+            " AND (enrich_lease IS NULL OR enrich_lease < ?) "
             "ORDER BY created_at LIMIT ?",
-            (limit * 4,),
+            (lease_cutoff, limit * 4),
         ).fetchall()
-    out = []
-    for r in rows:
-        if len(out) >= limit:
-            break
-        inc = _decode_incident(dict(r))
-        if inc.get("clip_path"):
-            out.append(inc)
-            continue
-        try:
-            # created_at is UTC; time.mktime would read it as local time and a
-            # +3 offset would silently cancel the grace window entirely.
-            created = calendar.timegm(time.strptime(inc["created_at"], "%Y-%m-%dT%H:%M:%SZ"))
-        except Exception:  # noqa: BLE001
-            created = 0.0
-        if created <= cutoff:
-            out.append(inc)
-    return out
+        for r in rows:
+            if len(claimed) >= limit:
+                break
+            inc = _decode_incident(dict(r))
+            if not inc.get("clip_path"):
+                try:
+                    # created_at is UTC; time.mktime would read it as local time
+                    # and a +3 offset would silently cancel the grace window.
+                    created = calendar.timegm(
+                        time.strptime(inc["created_at"], "%Y-%m-%dT%H:%M:%SZ"))
+                except Exception:  # noqa: BLE001
+                    created = 0.0
+                if created > cutoff:
+                    continue          # still waiting for its clip
+            got = conn.execute(
+                "UPDATE incidents SET enrich_lease=? WHERE id=? "
+                " AND (enrich_lease IS NULL OR enrich_lease < ?)",
+                (time.time(), inc["id"], lease_cutoff),
+            )
+            if got.rowcount:
+                inc["enrich_lease"] = time.time()
+                claimed.append(inc)
+        conn.commit()
+    return claimed
+
+
+def release_lease(incident_id: str) -> None:
+    """Give a finished incident back, so a crash-free run never looks stuck."""
+    with connect() as conn:
+        conn.execute("UPDATE incidents SET enrich_lease=NULL WHERE id=?",
+                     (incident_id,))
+        conn.commit()
 
 
 # ---------------------------------------------------------------------------
