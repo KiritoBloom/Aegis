@@ -547,8 +547,11 @@ async def checkin(incident_id: str, request: Request):
 
     db.add_checkin(f"chk_{incident_id[-8:]}", incident_id, transcript, verdict["resolution"],
                    TRANSCRIBE_MODEL)
+    # The audio itself went to the model, and the ledger must say so. A row
+    # that reports only a byte count would let "what left your home" answer
+    # "some data" when the honest answer is "ten seconds of her voice".
     db.add_outbound(incident_id, "api.meta.ai", "transcribe", len(body), 0, "1h", False,
-                    latency_ms=0, model=TRANSCRIBE_MODEL)
+                    latency_ms=0, model=TRANSCRIBE_MODEL, contains_audio=True)
     if new != current:
         db.set_status(incident_id, "resolved" if verdict["resolution"] == "self_recovered"
                       else "acknowledged", new)
@@ -923,6 +926,23 @@ async def escalation_loop() -> None:
         await asyncio.sleep(5.0)
 
 
+async def retention_loop() -> None:
+    """Delete what we promised to delete, without anyone remembering to ask.
+
+    The privacy page says seven days local and ninety days of metadata. A
+    promise enforced by a button a tired person has to press is not a
+    retention policy, so the same function the button calls runs on its own.
+    """
+    while True:
+        try:
+            result = await asyncio.to_thread(privacy.sweep_retention)
+            if result.get("media_dirs_removed") or result.get("ledger_rows_expired"):
+                log.info("retention: %s", result)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("retention loop error: %s", exc)
+        await asyncio.sleep(3600.0)
+
+
 async def fail_open(incident: dict, exc: Exception) -> None:
     """Last resort: notify from the template, record why, release the queue."""
     floor = policy.evaluate(incident, PROFILE, local_hour=incident_hour(incident))
@@ -1055,7 +1075,7 @@ async def weekly_letter():
 
 @app.on_event("startup")
 async def startup() -> None:
-    # AEGIS_WORKER=off lets `python -m app.worker` own the loops instead. The
+    # AEGIS_WORKER=off lets `python scripts/worker.py` own the loops instead. The
     # demo runs both in one process; the split exists because restarting the API
     # must never be able to drop a pending alert.
     if os.environ.get("AEGIS_WORKER", "on").lower() != "off":
@@ -1063,7 +1083,10 @@ async def startup() -> None:
         asyncio.create_task(escalation_loop())
         loops = "in-process"
     else:
-        loops = "external (python -m app.worker)"
+        loops = "external (python scripts/worker.py)"
+    # Retention runs in both modes. It is a storage promise, not an alert path,
+    # and it is harmless for two processes to sweep the same directory.
+    asyncio.create_task(retention_loop())
     log.info("aegis up — media=%s hmac=%s push=%s worker=%s",
              MEDIA_ROOT, "on" if EDGE_TOKEN else "off (demo)",
              "on" if notify.VAPID_PUBLIC else "off", loops)

@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS decisions (
 CREATE TABLE IF NOT EXISTS outbound_requests (
   id INTEGER PRIMARY KEY AUTOINCREMENT, incident_id TEXT, destination TEXT,
   purpose TEXT, bytes INTEGER, frames INTEGER, retention TEXT,
-  contains_video INTEGER, created_at TEXT, latency_ms INTEGER, model TEXT
+  contains_video INTEGER, contains_audio INTEGER DEFAULT 0,
+  created_at TEXT, latency_ms INTEGER, model TEXT
 );
 CREATE TABLE IF NOT EXISTS device_heartbeats (
   id INTEGER PRIMARY KEY AUTOINCREMENT, camera_id TEXT, ts TEXT, fps REAL,
@@ -125,6 +126,7 @@ MIGRATIONS = [
     ("incidents", "deferred_until", "REAL"),
     ("outbound_requests", "latency_ms", "INTEGER"),
     ("outbound_requests", "model", "TEXT"),
+    ("outbound_requests", "contains_audio", "INTEGER DEFAULT 0"),
     ("decisions", "packet_json", "TEXT"),
 ]
 
@@ -323,14 +325,15 @@ def add_decision(incident_id: str, phase: int, floor: str, floor_reasons: list[s
 
 def add_outbound(incident_id: str | None, destination: str, purpose: str, nbytes: int,
                  frames: int = 0, retention: str = "-", contains_video: bool = False,
-                 latency_ms: int = 0, model: str | None = None) -> None:
+                 latency_ms: int = 0, model: str | None = None,
+                 contains_audio: bool = False) -> None:
     with connect() as conn:
         conn.execute(
             "INSERT INTO outbound_requests (incident_id, destination, purpose, bytes, frames,"
-            " retention, contains_video, created_at, latency_ms, model)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            " retention, contains_video, contains_audio, created_at, latency_ms, model)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (incident_id, destination, purpose, nbytes, frames, retention,
-             int(contains_video), now(), latency_ms, model),
+             int(contains_video), int(contains_audio), now(), latency_ms, model),
         )
         conn.commit()
 
@@ -352,7 +355,19 @@ def ledger_totals() -> dict:
             "SELECT COALESCE(SUM(bytes),0) AS b FROM outbound_requests "
             "WHERE purpose='idle_probe'"
         ).fetchone()
-    return {"total_bytes": row["total"], "rows": row["rows"], "idle_bytes": idle["b"]}
+        # "What left your home" is only honest if it can answer the question
+        # the resident actually asks: was I seen, and was I heard?
+        media = conn.execute(
+            "SELECT COALESCE(SUM(bytes),0) AS video FROM outbound_requests"
+            " WHERE contains_video=1"
+        ).fetchone()
+        audio = conn.execute(
+            "SELECT COUNT(*) AS n, COALESCE(SUM(bytes),0) AS b FROM outbound_requests"
+            " WHERE contains_audio=1"
+        ).fetchone()
+    return {"total_bytes": row["total"], "rows": row["rows"], "idle_bytes": idle["b"],
+            "video_bytes": media["video"],
+            "audio_rows": audio["n"], "audio_bytes": audio["b"]}
 
 
 def add_heartbeat(payload: dict) -> None:

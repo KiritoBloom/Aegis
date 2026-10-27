@@ -25,6 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / ".vendor"))
 sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(ROOT / "edge"))
 os.environ.setdefault("MEDIA_ROOT", str(ROOT / "data" / "media"))
 
 from app import db, privacy  # noqa: E402
