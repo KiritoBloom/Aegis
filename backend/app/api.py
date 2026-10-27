@@ -24,7 +24,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -37,7 +37,7 @@ from pydantic import BaseModel, Field
 
 from . import auth
 from . import clip as clip_util
-from . import db, notify, policy, privacy, render
+from . import db, notify, policy, privacy, render, watch
 from .meta import (SAM_MODEL, SPARK_MODEL, TRANSCRIBE_MODEL, WONDER_MODEL, MetaClient,
                    MetaError, output_text, parse_sam, track_features)
 from .prompt import (DECISION_SCHEMA, DIGEST_PROMPT, DIGEST_SCHEMA, LETTER_PROMPT,
@@ -106,6 +106,39 @@ def incident_hour(incident: dict) -> int:
         return now_local().hour
 
 
+def incident_clock(incident: dict) -> str:
+    """The incident's own local time as HH:MM, for text a person will read.
+
+    Same reason as incident_hour: the first response is written from a template
+    the instant the event lands, and if that template reads the wall clock then
+    a 03:12 fall says "3:12" in one message and "16:12" in the next. Two
+    different times for one event is the fastest way to lose a family's trust.
+    """
+    stamp = str(incident.get("local_time") or incident.get("started_at") or "")
+    try:
+        return datetime.fromisoformat(stamp.replace("Z", "+00:00")).strftime("%H:%M")
+    except ValueError:
+        return now_local().strftime("%H:%M")
+
+
+def current_plan() -> dict:
+    return watch.normalise(db.get_state("watch_plan"))
+
+
+def effective_floor(incident: dict, local_hour: int | None = None) -> tuple[policy.Floor, str | None]:
+    """The floor, after the household's watch plan has had its say.
+
+    Every path that decides whether to interrupt goes through here - ingest,
+    phase 1, phase 2, fail-open, the control room - so the plan cannot be
+    honoured on one path and forgotten on another. That asymmetry would be
+    invisible until the night a muted class fired anyway.
+    """
+    hour = incident_hour(incident) if local_hour is None else local_hour
+    plan = current_plan()
+    floor = policy.evaluate(incident, PROFILE, local_hour=hour)
+    return watch.apply(plan, incident, floor, hour)
+
+
 # --------------------------------------------------------------------------
 # auth
 # --------------------------------------------------------------------------
@@ -170,8 +203,7 @@ async def ingest_incident(request: Request,
     db.upsert_incident(payload.model_dump())
 
     # The event stream records everything, including what policy will suppress.
-    floor = policy.evaluate(payload.model_dump(), PROFILE,
-                            local_hour=incident_hour(payload.model_dump()))
+    floor, plan_note = effective_floor(payload.model_dump())
     db.record_event(payload.incident_id, payload.camera_id, payload.type,
                     payload.zone_id, payload.local_time or db.now(),
                     floor.severity, suppressed=not floor.notifies,
@@ -319,7 +351,90 @@ def get_household():
         "privacy": {"consent": privacy.consent_state(),
                     "pause": privacy.paused_state()},
         "timezone": str(TZ),
+        "watch": watch.summary(current_plan()),
+        "onboarded": bool(current_plan().get("onboarded_at")),
     }
+
+
+# --------------------------------------------------------------------------
+# the watch plan — what onboarding actually writes
+# --------------------------------------------------------------------------
+@app.get("/api/watch")
+def get_watch():
+    """The questionnaire and the answers so far, in one read.
+
+    `catalog` is served from the backend rather than hardcoded in the UI for a
+    reason: the list of things Aegis can watch has to match the list of things
+    the policy floor can actually raise. A frontend that invents an option the
+    backend has no rule for is a settings page that lies.
+    """
+    plan = current_plan()
+    return {
+        "plan": plan,
+        "summary": watch.summary(plan),
+        "classes": [
+            {
+                "id": c.id, "label": c.label, "question": c.question,
+                "detail": c.detail, "tier": c.tier, "default": c.default,
+                "locked": c.locked, "modes": list(c.modes if not c.locked else ("alert",)),
+                "examples": c.examples, "types": list(c.types),
+            }
+            for c in watch.CATALOG
+        ],
+        "zones": db.zones(HOUSEHOLD),
+        "quiet": plan["quiet"],
+        "door_hours": plan["door_hours"],
+        "onboarded_at": plan.get("onboarded_at"),
+        "consent_at": plan.get("consent_at"),
+    }
+
+
+@app.put("/api/watch")
+async def put_watch(body: dict):
+    """Save the plan. A safety class set to `off` is rejected, not repaired."""
+    try:
+        plan = watch.validate({**current_plan(), **body})
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if body.get("complete"):
+        plan["onboarded_at"] = db.now()
+    db.set_state("watch_plan", plan)
+    await broadcast({"type": "watch.updated", "summary": watch.summary(plan)})
+    log.info("watch plan updated: alert=%s digest=%s off=%s door=%s",
+             plan["modes"].get("fall"), plan["modes"].get("door"),
+             plan["modes"].get("motion"), plan["door_hours"])
+    return {"ok": True, "plan": plan, "summary": watch.summary(plan)}
+
+
+@app.get("/api/camera")
+def get_camera():
+    """What the camera is doing right now, and the last frame it kept.
+
+    This is the endpoint that makes Aegis feel like a CCTV system rather than a
+    video parser: liveness, framing, masks, and the zones drawn in the same
+    coordinate space as the pixels. The still is the most recent one on disk,
+    labelled with its own timestamp - never a placeholder.
+    """
+    hb = db.last_heartbeat()
+    still = db.latest_still()
+    payload = {
+        "camera": {"id": (hb or {}).get("camera_id") or "cam_hallway",
+                   "online": bool(hb), "fps": (hb or {}).get("fps"),
+                   "frames": (hb or {}).get("frames"),
+                   "detector": (hb or {}).get("detector"),
+                   "queue_depth": (hb or {}).get("queue_depth"),
+                   "last_seen": (hb or {}).get("ts")},
+        "zones": db.zones(HOUSEHOLD),
+        "still": None,
+        "masks": [z["name"] for z in db.zones(HOUSEHOLD) if z.get("private")],
+    }
+    if still:
+        payload["still"] = {
+            "url": auth.media_url(still["id"], "still.jpg"),
+            "incident_id": still["id"], "at": still.get("local_time"),
+            "type": still.get("type"), "zone": still.get("zone_id"),
+        }
+    return payload
 
 
 @app.put("/api/household")
@@ -570,6 +685,10 @@ async def checkin(incident_id: str, request: Request):
 
 class SimIn(BaseModel):
     scenario: str = "door"
+    # Force an hour so a demo recorded at 3 PM can show the 3 AM rule. Without
+    # this the control room can only ever demonstrate daytime behaviour, which
+    # is the half of the product that does not matter.
+    hour: int | None = None
 
 
 _sim_hits: dict[str, list[float]] = {}
@@ -603,17 +722,32 @@ async def sim_trigger(payload: SimIn, background: BackgroundTasks,
     if not allowed:
         raise HTTPException(429, f"too many scenarios, try again in {wait}s")
     now = datetime.now(TZ)
-    hour = now.hour
+    hour = payload.hour if payload.hour is not None and 0 <= payload.hour <= 23 else now.hour
+    # The incident clock, not the wall clock. A demo recorded in the afternoon
+    # must be able to show the 3 AM door rule, and the floor reads the incident's
+    # own hour so that stays honest rather than being faked downstream.
+    stamp = now.replace(hour=hour, minute=now.minute, second=now.second)
     night = hour >= 22 or hour < 6
     scenarios = {
         "door": ("door_open", "front_door", {"door_contact": "open"}),
+        "door_left_open": ("door_left_open", "front_door",
+                           {"door_contact": "open", "door_open_s": 240}),
         "fall": ("fall_confirmed", "hallway", {"no_recovery_s": 12}),
-        "stove": ("stove_unattended", "kitchen", {"stove_power_w": 1240, "absent_s": 420}),
+        "fall_recovered": ("fall_confirmed", "hallway",
+                           {"no_recovery_s": 4, "recovered": True}),
+        "fall_assisted": ("fall_assisted", "hallway",
+                          {"helper_present": True, "no_recovery_s": 6}),
+        "stove": ("stove_unattended", "kitchen",
+                  {"stove_power_w": 1240, "absent_s": 420}),
+        "stove_long": ("stove_unattended", "kitchen",
+                       {"stove_power_w": 1240, "absent_s": 700, "smoke_visible": True}),
         "pet": ("pet_motion", "hallway", {"person_check": False}),
         "prayer": ("fall_suspected", "prayer_room",
                    {"posture_transitions": 8, "recurring_daily": True}),
         "caregiver": ("door_open", "front_door",
                       {"door_contact": "open", "expected_visitor": True}),
+        "still": ("person_unwell_still", "sofa", {"still_min": 780}),
+        "camera_offline": ("camera_offline", "hallway", {"camera_fps": 0}),
     }
     if payload.scenario not in scenarios:
         raise HTTPException(422, f"unknown scenario; expected one of {sorted(scenarios)}")
@@ -621,8 +755,8 @@ async def sim_trigger(payload: SimIn, background: BackgroundTasks,
     iid = f"sim_{payload.scenario}_{int(time.time())}"
     packet = {
         "incident_id": iid, "household_id": HOUSEHOLD, "camera_id": "cam_hallway",
-        "type": itype, "status": "detected", "started_at": now.isoformat(),
-        "local_time": now.isoformat(), "zone_id": zone,
+        "type": itype, "status": "detected", "started_at": stamp.astimezone(timezone.utc).isoformat(),
+        "local_time": stamp.isoformat(), "zone_id": zone,
         "track": {"primary_track_id": 0, "track_ids": [0], "person_count": 1,
                   "path_length": 0.42, "dwell_in_door_zone_s": 6.8,
                   "crossed_door_line": itype == "door_open",
@@ -632,15 +766,17 @@ async def sim_trigger(payload: SimIn, background: BackgroundTasks,
         "source": "sim",
     }
     db.upsert_incident(packet)
-    floor = policy.evaluate(packet, PROFILE, local_hour=hour)
-    db.record_event(iid, "cam_hallway", itype, zone, now.isoformat(), floor.severity,
+    floor, plan_note = effective_floor(packet, hour)
+    db.record_event(iid, "cam_hallway", itype, zone, stamp.isoformat(), floor.severity,
                     suppressed=not floor.notifies, reason=",".join(floor.reasons),
                     source="sim")
     await broadcast({"type": "incident.created", "id": iid, "severity": floor.severity,
                      "floor": floor.severity, "sim": payload.scenario})
     asyncio.create_task(phase_one(iid))
-    log.info("sim %s -> %s (floor %s)", payload.scenario, iid, floor.severity)
-    return {"ok": True, "id": iid, "scenario": payload.scenario, "floor": floor.severity}
+    log.info("sim %s -> %s (floor %s%s)", payload.scenario, iid, floor.severity,
+             f", {plan_note}" if plan_note else "")
+    return {"ok": True, "id": iid, "scenario": payload.scenario, "floor": floor.severity,
+            "plan": plan_note}
 
 
 @app.get("/api/letters")
@@ -692,6 +828,36 @@ def push_subscribe(body: SubscriptionIn):
     return {"ok": True}
 
 
+@app.post("/api/push/test")
+async def push_test():
+    """Send a real notification to every registered device.
+
+    Exists because "notifications are enabled" is a claim, and a claim is not
+    a delivery. The family can press this, watch the phone in their hand, and
+    learn the truth now rather than on the first bad night.
+
+    Deliberately goes through the same WebPushProvider the alerts use - a
+    separate test path could pass while the real one fails.
+    """
+    subs = db.subscriptions()
+    if not subs:
+        return {"ok": False, "sent": 0, "devices": 0,
+                "error": "no device is registered yet"}
+    alert = {
+        "incident_id": f"test_{int(time.time())}",
+        "title": "This is what an Aegis alert looks like",
+        "body": "Nothing is wrong. Tap to open the app and see a real alert from this house.",
+        "severity": "watch",
+    }
+    delivery = await asyncio.to_thread(
+        notify.WebPushProvider().send, alert, 1)
+    db.add_outbound(None, "webpush", "test_notification", 0, 0, "immediate", False)
+    log.info("push test: ok=%s devices=%d %s", delivery.ok, len(subs),
+             delivery.error or "")
+    return {"ok": delivery.ok, "sent": 1 if delivery.ok else 0,
+            "devices": len(subs), "error": delivery.error or ""}
+
+
 # --------------------------------------------------------------------------
 # SSE
 # --------------------------------------------------------------------------
@@ -737,14 +903,15 @@ async def phase_one(incident_id: str) -> None:
     if not incident:
         return
     local_hour = incident_hour(incident)
-    floor = policy.evaluate(incident, PROFILE, local_hour=local_hour)
+    floor, plan_note = effective_floor(incident, local_hour)
     decision = policy.template_decision(floor, incident, PROFILE,
-                                        now_local().strftime("%H:%M"))
+                                        incident_clock(incident))
     decision.severity = policy.max_severity(decision.severity, floor.severity)
 
     if not decision.notify_now and not floor.notifies:
         db.mark_phase(incident_id, 1)
-        log.info("phase1 %s stayed home (floor %s)", incident_id, floor.severity)
+        log.info("phase1 %s stayed home (floor %s%s)", incident_id, floor.severity,
+                 f", {plan_note}" if plan_note else "")
         return
 
     # Alert fatigue is a safety bug: the seventh buzz of the hour is how a real
@@ -778,7 +945,7 @@ async def enrich(incident: dict) -> None:
     started = time.time()
     itype = incident["type"]
     local_hour = incident_hour(incident)
-    floor = policy.evaluate(incident, PROFILE, local_hour=local_hour)
+    floor, plan_note = effective_floor(incident, local_hour)
 
     features: dict = {}
     clip = incident.get("clip_path") or ""
@@ -848,7 +1015,7 @@ async def enrich(incident: dict) -> None:
     except (MetaError, ValueError, KeyError) as exc:
         log.warning("agent failed for %s (%s); using template", incident["id"], exc)
         decision = policy.template_decision(floor, incident, PROFILE,
-                                            now_local().strftime("%H:%M"))
+                                            incident_clock(incident))
 
     # The gate is built from the packet the model actually read, so "cited a fact
     # that isn't there" and "cited a real fact in different words" are separable.
@@ -856,11 +1023,14 @@ async def enrich(incident: dict) -> None:
     decision, violations = policy.validate(decision, floor, gate)
 
     # Quiet hours hold only `watch`; the hold is stored so the UI can say
-    # "held until 07:00" instead of pretending nothing happened.
-    may_interrupt, why = policy.should_interrupt(decision, floor, local_hour)
+    # "held until 07:00" instead of pretending nothing happened. The window is
+    # the household's, not a constant: onboarding can move it.
+    plan = current_plan()
+    may_interrupt, why = policy.should_interrupt(decision, floor, local_hour,
+                                                 plan["quiet"])
     deferred_until = None
     if not may_interrupt and why == "quiet_hours":
-        deferred_until = time.time() + policy.defer_until(local_hour)
+        deferred_until = time.time() + policy.defer_until(local_hour, plan["quiet"])
         violations.append("deferred_quiet_hours")
         decision.notify_now = False
 
@@ -957,9 +1127,9 @@ async def fail_open(incident: dict, exc: Exception) -> None:
         db.record_failure(incident["id"], f"{type(exc).__name__}:already_decided")
         log.warning("fail-open skipped %s: a decision already exists", incident["id"])
         return
-    floor = policy.evaluate(incident, PROFILE, local_hour=incident_hour(incident))
+    floor, _ = effective_floor(incident)
     decision = policy.template_decision(floor, incident, PROFILE,
-                                        now_local().strftime("%H:%M"))
+                                        incident_clock(incident))
     db.add_decision(incident["id"], 9, floor.severity, floor.reasons, decision,
                     "template", PROMPT_VERSION, [f"enrich_failed:{type(exc).__name__}"], 0)
     db.set_status(incident["id"], "notified", decision.severity)

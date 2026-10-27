@@ -409,29 +409,49 @@ QUIET_START_HOUR = 22
 QUIET_END_HOUR = 7
 
 
-def in_quiet_hours(local_hour: int) -> bool:
-    return local_hour >= QUIET_START_HOUR or local_hour < QUIET_END_HOUR
+def in_quiet_hours(local_hour: int, quiet: dict | None = None) -> bool:
+    """Is this hour inside the household's quiet window?
+
+    The window is configurable during onboarding, because a night-shift
+    daughter and a sleeping resident do not share a definition of "night". The
+    default is the plan's 22:00-07:00. `quiet=None` keeps the pure-function
+    contract the tests rely on.
+    """
+    if quiet is not None:
+        if not quiet.get("enabled", True):
+            return False
+        start = int(quiet.get("start", QUIET_START_HOUR))
+        end = int(quiet.get("end", QUIET_END_HOUR))
+    else:
+        start, end = QUIET_START_HOUR, QUIET_END_HOUR
+    if start == end:
+        return False
+    if start < end:
+        return start <= local_hour < end
+    return local_hour >= start or local_hour < end
 
 
-def defer_until(local_hour: int) -> int:
-    """Seconds until 07:00 local. Only ever applied to `watch`."""
-    if not in_quiet_hours(local_hour):
+def defer_until(local_hour: int, quiet: dict | None = None) -> int:
+    """Seconds until the quiet window ends. Only ever applied to `watch`."""
+    if not in_quiet_hours(local_hour, quiet):
         return 0
-    return ((QUIET_END_HOUR - local_hour) % 24) * 3600
+    end = int((quiet or {}).get("end", QUIET_END_HOUR))
+    return ((end - local_hour) % 24) * 3600
 
 
-def should_interrupt(decision: Decision, floor: Floor, local_hour: int) -> tuple[bool, str]:
+def should_interrupt(decision: Decision, floor: Floor, local_hour: int,
+                     quiet: dict | None = None) -> tuple[bool, str]:
     """Whether this may buzz a phone right now, and why not if it may not.
 
     Emergencies and anything at or above `urgent` always send. Only `watch` is
-    held for the morning — and the hold is disclosed in the UI, never silent.
+    held for the morning - and the hold is disclosed in the UI, never silent.
     """
     rank = ORDER.get(decision.severity, 0)
     if rank >= ORDER["urgent"] or decision.notify_now:
         return True, "sends_now"
     if floor.notifies:
         return True, "floor_requires"
-    if in_quiet_hours(local_hour):
+    if in_quiet_hours(local_hour, quiet):
         return False, "quiet_hours"
     return False, "watch_only"
 

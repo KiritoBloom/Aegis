@@ -905,6 +905,43 @@ def set_household(household_id: str, patch: dict) -> None:
             ("profile", json.dumps(current), now()))
 
 
+def get_state(key: str, default=None):
+    """One JSON value from household_state, or `default` if it was never set."""
+    with connect() as conn:
+        row = conn.execute("SELECT value FROM household_state WHERE key=?",
+                           (key,)).fetchone()
+    if not row or not row["value"]:
+        return default
+    try:
+        return json.loads(row["value"])
+    except json.JSONDecodeError:
+        return default
+
+
+def set_state(key: str, value) -> None:
+    with connect() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO household_state (key, value, updated_at) VALUES (?,?,?)",
+            (key, json.dumps(value), now()))
+        conn.commit()
+
+
+def latest_still() -> dict | None:
+    """The most recent frame the system actually kept.
+
+    The live page shows this instead of pretending to stream: it is the honest
+    thing to put on screen, because it is exactly the frame a family would see
+    if they opened the alert. A camera tile that is secretly a stock photo
+    would be the most dishonest element in a privacy product.
+    """
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT id, still_path, thumb_path, created_at, local_time, zone_id, type"
+            " FROM incidents WHERE still_path IS NOT NULL AND still_path != ''"
+            " ORDER BY created_at DESC LIMIT 1").fetchone()
+    return dict(row) if row else None
+
+
 def zones(household_id: str = "hh_demo") -> list[dict]:
     """Zones come from config/edge.yaml — the same file the edge reads.
 

@@ -29,6 +29,9 @@ venv/
 node_modules/
 .next/
 out/
+npm-debug.log*
+.npm-cache/
+*.tsbuildinfo
 
 # os / editor
 .DS_Store
