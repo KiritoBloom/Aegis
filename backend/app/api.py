@@ -30,10 +30,12 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from . import auth
 from . import clip as clip_util
 from . import db, notify, policy, privacy, render
 from .meta import (SAM_MODEL, SPARK_MODEL, TRANSCRIBE_MODEL, WONDER_MODEL, MetaClient,
@@ -53,6 +55,22 @@ PROMPT_VERSION = "aegis-v2-restraint"
 HOUSEHOLD = "hh_demo"
 
 app = FastAPI(title="Aegis", version="0.2.0")
+
+# The dashboard runs on another port in development and on the same origin in
+# production. Anything else is not invited: a care system that answers
+# `Access-Control-Allow-Origin: *` will happily hand a clip to any page the
+# family browses.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o for o in os.environ.get(
+        "DASHBOARD_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000",
+    ).split(",") if o],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["*"],
+)
+
 db.init()
 
 _subscribers: set[asyncio.Queue] = set()
@@ -206,8 +224,69 @@ async def ingest_heartbeat(request: Request,
 
 
 # --------------------------------------------------------------------------
+# session — the household PIN
+# --------------------------------------------------------------------------
+class PinIn(BaseModel):
+    pin: str
+
+
+@app.post("/api/session")
+def create_session(body: PinIn, request: Request):
+    """Exchange the household PIN for a signed cookie.
+
+    Off unless `HOUSEHOLD_PIN` is set, so the laptop demo behaves like a demo
+    and a configured deployment behaves like a locked door.
+    """
+    if not auth.required():
+        return {"ok": True, "auth": "disabled"}
+    token, exp = auth.check_pin(body.pin, auth.client_of(request))
+    response = JSONResponse({"ok": True, "expires_at": exp})
+    response.set_cookie(auth.COOKIE, token, max_age=auth.SESSION_S,
+                        httponly=True, samesite="lax",
+                        secure=os.environ.get("COOKIE_SECURE", "") == "1")
+    log.info("session opened from %s", auth.client_of(request))
+    return response
+
+
+@app.get("/api/session")
+def session_state(request: Request):
+    return {"auth_required": auth.required(),
+            "signed_in": (not auth.required())
+            or auth.session_ok(request.cookies.get(auth.COOKIE))}
+
+
+@app.delete("/api/session")
+def end_session():
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(auth.COOKIE)
+    return response
+
+
+# --------------------------------------------------------------------------
 # read API
 # --------------------------------------------------------------------------
+def with_media(inc: dict) -> dict:
+    """Attach five-minute signed links to whatever media this incident has.
+
+    The UI needs a URL it can put in a `<video src>`; the ledger and the alert
+    page must both work from a phone that has no cookie yet, because a push
+    notification opens cold. Signing per request is what makes that safe.
+
+    The `*_path` fields are dropped: they are absolute paths on this machine,
+    and the browser has no use for the layout of the laptop serving it.
+    """
+    for key, name in (("clip_path", "clip.mp4"), ("still_path", "still.jpg"),
+                      ("thumb_path", "thumb.jpg")):
+        if inc.get(key):
+            inc[key.replace("_path", "_url")] = auth.media_url(inc["id"], name)
+        inc.pop(key, None)
+    # The UI asks "is there a clip to play?", not "where is it on disk".
+    inc["has_clip"] = bool(inc.get("clip_url"))
+    if (MEDIA_ROOT / inc["id"] / "annotated.mp4").exists():
+        inc["annotated_url"] = auth.media_url(inc["id"], "annotated.mp4")
+    return inc
+
+
 @app.get("/api/incidents")
 def list_incidents(limit: int = 50, status: str | None = None,
                    severity: str | None = None, type: str | None = None,
@@ -219,7 +298,7 @@ def list_incidents(limit: int = 50, status: str | None = None,
         items = [i for i in items if i.get("type") == type]
     if since:
         items = [i for i in items if str(i.get("created_at") or "") >= since]
-    return {"items": items}
+    return {"items": [with_media(i) for i in items]}
 
 
 @app.get("/api/household")
@@ -272,7 +351,7 @@ def get_incident(incident_id: str):
         raise HTTPException(404, "not found")
     inc["notifications"] = db.notifications_for(incident_id)
     inc["acks"] = db.acks_for(incident_id)
-    return inc
+    return with_media(inc)
 
 
 class AckIn(BaseModel):
@@ -490,14 +569,36 @@ class SimIn(BaseModel):
     scenario: str = "door"
 
 
+_sim_hits: dict[str, list[float]] = {}
+
+
+def _sim_budget(who: str, limit: int = 10, window: float = 60.0) -> tuple[bool, int]:
+    """Ten scenarios a minute per caller, per §8.7."""
+    now = time.time()
+    hits = [t for t in _sim_hits.get(who, []) if now - t < window]
+    if len(hits) >= limit:
+        return False, int(window - (now - hits[0])) + 1
+    hits.append(now)
+    _sim_hits[who] = hits
+    return True, 0
+
+
 @app.post("/api/sim/trigger")
-async def sim_trigger(payload: SimIn, background: BackgroundTasks):
+async def sim_trigger(payload: SimIn, background: BackgroundTasks,
+                      request: Request = None):
     """Control room: fire a scripted scenario through the real pipeline.
 
     Deliberately not a shortcut around the pipeline. It builds the same
     incident packet the edge agent posts, so the floor, the SAM pass, the model
     decision and the ledger all run exactly as they would at 3 AM.
     """
+    # Ten a minute. The control room is behind a PIN in a real deployment, and
+    # a demo that can be scripted into a hundred model calls is a demo that
+    # spends the family's API budget.
+    who = auth.client_of(request) if request else "local"
+    allowed, wait = _sim_budget(who)
+    if not allowed:
+        raise HTTPException(429, f"too many scenarios, try again in {wait}s")
     now = datetime.now(TZ)
     hour = now.hour
     night = hour >= 22 or hour < 6
@@ -550,10 +651,15 @@ def checkins():
 
 
 @app.get("/media/{incident_id}/{name}")
-def media(incident_id: str, name: str):
+def media(incident_id: str, name: str, request: Request):
     if name not in ("clip.mp4", "still.jpg", "thumb.jpg", "sam_input.mp4",
                     "annotated.mp4", "redacted.mp4"):
         raise HTTPException(404, "not found")
+    # A clip is the most private object in the system. If a PIN is configured,
+    # a session cookie or a five-minute signature is required — and the answer
+    # is a plain 401, never a redirect that leaks the path.
+    if not auth.media_ok(incident_id, name, request):
+        raise HTTPException(401, "sign in to view this clip")
     path = MEDIA_ROOT / incident_id / name
     if not path.exists():
         raise HTTPException(404, "not found")
