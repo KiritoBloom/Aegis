@@ -1,0 +1,106 @@
+# Corridor camera, calibrated to real fixed-camera surveillance.
+#
+# Source is the CAVIAR lobby/corridor corpus (384x288 fisheye, normalised to
+# 640x480). This exists because the pipeline was being validated on cinematic
+# stock, which has shallow depth of field and a camera at chest height — nothing
+# like the flat, wide, high-mounted framing a real hallway camera produces. The
+# zones below are drawn against the pixels in that clip, not against a film set.
+#
+# Geometry in one line: the camera looks down a corridor, so the floor occupies
+# the bottom two thirds and the far end (where someone leaves the view) sits in
+# a narrow band just under the ceiling line. A tripwire across that band is the
+# real "left the corridor" signal; a dwell zone over the near floor is "standing
+# about in the hallway".
+camera:
+  source: file:data/reels/cctv_corridor.mp4
+  width: 640
+  height: 480
+  fps: 15
+  realtime: true
+  loop: true
+household:
+  id: hh_demo
+  timezone: Africa/Cairo
+  resident_name: Margaret
+motion:
+  downscale:
+  - 160
+  - 120
+  min_changed_ratio: 0.006
+  persistence_frames: 2
+  cooldown_s: 2.0
+  ignore_zones:
+  - tv
+  - window
+  - private
+person:
+  model: yolov8n.pt
+  imgsz: 640          # measured: 320 missed a third of person frames on real CCTV
+  conf_day: 0.40      # corridor lighting is flat and low-contrast
+  conf_night: 0.32
+  min_area_ratio: 0.004   # a person at the far end of a corridor is small
+  max_fps: 8
+  tracker: bytetrack.yaml
+fall:
+  enabled: true
+  suspect_score: 0.6
+  confirm_score: 0.8
+  no_recovery_s: 8
+clip:
+  pre_s: 6
+  post_s: 4
+  fps: 10
+  crf: 26
+  max_mb: 8
+zones:
+# The far end of the corridor. Someone crossing this has walked out of the
+# camera's reach, which is the event the product cares about at 3 AM.
+- name: corridor_end
+  type: tripwire
+  points:
+  - - 0.18
+    - 0.30
+  - - 0.46
+    - 0.30
+  - - 0.46
+    - 0.12
+  - - 0.18
+    - 0.12
+  schedule: 22:00-06:00
+  risk: high
+# The near floor. Standing here is ordinary; standing here for a long time, or
+# ending up on the floor here, is not.
+- name: hallway
+  type: dwell
+  points:
+  - - 0.05
+    - 0.55
+  - - 0.75
+    - 0.50
+  - - 0.95
+    - 1.0
+  - - 0.02
+    - 1.0
+- name: shopfront
+  type: dwell
+  points:
+  - - 0.72
+    - 0.42
+  - - 0.98
+    - 0.40
+  - - 1.0
+    - 1.0
+  - - 0.80
+    - 1.0
+- name: bathroom_interior
+  type: exclusion
+  private: true
+  points:
+  - - 0.0
+    - 0.0
+  - - 0.06
+    - 0.0
+  - - 0.06
+    - 0.35
+  - - 0.0
+    - 0.35

@@ -10,11 +10,11 @@ classifier and the de-escalation table then run on that real output.
 
 | Case | She said | Transcript | Class | Perception | Outcome | Delta |
 |---|---|---|---|---|---|---|
-| contradiction_floor | I'm fine, I dropped the remote. | I'm fine. I dropped the remote. | `affirmative` | upright | `contradiction` | +0 |
-| contradiction_still | I am okay, really. | I am okay. Really. | `affirmative` | upright | `contradiction` | +0 |
+| contradiction_floor | I'm fine, I dropped the remote. | I'm fine, I dropped the remote. | `affirmative` | upright | `contradiction` | +0 |
+| contradiction_still | I am okay, really. | I am okay really | `affirmative` | upright | `contradiction` | +0 |
 | negated_affirmative | I'm not okay, I can't get up. | I'm not okay, I can't get up. | `help` | upright | `escalated` | +1 |
-| help_explicit | Please help me, I need help. | Please help me, me, I need help. | `help` | upright | `escalated` | +1 |
-| self_recovered | I'm fine, I just tripped. I'm up now. | I'm fine. I just tripped. I'm I'm up now. | `affirmative` | upright | `self_recovered` | -1 |
+| help_explicit | Please help me, I need help. | please help me, I need help. | `help` | upright | `escalated` | +1 |
+| self_recovered | I'm fine, I just tripped. I'm up now. | I'm fine, I just tripped. I'm I'm up now. | `affirmative` | upright | `self_recovered` | -1 |
 
 ## Why each case exists
 

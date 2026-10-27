@@ -2,7 +2,7 @@
   {
     "id": "contradiction_floor",
     "said": "I'm fine, I dropped the remote.",
-    "transcript": "I'm fine. I dropped the remote.",
+    "transcript": "I'm fine, I dropped the remote.",
     "class": "affirmative",
     "expect": "contradiction",
     "got": "contradiction",
@@ -14,7 +14,7 @@
   {
     "id": "contradiction_still",
     "said": "I am okay, really.",
-    "transcript": "I am okay. Really.",
+    "transcript": "I am okay really",
     "class": "affirmative",
     "expect": "contradiction",
     "got": "contradiction",
@@ -38,7 +38,7 @@
   {
     "id": "help_explicit",
     "said": "Please help me, I need help.",
-    "transcript": "Please help me, me, I need help.",
+    "transcript": "please help me, I need help.",
     "class": "help",
     "expect": "escalated",
     "got": "escalated",
@@ -50,7 +50,7 @@
   {
     "id": "self_recovered",
     "said": "I'm fine, I just tripped. I'm up now.",
-    "transcript": "I'm fine. I just tripped. I'm I'm up now.",
+    "transcript": "I'm fine, I just tripped. I'm I'm up now.",
     "class": "affirmative",
     "expect": "self_recovered",
     "got": "self_recovered",

@@ -135,6 +135,29 @@ class RulesEngine:
                 return [
                     self._emit(Event("door_approach", ctx.t, zone.name, sev, {**feats, "night": ctx.night}))
                 ]
+
+        # A tripwire zone means "crossing this is leaving". Without this branch
+        # the zone type was decorative: it drew a polygon, produced no event, and
+        # a corridor exit was indistinguishable from an empty hallway. `entries`
+        # counts how many times the foot point moved into the polygon, which is
+        # the crossing signal a corridor camera can actually measure.
+        if zone.type == "tripwire" and feats.get("zone_entries", 0) > 0:
+            key = "door_open:front_door"
+            if self._fresh(key, ctx.t, cooldown=5.0):
+                sev = Severity.URGENT if (ctx.night and ctx.cognitive_condition) else Severity.WATCH
+                return [
+                    self._emit(
+                        Event(
+                            "door_open",
+                            ctx.t,
+                            zone.name,
+                            sev,
+                            {**feats, "door_contact": "unknown", "crossed_tripwire": True,
+                             "night": ctx.night},
+                        )
+                    )
+                ]
+            return []
         return []
 
     def _fall(self, ctx: Context) -> list[Event]:
