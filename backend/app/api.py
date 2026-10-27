@@ -435,10 +435,21 @@ async def checkin(incident_id: str, request: Request):
     cls = policy.classify_transcript(transcript)
     sam = inc.get("sam") or {}
     track = inc.get("track") or {}
-    on_floor = str(track.get("posture") or "").lower() in ("lying", "fallen", "on_floor")
-    upright_moving = not sam.get("track_unavailable") and bool(
-        track.get("path_length") or 0) > 0.05
-    still_s = float((inc.get("sensors") or {}).get("still_s") or 0)
+    sensors = inc.get("sensors") or {}
+    # Perception, not the transcript, decides whether she is on her feet. A
+    # confirmed fall with no recovery is on the floor by definition — trusting a
+    # `path_length` stub instead made the contradiction case resolve as
+    # self-recovered, which is the single most dangerous output here.
+    no_recovery = float(sensors.get("no_recovery_s") or 0)
+    recovered = bool(sensors.get("recovered"))
+    # `fall_confirmed` means perception saw her go down and stay down; that is
+    # the definition of the event, not an inference from a field that may be
+    # absent. Only an explicit `recovered` lifts it.
+    on_floor = (str(track.get("posture") or "").lower() in ("lying", "fallen", "on_floor")
+                or (inc.get("type") == "fall_confirmed" and not recovered)
+                or (no_recovery >= 8 and not recovered))
+    still_s = float(sensors.get("still_s") or no_recovery or 0)
+    upright_moving = (not on_floor and not sam.get("track_unavailable") and recovered)
 
     verdict = policy.checkin_outcome(cls, upright_moving=upright_moving,
                                      on_floor=on_floor, still_s=still_s)

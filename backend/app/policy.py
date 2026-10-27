@@ -491,6 +491,11 @@ def classify_transcript(text: str) -> str:
     t = f" {text.lower().strip()} "
     if not t.strip():
         return "no_response"
+    # Punctuation must never change a safety verdict. "I'm fine, I dropped the
+    # remote" is the demo line, and a comma after "fine" used to make it fall
+    # through to `other` — which meant the one case the product is built to
+    # handle never de-escalated.
+    t = " " + re.sub(r"[^\w']+", " ", t).strip() + " "
     negated = ("not ok", "not okay", "not fine", "can't get up", "cannot get up",
                "can not get up", "no i am not", "don't feel", "do not feel")
     if any(n in t for n in negated):
@@ -536,10 +541,17 @@ def checkin_outcome(transcript_class: str, *, upright_moving: bool,
         return {"severity_delta": 1, "resolution": "escalated",
                 "contradiction": False, "reason": "no answer after 20s"}
     if cls == "affirmative":
-        if lying or not upright_moving:
+        if on_floor or still_s > 10.0:
             return {"severity_delta": 0, "resolution": "contradiction",
                     "contradiction": True,
                     "reason": "said she is fine but has not stood up"}
+        if not upright_moving:
+            # She says she is fine, but perception has no evidence she is on her
+            # feet. Hold rather than resolve: an all-clear nobody can check is
+            # the one mistake this product must not make.
+            return {"severity_delta": 0, "resolution": "unclear",
+                    "contradiction": False,
+                    "reason": "said she is fine but is not clearly on her feet"}
         return {"severity_delta": -1, "resolution": "self_recovered",
                 "contradiction": False,
                 "reason": "said she is fine and is upright and moving"}

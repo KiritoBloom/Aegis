@@ -221,14 +221,31 @@ class MetaClient:
         return output_text(resp), usage, size
 
     # -- Transcribe -------------------------------------------------------
-    def transcribe(self, wav_path: str | Path) -> str:
-        with Path(wav_path).open("rb") as fh:
-            r = self.client.post("/asr/transcribe",
-                                 files={"file": (Path(wav_path).name, fh, "audio/wav")})
+    def transcribe(self, wav_path: str | Path, session: str = "aegis-checkin") -> str:
+        """Transcribe a short answer.
+
+        The endpoint is multipart with a JSON `request` part *and* an `audio`
+        part. Sending the file alone returns 400 "Both a 'request' and an
+        'audio' part are required" — which is exactly what a check-in must not
+        fail with, so the shape is pinned by the API docs, not guessed.
+        """
+        wav = Path(wav_path)
+        request = json.dumps({"model": TRANSCRIBE_MODEL,
+                              "audioEncoding": "WAV",
+                              "mode": "PUSH_TO_TALK"})
+        with wav.open("rb") as fh:
+            r = self.client.post(
+                "/asr/transcribe",
+                params={"sessionId": session},
+                files={
+                    "request": (None, request, "application/json"),
+                    "audio": (wav.name, fh, "audio/wav"),
+                },
+            )
         if r.status_code >= 400:
             raise MetaError(f"transcribe failed {r.status_code}: {r.text[:200]}")
         body = r.json()
-        return body.get("text") or body.get("transcript") or ""
+        return body.get("transcript") or body.get("text") or ""
 
 
 # ---------------------------------------------------------------------------

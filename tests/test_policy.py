@@ -183,6 +183,12 @@ def test_worker_sees_the_same_sensors_the_ingest_saw():
     assert floor.severity == "info", f"expected info, got {floor.severity}"
 
 
+def test_punctuation_cannot_change_a_safety_verdict():
+    # The plan's demo line. A comma after "fine" used to fall through to `other`.
+    assert policy.classify_transcript("I'm fine, I just dropped the remote") == "affirmative"
+    assert policy.classify_transcript("I'm fine.") == "affirmative"
+
+
 def test_classifier_reads_negation_as_help_not_affirmative():
     # "I'm not okay" contains "okay". Order of checks is the safety property.
     assert policy.classify_transcript("I'm not okay") == "help"
