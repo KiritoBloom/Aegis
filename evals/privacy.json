@@ -7,7 +7,7 @@
   {
     "test": "every uploaded byte has a retention",
     "pass": true,
-    "detail": "49 rows, 0 without retention"
+    "detail": "65 rows, 0 without retention"
   },
   {
     "test": "a private zone exists in the config",
