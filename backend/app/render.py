@@ -1,21 +1,4 @@
-"""Render the annotated clip the family actually sees.
-
-Two jobs, one pass over the frames:
-
-1. **Explain the decision.** A white person box, a soft mask fill, a mono
-   timestamp, and the foot-point trail turn "the system thought something" into
-   "here is what happened" — legible in about two seconds.
-
-2. **Redact people who did not consent.** The tracking pass returns a mask for
-   every `person`, not just the resident. Keeping the primary track and blurring
-   the rest costs nothing extra and is the one place segmentation is doing
-   privacy work rather than decoration. The label says it happened; a silent
-   redaction would be its own kind of dishonesty.
-
-If nothing can be decoded, this returns `None` and the caller shows the clean
-clip with a visible "third party may be visible" note. Never claim an overlay
-that was not drawn.
-"""
+"""Render SAM masks and tracks into the annotated clip."""
 from __future__ import annotations
 
 import logging

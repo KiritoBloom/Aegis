@@ -14,19 +14,7 @@ import {
 } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
-/**
- * "What left your home."
- *
- * The most important page in the product and the one most likely to be a lie in
- * someone else's build. Every row here is a real outbound request written by the
- * backend before the request was sent; the totals are SUMs at render time. If
- * the camera is idle the number is genuinely zero, and the page says so in the
- * largest type on the screen.
- *
- * The push-provider caveat is stated plainly. Aegis does not control what Google
- * or Apple does with a notification payload after it is handed over, and a
- * privacy page that omitted that would be selling a feeling.
- */
+/** Privacy ledger: consent, pause, retention, and what left the house. */
 export default function PrivacyPage() {
   const ledger = useApi<{ items: LedgerRow[]; totals: LedgerTotals }>("/api/ledger", 20000);
   const privacy = useApi<{

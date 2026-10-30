@@ -1,8 +1,4 @@
-"""HMAC-signed uploads with an offline queue.
-
-The edge never talks to the notification provider or the model API. It talks to
-one backend, and if that backend is down it writes to a queue and keeps watching.
-"""
+"""Signed uploads from the edge to the backend."""
 from __future__ import annotations
 
 import hashlib
@@ -77,6 +73,35 @@ class Uploader:
             log.warning("clip rejected: %s %s", r.status_code, r.text[:200])
         except Exception as exc:  # noqa: BLE001
             log.warning("clip upload failed (%s); keeping local copy", exc)
+        return False
+
+    def post_audio(self, incident_id: str, wav: Path, sensors: dict,
+                   track: dict, hint: str = "", zone_id: str = "") -> bool:
+        """Send one gated WAV. The signature covers the incident id, as ingest expects."""
+        ts = str(int(time.time()))
+        sig = self._sign(ts, incident_id.encode())
+        try:
+            r = self.client.post(
+                f"{self.base}/api/ingest/audio",
+                data={
+                    "incident_id": incident_id,
+                    "household_id": "hh_demo",
+                    "camera_id": "cam_hallway",
+                    "zone_id": zone_id,
+                    "sensors": json.dumps(sensors, separators=(",", ":")),
+                    "track": json.dumps(track, separators=(",", ":")),
+                    "hint": hint,
+                    "event_type": "help_call",
+                    "source": "live",
+                },
+                files={"audio": (Path(wav).name, Path(wav).read_bytes(), "audio/wav")},
+                headers={"X-Edge-Timestamp": ts, "X-Edge-Signature": sig},
+            )
+            if r.status_code in (200, 201, 202):
+                return True
+            log.warning("audio rejected: %s %s", r.status_code, r.text[:200])
+        except Exception as exc:  # noqa: BLE001
+            log.warning("audio upload failed: %s", exc)
         return False
 
     def heartbeat(self, status: dict) -> bool:

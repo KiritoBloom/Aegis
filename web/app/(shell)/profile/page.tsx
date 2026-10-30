@@ -2,20 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Banner, Fact, Icon, Skeleton } from "@/components/ui";
+import { Icon } from "@/components/icons";
+import { Banner, Fact, Skeleton } from "@/components/ui";
 import { Notifications } from "@/components/notifications";
 import { hourLabel, send, type Household } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
-/**
- * The household.
- *
- * Two audiences on one page, which is why it is split: the care profile (what
- * changes how fast Aegis calls you) and the plan (what reaches your phone). The
- * plan summary here is a mirror of onboarding, not a second implementation — it
- * links back to the flow rather than growing a parallel set of controls that
- * could drift out of step with it.
- */
+/** Household profile and the push subscription that makes alerts deliverable. */
 export default function ProfilePage() {
   const household = useApi<Household>("/api/household", 30000);
   const [profile, setProfile] = useState<Household["profile"] | null>(null);
@@ -179,7 +172,7 @@ export default function ProfilePage() {
               />
             </div>
             <Link
-              href="/onboarding"
+              href="/setup"
               className="btn"
               style={{ width: "100%", marginTop: 12, justifyContent: "space-between" }}
             >

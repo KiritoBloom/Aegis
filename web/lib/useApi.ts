@@ -11,13 +11,7 @@ export type Loadable<T> = {
   setData: (value: T | null) => void;
 };
 
-/**
- * One GET, one poll, one error surface.
- *
- * `poll` defaults to 15s, which is the interval at which the dashboard still
- * feels live without turning a care app into a load generator on a phone. Live
- * views pass a shorter interval; the alert list subscribes to SSE instead.
- */
+/** One GET, one poll, one error surface. */
 export function useApi<T>(path: string, poll = 15000): Loadable<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,18 +62,7 @@ export function useNow(interval = 30000): number {
   return now;
 }
 
-/**
- * SSE as an upgrade, never a dependency.
- *
- * The backend emits *named* frames (`incident.created`, `incident.notified`, …)
- * and an unnamed `snapshot` on connect, so a bare `onmessage` handler would sit
- * there receiving nothing. Both are wired, and the handler is told which frame
- * arrived so a page can decide what is worth re-fetching.
- *
- * If the stream dies the page keeps its last good data and the poll above
- * catches up; the reconnect is silent because a red toast about a websocket
- * would be the loudest thing on a quiet night.
- */
+/** SSE is an upgrade; every view still works from a single GET. */
 const FRAMES = [
   "incident.created",
   "incident.clip",
@@ -88,12 +71,20 @@ const FRAMES = [
   "incident.suppressed",
   "incident.escalated",
   "incident.ack",
+  "checkin.started",
+  "checkin.answered",
+  "checkin.no_answer",
+  "checkin.cancelled",
+  "context.read",
+  "visitor.expected",
+  "night.note",
   "watch.updated",
   "privacy.paused",
   "privacy.resumed",
   "privacy.consent",
   "privacy.deleted",
   "household.updated",
+  "wall.verification",
 ] as const;
 
 export function useStream(onEvent: (frame: string, payload: unknown) => void) {

@@ -1,12 +1,4 @@
-/**
- * The client-side data layer.
- *
- * Everything here is a plain fetch with a poll, on purpose. A care dashboard
- * that depends on a websocket staying open is a dashboard that is stale at the
- * exact moment the network is busy — which is when an alert is happening. SSE is
- * used as an *upgrade* for the incident list (it makes the page feel alive), but
- * every view still renders correctly from a single GET.
- */
+/** Client data layer: typed reads, fetch helpers, and display formatters. */
 
 export type Severity = "info" | "watch" | "urgent" | "emergency";
 
@@ -44,10 +36,24 @@ export type Incident = {
   evidence?: string[];
   decision?: Decision | null;
   sam?: SamResult | null;
+  context_read?: ContextRead | null;
+  checkin_status?: "asking" | "answered" | "no_answer" | "cancelled" | null;
+  checkin_prompt?: string | null;
+  checkin_audio_url?: string;
+  checkin_due_at?: number | null;
+  checkin_timeout_s?: number | null;
+  checkin?: CheckinRecord | null;
   track?: Record<string, unknown> | null;
   sensors?: Record<string, unknown> | null;
   notifications?: Notification[];
   acks?: Ack[];
+  agent?: {
+    step: string;
+    tool?: string;
+    summary?: string;
+    ok?: boolean;
+    latency_ms?: number;
+  }[] | null;
 };
 
 export type Decision = {
@@ -73,6 +79,37 @@ export type SamResult = {
   person_count?: number;
   track_unavailable?: boolean;
   error?: string;
+};
+
+export type CheckinRead = {
+  class: string;
+  read: string;
+  evidence: string[];
+  confidence: number;
+  model: string;
+  latency_ms?: number;
+};
+
+export type CheckinRecord = {
+  id: string;
+  transcript: string;
+  outcome: string;
+  model: string;
+  created_at: string;
+  read?: CheckinRead | null;
+};
+
+export type ContextRead = {
+  source: "person" | "media" | "unclear";
+  severity: Severity;
+  notify_now: boolean;
+  title: string;
+  body: string;
+  read: string;
+  evidence: string[];
+  confidence: number;
+  model: string;
+  latency_ms?: number;
 };
 
 export type Notification = {
@@ -127,8 +164,7 @@ export type WatchState = {
   consent_at: string | null;
 };
 
-export type Stats = {
-  events_seen?: number;
+export type Stats = {  events_seen?: number;
   alerts_sent?: number;
   stayed_home?: number;
   restraint_rate?: number;
@@ -187,6 +223,43 @@ export type AegisEvent = {
   source?: string;
 };
 
+export type NightSummary = {
+  events: number;
+  quiet: number;
+  alerts: number;
+  door: number;
+  unexpected: number;
+  falls: number;
+  checkins: number;
+  hours: number;
+};
+
+export type NightNote = {
+  note: string;
+  check: string;
+  model: string;
+  event_count: number;
+  created_at: string;
+};
+
+export type NightView = {
+  start: string;
+  end: string;
+  active: boolean;
+  events: AegisEvent[];
+  incidents: Incident[];
+  note: NightNote | null;
+  summary: NightSummary;
+};
+
+export type VisitorState = {
+  expected: boolean;
+  until?: string;
+  minutes_left?: number;
+  by?: string;
+  label?: string;
+};
+
 export type Household = {
   household: { id: string; name: string; timezone: string };
   profile: {
@@ -197,6 +270,7 @@ export type Household = {
     uses_mobility_aid: boolean;
     anticoagulant: boolean;
     lives_alone: boolean;
+    conditions?: string[];
   };
   zones: Zone[];
   privacy: { consent: ConsentState; pause: PauseState };
@@ -220,6 +294,13 @@ export type PauseState = {
   at?: string | null;
 };
 
+export type CameraObject = {
+  label: string;
+  conf: number;
+  box: [number, number, number, number];
+  zone?: string | null;
+};
+
 export type Camera = {
   camera: {
     id: string;
@@ -232,6 +313,8 @@ export type Camera = {
   };
   zones: Zone[];
   still: { url: string; incident_id: string; at: string; type: string; zone: string } | null;
+  objects?: CameraObject[];
+  objects_at?: string | null;
   masks: string[];
 };
 
@@ -298,6 +381,9 @@ const TYPE_LABEL: Record<string, string> = {
   pet_motion: "Pet moving",
   prayer_activity: "Prayer",
   normal_rest: "Resting",
+  help_call: "Call for help",
+  unexpected_presence: "Someone else at night",
+  restlessness: "Repeated pacing",
 };
 
 export function typeLabel(t: string | null | undefined): string {
@@ -315,18 +401,6 @@ export function severityLabel(s: Severity | string | null | undefined): string {
       return "Worth a look";
     default:
       return "Noted";
-  }
-}
-
-export function severityTone(s: Severity | string | null | undefined): string {
-  switch (s) {
-    case "emergency":
-    case "urgent":
-      return "red";
-    case "watch":
-      return "amber";
-    default:
-      return "sage";
   }
 }
 

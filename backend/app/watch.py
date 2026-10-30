@@ -1,33 +1,4 @@
-"""The watch plan: what this household asked to be told about.
-
-Onboarding is not a survey. Every answer here changes a branch in the policy
-floor, and the change is visible afterwards in the restraint counter — "you
-asked us not to interrupt you for daytime door opens" is a row a family can
-read, not a setting buried in a menu.
-
-The safety rule from `policy.py` survives intact, and this module is where it
-is defended a second time from a different direction:
-
-    **A household may turn down the volume. It may never turn off the net.**
-
-Three classes are locked. A fall, a check-in that got no answer, and the camera
-going blind are not preferences. If a client sends `mode: off` for one of them
-the request is rejected rather than silently honoured, because the failure mode
-of "the family muted the thing that saves her" is unrecoverable.
-
-For everything else there are three modes:
-
-* `alert`  — interrupt the phone now, exactly as before.
-* `digest` — record it, keep it on the dashboard, put it in the morning letter,
-             do not buzz. Only ever applied below `urgent`.
-* `off`    — record it for the restraint counter, never surface it as an alert.
-
-The second guard is structural: `apply()` refuses to lower anything the floor
-has already put at `urgent` or above. A muted stove rule still fires when the
-stove has been on for twelve minutes. A digest-only door still fires at 3 AM
-for a resident with dementia. The plan is a preference layer *above* the floor,
-never a hole through it.
-"""
+"""Household watch plan: preferences above the policy floor. Safety classes stay locked."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -103,6 +74,23 @@ CATALOG: tuple[WatchClass, ...] = (
         examples={"alert": "A call at five minutes, and a louder one at ten."},
     ),
     WatchClass(
+        id="restlessness",
+        label="Pacing and restlessness",
+        question="When should repeated back-and-forth be worth a quiet check?",
+        detail=("A normal walk crosses a room and stops. Pacing has a long path, "
+                "many turns, and little net displacement. It can be exercise, "
+                "cooking, worry or pain; Aegis reports the pattern and never "
+                "names a cause."),
+        tier="care",
+        default="digest",
+        types=("restlessness",),
+        examples={
+            "alert": "A gentle check when the pattern is new or at night.",
+            "digest": "A line in the morning note.",
+            "off": "Count it silently.",
+        },
+    ),
+    WatchClass(
         id="stillness",
         label="Long stillness",
         question="Should a whole day without movement be worth a quiet check?",
@@ -127,6 +115,31 @@ CATALOG: tuple[WatchClass, ...] = (
         default="alert",
         types=("camera_offline", "device_offline"),
         examples={"alert": "A red banner and a push until it is back."},
+    ),
+    WatchClass(
+        id="night",
+        label="Someone else at night",
+        question="If a second person is in the house after dark, who should know?",
+        detail=("This is not a burglar alarm and it does not identify anyone. "
+                "It notices a second person after dark and gives the family the "
+                "clip, the time, and the door state, so a human can decide."),
+        tier="safety",
+        default="alert",
+        types=("unexpected_presence",),
+        examples={"alert": "A phone alert with the clip and the time."},
+    ),
+    WatchClass(
+        id="help",
+        label="Calls for help",
+        question="If she calls for help, who should hear it?",
+        detail=("A cry with no television or radio to explain it is treated as a "
+                "person in need. When the room is ambiguous, Aegis asks her first "
+                "and escalates if she does not answer. This is a safety net, not "
+                "a preference."),
+        tier="safety",
+        default="alert",
+        types=("help_call",),
+        examples={"alert": "A check-in at once; the family if she does not answer."},
     ),
     WatchClass(
         id="checkin",
@@ -194,12 +207,7 @@ def defaults() -> dict:
 
 
 def normalise(raw: dict | None) -> dict:
-    """A stored plan plus defaults, tolerant of an older or partial row.
-
-    A plan written before a class existed must not make that class silently
-    disappear: missing classes fall back to their default, which for a safety
-    class is `alert`. The same goes for areas - an unknown zone is watched.
-    """
+    """Merge stored preferences with defaults without losing new safety classes."""
     plan = defaults()
     raw = raw or {}
     modes = raw.get("modes") or {}

@@ -1,12 +1,4 @@
-"""Clip preparation for upload.
-
-SAM bills per frame and per pixel. The clip the edge sends is already ~10 s, but
-a reviewer can post anything, so the backend re-cuts every clip into the short
-window SAM actually needs. The trajectory is preserved; the size is not.
-
-This is also the last point before data leaves the house, so it is where the
-media boundary is enforced rather than merely described.
-"""
+"""Small ffmpeg wrappers used by the incident and wall pipelines."""
 from __future__ import annotations
 
 import logging
@@ -55,15 +47,3 @@ def duration_s(path: Path | str) -> float:
         return round(float(res.stdout.strip()), 2)
     except Exception:  # noqa: BLE001
         return 0.0
-
-
-def frame_count(path: Path | str) -> int:
-    try:
-        res = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames",
-             "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", str(path)],
-            capture_output=True, text=True, timeout=60,
-        )
-        return int(res.stdout.strip().split(",")[0])
-    except Exception:  # noqa: BLE001
-        return 0

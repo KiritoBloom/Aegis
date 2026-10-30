@@ -12,6 +12,7 @@ const backend = process.env.AEGIS_API ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  devIndicators: false,
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${backend}/api/:path*` },

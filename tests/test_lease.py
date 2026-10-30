@@ -28,6 +28,11 @@ os.environ["DATABASE_PATH"] = str(SCRATCH / "lease.db")
 
 from app import db  # noqa: E402
 
+# The environment variable only helps if this module imports db first; another
+# test may have imported it already. Pin the module path explicitly so these
+# tests can never claim the live demo's incidents (including check-in rows).
+db.DB_PATH = str(SCRATCH / "lease.db")
+
 
 def _seed(incident_id: str, with_clip: bool = True) -> None:
     db.upsert_incident({

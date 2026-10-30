@@ -38,11 +38,33 @@ person:
   max_fps: 8
   tracker: "bytetrack.yaml"
 
+# Repeated back-and-forth is a care signal, not a diagnosis. The Evidence Agent
+# checks it against household memory and recent events before anything is sent.
+restlessness:
+  enabled: true
+  min_present_s: 8
+  min_path: 0.8
+  min_direction_changes: 6
+  cooldown_s: 600
+  night_cooldown_s: 300
+
 fall:
   enabled: true
   suspect_score: 0.60
   confirm_score: 0.80
   no_recovery_s: 8
+
+# The microphone is local and gated by loudness. Audio leaves only when the
+# gate fires; the backend transcribes one short WAV and deletes it. Enable with
+# AEGIS_AUDIO=on (or --audio) on a machine with a microphone.
+audio:
+  enabled: false
+  sample_rate: 16000
+  block_s: 0.1
+  pre_s: 5
+  threshold_dbfs: -30
+  sustain_s: 0.6
+  cooldown_s: 30
 
 clip:
   pre_s: 6

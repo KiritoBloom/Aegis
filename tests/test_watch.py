@@ -139,7 +139,7 @@ def test_the_quiet_window_is_the_households_and_can_move():
 def test_summary_counts_match_the_catalog():
     plan = watch.normalise(None)
     s = watch.summary(plan)
-    assert set(s["locked"]) == {"fall", "camera", "checkin", "stove"}
+    assert set(s["locked"]) == {"fall", "camera", "checkin", "stove", "help", "night"}
     assert len(s["alert"]) + len(s["digest"]) + len(s["off"]) + len(s["locked"]) == len(watch.CATALOG)
 
 

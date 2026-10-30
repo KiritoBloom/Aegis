@@ -1,25 +1,4 @@
-"""Who is allowed to look at a clip.
-
-The privacy claim in this project is not only "the video never leaves the
-house", it is "the video is not readable by whoever happens to be on the
-network". Port 8000 on a laptop in a Cairo flat is reachable from the flat's
-wifi, and `GET /media/<id>/clip.mp4` was an open door.
-
-Two locks, both deliberately simple:
-
-* **Session cookie** — a six-digit household PIN, exchanged for an HMAC-signed
-  HttpOnly cookie. Five wrong tries from one address buys a sixty-second
-  lockout. Demo-grade, and documented as such: a real deployment puts the
-  family behind an identity provider, not behind a number a caregiver can
-  guess.
-* **Signed media URL** — a push notification cannot carry a cookie, so media
-  links may instead carry `?exp=<epoch>&sig=<hmac>`. Five minutes, one file,
-  no directory listing.
-
-Both are off when `HOUSEHOLD_PIN` is unset, because a laptop demo with no PIN
-configured should behave like a laptop demo and not like a broken product.
-When it *is* set, every media request is checked — the default is closed.
-"""
+"""Household PIN sessions and signed media URLs. Auth is optional on localhost and enforced when configured."""
 from __future__ import annotations
 
 import hashlib

@@ -2,29 +2,18 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Banner, Fact, Icon, Skeleton } from "@/components/ui";
+import { Icon } from "@/components/icons";
+import { Banner, Fact, Skeleton } from "@/components/ui";
 import { send, type Stats } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
-/**
- * The control room.
- *
- * Every button here posts the same packet the edge agent posts, so what you see
- * is the real floor, the real SAM pass, the real model decision. Nothing is
- * mocked — which is also why it is behind a PIN in a real deployment and capped
- * at ten scenarios a minute.
- *
- * The `hour` selector exists because the interesting half of this product only
- * happens at night, and a demo recorded at 3 PM would otherwise never show it.
- * Forcing the hour changes the incident's own clock, so the floor reads 03:00
- * for real rather than being told to pretend.
- */
+/** Control room for deterministic pipeline scenarios. */
 
 type Scenario = {
   id: string;
   label: string;
   detail: string;
-  group: "door" | "fall" | "kitchen" | "quiet";
+  group: "door" | "fall" | "kitchen" | "voice" | "night" | "quiet" | "patterns";
   expect: string;
 };
 
@@ -63,6 +52,20 @@ const SCENARIOS: Scenario[] = [
     detail: "A second person is already with her.",
     group: "fall",
     expect: "Urgent, not emergency — someone is there.",
+  },
+  {
+    id: "restlessness",
+    label: "Repeated pacing",
+    detail: "A long path, nine sharp turns, little net movement.",
+    group: "patterns",
+    expect: "A care note, not an alarm. The Evidence Agent checks whether it is new.",
+  },
+  {
+    id: "restlessness_night",
+    label: "Pacing after dark",
+    detail: "The same pattern at 03:00.",
+    group: "patterns",
+    expect: "A quiet after-dark check; a human decides what it means.",
   },
   {
     id: "prayer",
@@ -113,13 +116,65 @@ const SCENARIOS: Scenario[] = [
     group: "quiet",
     expect: "A red banner. It never pretends the house is quiet.",
   },
+  {
+    id: "help_call",
+    label: "A cry for help",
+    detail: "A call for help, no television or radio on.",
+    group: "voice",
+    expect: "Urgent. The alert goes out, then Aegis asks her if she is okay.",
+  },
+  {
+    id: "help_call_tv",
+    label: "A cry over the TV",
+    detail: "The same cry, but the television is on and she is in frame.",
+    group: "voice",
+    expect: "Ambiguous. Muse reads the room and Aegis asks her before it escalates.",
+  },
+  {
+    id: "help_call_floor",
+    label: "A cry from the floor",
+    detail: "She called for help and has not got up.",
+    group: "voice",
+    expect: "Emergency. The camera evidence outranks the television.",
+  },
+  {
+    id: "help_call_tv_only",
+    label: "The television",
+    detail: "A scream-like sound, the TV is on, and no person is in frame.",
+    group: "voice",
+    expect: "Stay quiet. The sound is the television until a person appears.",
+  },
+  {
+    id: "night_visitor",
+    label: "Second person after dark",
+    detail: "Two people at the front door at 03:00, and no expected visitor.",
+    group: "night",
+    expect: "Urgent. The family gets the clip, the time and the door state — not an identity.",
+  },
+  {
+    id: "night_visitor_expected",
+    label: "Expected night visitor",
+    detail: "Two people at 03:00, but the plan expects a caregiver.",
+    group: "night",
+    expect: "Stay quiet. The second person is expected, and the event is still recorded.",
+  },
+  {
+    id: "night_visitor_day",
+    label: "Visitor in daylight",
+    detail: "Two people at 14:00 with the door open.",
+    group: "night",
+    expect: "Stay quiet. A daylight visitor is not an alarm.",
+  },
 ];
 
 const GROUPS: { id: Scenario["group"]; label: string }[] = [
   { id: "door", label: "The door" },
   { id: "fall", label: "Falls and posture" },
   { id: "kitchen", label: "The kitchen" },
+  { id: "voice", label: "A voice in the room" },
+  { id: "night", label: "After dark" },
   { id: "quiet", label: "Things that should not wake you" },
+  { id: "patterns", label: "Movement patterns" },
 ];
 
 const HOURS = [3, 8, 14, 19, 23];
@@ -162,13 +217,22 @@ export default function SimPage() {
   return (
     <div style={{ maxWidth: 960 }}>
       <header style={{ marginBottom: 20 }}>
-        <p className="eyebrow">Control room</p>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 14 }}>
+          <p className="eyebrow">Control room</p>
+          <Link href="/night" className="mono micro" style={{ textDecoration: "underline" }}>
+            Night watch →
+          </Link>
+        </div>
         <h1 className="h1" style={{ margin: "8px 0 0" }}>Make something happen.</h1>
         <p className="lede" style={{ marginTop: 10, maxWidth: 600 }}>
           Each of these posts the same packet the camera posts. The policy floor, the
           person check and the model all run for real — so if a scenario behaves
           wrongly here, it would behave wrongly at 3 AM.
         </p>
+        <div className="control-note">
+          <span className="dot dot-live" aria-hidden="true" />
+          Simulated input · real policy · real model calls when a clip exists
+        </div>
       </header>
 
       <div className="card-flat" style={{ padding: 16, marginBottom: 16 }}>
@@ -225,22 +289,17 @@ export default function SimPage() {
 
       <div style={{ display: "grid", gap: 22 }}>
         {GROUPS.map((g) => (
-          <section key={g.id}>
+          <section key={g.id} className="reveal">
             <p className="eyebrow" style={{ marginBottom: 8 }}>{g.label}</p>
             <div style={{ display: "grid", gap: 10 }} className="sm:grid-cols-2">
               {SCENARIOS.filter((s) => s.group === g.id).map((s) => (
                 <button
                   key={s.id}
                   type="button"
-                  className="card"
+                  className="card scenario-card"
                   onClick={() => fire(s)}
                   disabled={busy !== null}
                   style={{
-                    padding: "14px 16px",
-                    textAlign: "left",
-                    display: "grid",
-                    gap: 4,
-                    cursor: busy ? "wait" : "pointer",
                     opacity: busy && busy !== s.id ? 0.55 : 1,
                   }}
                 >

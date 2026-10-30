@@ -1,15 +1,4 @@
-"""Notification providers behind one interface.
-
-The contract that makes this safe is not the interface, it is the order of
-operations: a `notifications` row is written **before** the network call. A push
-that fails is then a recorded fact the dashboard can show, not a channel that
-silently did nothing. The edge never talks to a provider directly; only this
-module does, and only after the policy floor has already been applied.
-
-Web Push is the primary channel because it needs no vendor, no phone number, and
-no third party holding a copy of the alert. In-app SSE is the fallback that
-always works while the dashboard is open.
-"""
+"""Notification providers. The notification row is written before the network call."""
 from __future__ import annotations
 
 import asyncio
@@ -72,8 +61,9 @@ class WebPushProvider:
             "tag": alert["incident_id"],
             "incident_id": alert["incident_id"],
             # Same tag on phase 2 so the lock screen updates instead of buzzing
-            # twice for one event.
-            "renotify": phase == 1,
+            # twice for one event. Phase 3 is the silence/answer escalation:
+            # that one is allowed to buzz because nobody has acknowledged it.
+            "renotify": phase in (1, 3),
         })
         if len(payload.encode()) > 4096:
             payload = json.dumps({

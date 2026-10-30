@@ -45,3 +45,5 @@ Thumbs.db
 .userbase/
 *.pt
 *.onnx
+.pytest_cache/
+.qoder/

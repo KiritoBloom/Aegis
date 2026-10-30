@@ -1,12 +1,4 @@
-"""Zone geometry and trajectory features.
-
-Pure functions over normalized (0..1) coordinates. No OpenCV, no numpy, no I/O,
-so every rule in this module is unit-testable without a camera.
-
-Coordinate convention: (x, y) where x grows right and y grows DOWN, matching
-image space. A "foot point" is (box centre x, box bottom y) — the point that
-touches the floor and therefore the point that crosses a door threshold.
-"""
+"""Normalized geometry helpers for zones, tracks, and posture."""
 from __future__ import annotations
 
 import math
@@ -56,25 +48,6 @@ def distance_to_polygon(point: Point, polygon: tuple[Point, ...]) -> float:
     return min(_seg_distance(point, polygon[i], polygon[(i + 1) % n]) for i in range(n))
 
 
-def polygon_centroid(polygon: tuple[Point, ...]) -> Point:
-    n = len(polygon)
-    return (sum(p[0] for p in polygon) / n, sum(p[1] for p in polygon) / n)
-
-
-def bbox_overlap_ratio(box: tuple[float, float, float, float], polygon: tuple[Point, ...]) -> float:
-    """Fraction of a normalized box's area that falls inside the polygon.
-
-    Sampled on a 5x5 grid — cheap, and precise enough for a hazard test.
-    """
-    x1, y1, x2, y2 = box
-    hits = 0
-    for i in range(5):
-        for j in range(5):
-            px = x1 + (x2 - x1) * (i + 0.5) / 5
-            py = y1 + (y2 - y1) * (j + 0.5) / 5
-            if point_in_polygon((px, py), polygon):
-                hits += 1
-    return hits / 25.0
 
 
 @dataclass

@@ -47,6 +47,30 @@ floor when the packet already explains the situation:
 Raising severity is allowed when the packet shows real danger. Raising it because the words sound
 frightening is how this product fails.
 
+AUDIO AND THE CHECK-IN
+- A cry for help with no television or radio to explain it is a person in need: treat it as at
+  least urgent. If a television or radio was on, the sound is ambiguous; use the camera and the
+  check-in rather than calling it a fall.
+- A person on the floor who called for help is an emergency. Never name a medical cause — no
+  "heart attack", no "stroke", no diagnosis. Say what was heard and what is happening.
+- The check-in is evidence. "No answer" or "help" raises urgency; "I'm fine" never lowers the
+  policy floor unless the camera independently shows her upright and moving.
+
+MOVEMENT PATTERNS
+- `restlessness` is a pattern: a long path, many sharp turns, little net movement.
+  It can be exercise, cooking, pacing, worry, pain, or a familiar routine. It is
+  not a diagnosis and must never be described as one.
+- Use household memory and recent events. A familiar daytime pattern is a note,
+  not a phone call. A new or unusual pattern after dark, or one accompanied by
+  a cry or a door approach, is worth a quiet check. State the observed pattern,
+  not a cause. Never mention anxiety, dementia, agitation, or a medical term.
+
+OBJECT CONTEXT
+- `sensors.objects` is a small, sampled vocabulary from the room (bed, couch, chair, table,
+  television, appliance, phone). It is context, not identity. A bed or couch under her can explain
+  a lie-down; a bed merely present in the frame does not put her on it. Use `support_surface` when it
+  is present and never invent an object or a room.
+
 TONE EXAMPLES (do not copy verbatim)
 - "Front door opened at 3:12 AM. Margaret walked to the door and stayed for 7 seconds."
 - "Possible fall in the hallway. She has not stood up for 12 seconds."
@@ -89,6 +113,82 @@ DECISION_SCHEMA = {
 }
 
 
+CHECKIN_READ_PROMPT = """You interpret one short reply from a resident after a safety check-in.
+You receive the question that was asked, the transcript, a deterministic word-list classification,
+and the perception context (posture, whether she is on the floor, person count, audio/media state).
+Your job is to catch the answers a word list misses, without ever talking a frightened person out of
+an alert.
+
+Return one class:
+- "help": she is asking for help, is hurt, cannot get up, or the words and perception conflict in a
+  way that suggests she is not safe. A negation ("not okay", "can't get up") is always help.
+- "affirmative": she clearly says she is okay and nothing in the context contradicts it.
+- "confused": she is disoriented or does not know what happened, but is not asking for help.
+- "other": anything else.
+- "no_response": only when the transcript is empty.
+
+Never diagnose and never give medical advice. Never name a condition. The classifier is a floor, not
+a ceiling: you may raise a class to "help" when the words and context warrant it, but you may not
+turn a "help" into "affirmative". Your read is a short factual sentence a family can understand,
+under 160 characters, with no mention of AI, models, sensors or confidence scores. Every evidence
+token must appear in the input."""
+
+CHECKIN_READ_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "class": {"type": "string",
+                  "enum": ["affirmative", "help", "confused", "other", "no_response"]},
+        "read": {"type": "string", "maxLength": 160},
+        "evidence": {"type": "array", "items": {"type": "string"}, "maxItems": 6},
+        "confidence": {"type": "number"},
+    },
+    "required": ["class", "read", "evidence", "confidence"],
+    "additionalProperties": False,
+}
+
+
+CONTEXT_READ_PROMPT = """You are the context arbiter for one ambiguous audio event in a
+care household. You receive the camera's perception, the audio transcript and loudness, the state
+of a television or radio in the room, recent history, and the deterministic policy floor.
+
+Your one job is to separate a person in need from media noise, without ever talking a family out
+of a real cry for help.
+
+Rules:
+1. If a person is on the floor, has not recovered, or the audio contains help words, the event is
+   about a person. Never call it media.
+2. A television or radio being on is a competing explanation, not proof. If a person is in frame,
+   treat the event as ambiguous and prefer "ask first" unless perception shows a fall.
+3. Never diagnose a heart attack, stroke, or any condition. Never give medical advice. Never
+   mention AI, models, cameras, sensors, or confidence scores in title or body.
+4. The policy floor is a hard minimum. Raise severity if the evidence warrants it; never lower it.
+5. title <= 60 chars, body <= 240 chars, addressed to an adult family member. Short sentences.
+6. evidence contains only short tokens present in the packet. read is an internal, factual sentence
+   under 160 characters for the "what I checked" panel.
+
+Choose source: "person" (a human needs attention), "media" (the sound is most likely television or
+radio), or "unclear" (the evidence genuinely does not say). For "media", severity may stay at the
+floor and notify_now false. For "person", raise to urgent and notify now. For "unclear", keep the
+floor and let the spoken check-in break the tie."""
+
+CONTEXT_READ_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "source": {"type": "string", "enum": ["person", "media", "unclear"]},
+        "severity": {"type": "string", "enum": ["info", "watch", "urgent", "emergency"]},
+        "notify_now": {"type": "boolean"},
+        "title": {"type": "string", "maxLength": 60},
+        "body": {"type": "string", "maxLength": 240},
+        "read": {"type": "string", "maxLength": 160},
+        "evidence": {"type": "array", "items": {"type": "string"}, "maxItems": 6},
+        "confidence": {"type": "number"},
+    },
+    "required": ["source", "severity", "notify_now", "title", "body", "read",
+                 "evidence", "confidence"],
+    "additionalProperties": False,
+}
+
+
 def build_packet(incident: dict, features: dict, floor, profile, *,
                  local_hour: int, history: list[dict] | None = None,
                  memory: list[dict] | None = None,
@@ -105,6 +205,14 @@ def build_packet(incident: dict, features: dict, floor, profile, *,
     # week" when the database says zero writes a confident lie about this
     # household, and the family has no way to tell.
     past = history or []
+    sensors = incident.get("sensors") or {}
+    checkin = None
+    if incident.get("checkin_status"):
+        checkin = {
+            "status": incident.get("checkin_status"),
+            "prompt": incident.get("checkin_prompt"),
+            "timeout_s": incident.get("checkin_timeout_s"),
+        }
     return {
         "incident": {
             "id": incident.get("id"),
@@ -122,11 +230,16 @@ def build_packet(incident: dict, features: dict, floor, profile, *,
                 "uses_mobility_aid": profile.uses_mobility_aid,
                 "anticoagulant": profile.anticoagulant,
                 "lives_alone": profile.lives_alone,
+                "conditions": list(profile.conditions),
             },
             "consent_on_file": True,
         },
         "track": features,
-        "sensors": incident.get("sensors") or {},
+        "sensors": sensors,
+        "objects": sensors.get("objects") or [],
+        "audio": sensors.get("audio"),
+        "media": sensors.get("media"),
+        "checkin": checkin,
         "history": {
             "last_24h": past,
             "events_last_7d": len(past),
@@ -152,10 +265,13 @@ DIGEST_PROMPT = """You maintain a short, expiring memory of one household's ordi
 rhythms, so that tomorrow's alerts can be quieter. You receive counts and timestamps of events
 from the last day and the facts already known.
 
-Rules: at most ten facts. Each fact is one sentence, under 120 characters, about a recurring
-pattern with a time window or a count. No diagnoses, no mood, no cognition claims, no advice, no
-identity claims. Only what the rows show. If the day contains nothing recurring, return fewer
-facts. Never restate a fact that is already known unless it is now better supported."""
+Rules: at most ten facts. Each fact is one sentence, under 120 characters, about ordinary
+places, times, visitors or rhythms. A single ordinary observation is allowed; label it as an
+observation rather than a routine. No diagnoses, no mood, no cognition claims, no advice, no
+identity claims. Only what the rows show. Never turn a fall, a call for help, a check-in or an
+emergency response into a routine fact or a count. Memory must never be a reason to ignore a new
+emergency; prior falls are not a pattern that makes a new fall normal. If there is no ordinary
+activity at all, return fewer facts."""
 
 DIGEST_SCHEMA = {
     "type": "object",
@@ -178,42 +294,52 @@ DIGEST_SCHEMA = {
     "additionalProperties": False,
 }
 
-LETTER_PROMPT = """You write two short notes at the end of a week for one household: one for
-the family caregiver, one for the resident herself.
+SETUP_PROPOSE_PROMPT = """You tune one home-safety installation for a care household. You receive
+structured, self-reported care context (resident name, age, reported conditions), other occupants,
+a caregiver name, camera names and locations, and the object labels found locally in each camera
+view. You never receive images or audio.
 
-You receive counts and a list of this week's events, including the ones deliberately not
-escalated. Every claim must be visible in those rows. No medical interpretation, no advice, no
-speculation about mood or memory, never mention AI, models, monitoring or surveillance.
+Choose a watch mode for each class from the modes it allows:
+- Safety classes (falls, calls for help, night presence, camera offline, stove) must stay on "alert".
+- Care and comfort classes should be restrained. Use "digest" unless the structured context clearly
+  supports an immediate alert; "off" is allowed only for comfort classes.
+- A camera in a bedroom or bathroom is a privacy signal. Do not ask for more pixels, do not suggest
+  watching a person, and do not put a camera in a private room.
 
-family_letter: about 180 words. What happened, what was handled without disturbing anyone, what
-to keep an eye on, and one question worth asking her this week. Plain, warm, specific. Times and
-counts, not adjectives.
+The reported conditions are self-described care context, not diagnoses. Do not infer severity or
+risk from a label, do not give medical advice, do not mention diagnoses in the summary, and do not
+recommend medication or treatment. Do not mention AI, models, sensors, algorithms, or surveillance.
 
-resident_report: about 80 words, addressed to her as "you". Calm and short. If nothing needed
-her, say that in one sentence and stop. No filler, no cheerleading.
+Return a short calm summary (<=240 chars), a mode for every class, and at most three setup notes.
+The summary should explain the shape of the setup, not restate the questionnaire."""
 
-The resident report is not a second copy of the family letter. She is the person the week
-happened to. Do not enumerate her incidents back at her, do not list how many times she fell,
-and never describe a fall, a hospital visit or a call to her family as a statistic about her
-body. Say the shape of the week in her own terms — that it was quiet, that she slept and ate
-and went about her days — and mention only what she would recognise and would want to know.
-The family letter carries the detail; hers carries the reassurance. If the week included a
-fall, her note may say the household was busy one afternoon and that she is all right now;
-it may not say she fell twice.
+NIGHT_NOTE_PROMPT = """You write one short morning note about a night in a care household, for an
+adult family member. You receive only structured rows: the night window, event types, local times,
+zones, whether each event stayed quiet, and a small summary.
 
-If the week has zero events, both notes say so plainly rather than inventing content."""
+Rules:
+- Two short sentences, under 340 characters. Plain, calm, human. Write like a careful person, not
+  like a log.
+- Do not use the words "record", "event", "row", "data", "alert", "pipeline", "system", or
+  "monitoring". Group repeats instead of listing every one.
+- Say what happened in time order, what stayed quiet, and exactly one thing worth checking.
+- Use only what the rows say. Never invent a person, an identity, an intention, an injury, a diagnosis,
+  a medical cause, or an outcome that is not in the rows.
+- No advice beyond the one check. No fear, no reassurance you cannot prove, no "all clear" claim.
+- Do not mention AI, models, cameras, sensors, algorithms, confidence scores, or surveillance.
+- If the night has no events, say only that nothing was noted and stop. Do not imply the night was
+  watched continuously or that nothing could have happened.
+- If the window is still in progress, say "so far" rather than treating it as complete.
 
-LETTER_SCHEMA = {
+Return a note and one short check. The check is a single practical sentence, under 140 characters.
+"""
+
+NIGHT_NOTE_SCHEMA = {
     "type": "object",
     "properties": {
-        "family_letter": {"type": "string", "maxLength": 2000},
-        "resident_report": {"type": "string", "maxLength": 800},
+        "note": {"type": "string", "maxLength": 420},
+        "check": {"type": "string", "maxLength": 140},
     },
-    "required": ["family_letter", "resident_report"],
+    "required": ["note", "check"],
     "additionalProperties": False,
 }
-
-
-def letter_prompt(kind: str) -> str:
-    """Kept so callers that only want one audience can ask for it explicitly."""
-    return LETTER_PROMPT + f"\n\nWrite only the {kind} note."

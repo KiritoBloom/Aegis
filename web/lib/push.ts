@@ -1,20 +1,6 @@
 "use client";
 
-/**
- * Web Push, from the browser side.
- *
- * The server has had VAPID keys and a WebPushProvider since the backend was
- * built, and every notification so far has been recorded as `skipped` with
- * `no_subscription` — which is honest, but it means the one channel that
- * matters at 3 AM had never actually been exercised. This module is what turns
- * that channel on.
- *
- * Notes that matter:
- * - iOS only allows push for a PWA that has been added to the Home Screen, so
- *   `iosNeedsInstall()` drives an instruction instead of a broken button.
- * - The permission prompt must be triggered by a tap. Asking on page load is
- *   how apps get permanently denied by a user who never saw the question.
- */
+/** Browser-side Web Push subscription helpers. */
 
 export type PushStatus =
   | "unsupported"

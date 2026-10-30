@@ -4,15 +4,7 @@ import { GeistMono } from "geist/font/mono";
 import { Newsreader } from "next/font/google";
 import "./globals.css";
 
-/**
- * Three faces, three jobs.
- *
- * Newsreader carries the one number the product is actually arguing about, and
- * nothing else — a serif numeral reads as editorial confidence rather than
- * telemetry. Geist Sans is the UI. Geist Mono is everything a machine produced,
- * which is a useful honesty signal: if a value is monospaced, it is a fact, not
- * a paraphrase.
- */
+/** Three typefaces: Newsreader for editorial numbers, Geist Sans for UI, Geist Mono for machine facts. */
 const newsreader = Newsreader({
   subsets: ["latin"],
   weight: ["400", "500"],
@@ -24,7 +16,7 @@ const newsreader = Newsreader({
 export const metadata: Metadata = {
   title: "Aegis — Margaret's home",
   description:
-    "A privacy-first care system that watches a home through one ordinary camera and only interrupts when it matters.",
+    "A privacy-first care console that watches the rooms a family chooses and only interrupts when something actually needs them.",
   applicationName: "Aegis",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Aegis", statusBarStyle: "default" },
@@ -49,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
+      data-scroll-behavior="smooth"
       className={`${GeistSans.variable} ${GeistMono.variable} ${newsreader.variable}`}
     >
       <body>

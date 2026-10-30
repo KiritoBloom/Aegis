@@ -73,10 +73,6 @@ CREATE TABLE IF NOT EXISTS household_memory (
   id TEXT PRIMARY KEY, household_id TEXT, fact TEXT, confidence REAL,
   source TEXT, created_at TEXT, expires_at TEXT
 );
-CREATE TABLE IF NOT EXISTS letters (
-  id TEXT PRIMARY KEY, household_id TEXT, kind TEXT, week_start TEXT,
-  body TEXT, facts_json TEXT, model TEXT, created_at TEXT
-);
 CREATE TABLE IF NOT EXISTS checkins (
   id TEXT PRIMARY KEY, incident_id TEXT, transcript TEXT, outcome TEXT,
   model TEXT, created_at TEXT
@@ -119,6 +115,7 @@ def connect() -> sqlite3.Connection:
 # a two-line migration.
 MIGRATIONS = [
     ("incidents", "sam_json", "TEXT"),
+    ("incidents", "agent_json", "TEXT"),
     ("incidents", "attempts", "INTEGER DEFAULT 0"),
     ("incidents", "notify_phase", "INTEGER DEFAULT 0"),
     ("incidents", "escalation_due_at", "REAL"),
@@ -129,6 +126,19 @@ MIGRATIONS = [
     ("outbound_requests", "contains_audio", "INTEGER DEFAULT 0"),
     ("incidents", "enrich_lease", "REAL"),
     ("decisions", "packet_json", "TEXT"),
+    # The spoken check-in is a state machine, not a button. These columns make
+    # the deadline survive an API restart and let the dashboard show exactly
+    # what was said, when, and whether anyone answered.
+    ("incidents", "checkin_status", "TEXT"),
+    ("incidents", "checkin_due_at", "REAL"),
+    ("incidents", "checkin_prompt", "TEXT"),
+    ("incidents", "checkin_started_at", "REAL"),
+    ("incidents", "checkin_answered_at", "REAL"),
+    ("incidents", "checkin_timeout_s", "REAL"),
+    ("checkins", "read_json", "TEXT"),
+    ("incidents", "context_json", "TEXT"),
+    ("device_heartbeats", "scene_json", "TEXT"),
+    ("device_heartbeats", "scene_at", "TEXT"),
 ]
 
 
@@ -203,9 +213,48 @@ def attach_sam(incident_id: str, features: dict) -> None:
         conn.commit()
 
 
+def attach_agent(incident_id: str, trace: list[dict]) -> None:
+    """Persist the evidence-agent steps for the human-readable audit trail."""
+    with connect() as conn:
+        conn.execute("UPDATE incidents SET agent_json=? WHERE id=?",
+                     (json.dumps(trace), incident_id))
+        conn.commit()
+
+
+def attach_context_read(incident_id: str, read: dict) -> None:
+    with connect() as conn:
+        conn.execute("UPDATE incidents SET context_json=? WHERE id=?",
+                     (json.dumps(read), incident_id))
+        conn.commit()
+
+
+def update_incident_sensors(incident_id: str, patch: dict) -> None:
+    """Merge new perception into an open incident."""
+    with connect() as conn:
+        row = conn.execute("SELECT sensors_json FROM incidents WHERE id=?",
+                           (incident_id,)).fetchone()
+        if row is None:
+            return
+        sensors = json.loads(row[0] or "{}")
+        sensors.update(patch)
+        conn.execute("UPDATE incidents SET sensors_json=? WHERE id=?",
+                     (json.dumps(sensors), incident_id))
+        conn.commit()
+
+
 def set_status(incident_id: str, status: str, severity: str | None = None) -> None:
     with connect() as conn:
         if severity:
+            # Only an explicit resolution may lower severity. A late model write
+            # or a status refresh must not undo an escalation that already
+            # reached a phone.
+            if status != "resolved":
+                order = {"info": 0, "watch": 1, "urgent": 2, "emergency": 3}
+                row = conn.execute("SELECT severity FROM incidents WHERE id=?",
+                                   (incident_id,)).fetchone()
+                current = row["severity"] if row else "info"
+                if order.get(severity, 0) < order.get(current, 0):
+                    severity = current
             conn.execute("UPDATE incidents SET status=?, severity=? WHERE id=?",
                          (status, severity, incident_id))
         else:
@@ -213,14 +262,19 @@ def set_status(incident_id: str, status: str, severity: str | None = None) -> No
         conn.commit()
 
 
-def _decode_incident(inc: dict) -> dict:
-    """Turn the stored `*_json` columns into the payload names the rules read.
+def raise_incident_severity(incident_id: str, severity: str) -> None:
+    """Raise severity without ever lowering it."""
+    order = {"info": 0, "watch": 1, "urgent": 2, "emergency": 3}
+    with connect() as conn:
+        row = conn.execute("SELECT severity FROM incidents WHERE id=?", (incident_id,)).fetchone()
+        current = row["severity"] if row else "info"
+        chosen = severity if order.get(severity, 0) >= order.get(current, 0) else current
+        conn.execute("UPDATE incidents SET severity=? WHERE id=?", (chosen, incident_id))
+        conn.commit()
 
-    Every caller that hands an incident to `policy.evaluate` must go through
-    this. `pending_for_processing` used to return raw rows, so the worker
-    re-evaluated the floor against a row whose `sensors` key did not exist —
-    which silently turned every ritual, recovery and stove rule into a miss.
-    """
+
+def _decode_incident(inc: dict) -> dict:
+    """Decode stored JSON columns into the names the policy rules read."""
     # Column names and payload names differ for track (stored as features_json).
     for key, column, empty in (("track", "features_json", {}),
                                ("sensors", "sensors_json", {}),
@@ -236,6 +290,14 @@ def _decode_incident(inc: dict) -> dict:
         inc["sam"] = json.loads(inc.pop("sam_json", None) or "null")
     except (json.JSONDecodeError, TypeError):
         inc["sam"] = None
+    try:
+        inc["agent"] = json.loads(inc.pop("agent_json", None) or "null")
+    except (json.JSONDecodeError, TypeError):
+        inc["agent"] = None
+    try:
+        inc["context_read"] = json.loads(inc.pop("context_json", None) or "null")
+    except (json.JSONDecodeError, TypeError):
+        inc["context_read"] = None
     return inc
 
 
@@ -253,6 +315,7 @@ def get_incident(incident_id: str) -> dict | None:
         inc["ledger"] = [dict(r) for r in conn.execute(
             "SELECT * FROM outbound_requests WHERE incident_id=? ORDER BY id", (incident_id,)
         )]
+        inc["checkin"] = latest_checkin(incident_id)
         return inc
 
 
@@ -270,20 +333,32 @@ def list_incidents(limit: int = 50, status: str | None = None) -> list[dict]:
         for r in rows:
             inc = dict(r)
             dec = conn.execute(
-                "SELECT title, severity, notify_now, policy_floor FROM decisions "
+                "SELECT * FROM decisions "
                 "WHERE incident_id=? ORDER BY phase DESC LIMIT 1", (inc["id"],)
             ).fetchone()
             if dec:
+                order = {"info": 0, "watch": 1, "urgent": 2, "emergency": 3}
+                inc["decision"] = _decode_decision(dec)
                 inc["title"] = dec["title"]
-                inc["severity"] = dec["severity"] or inc["severity"]
+                if order.get(dec["severity"], 0) >= order.get(inc.get("severity"), 0):
+                    inc["severity"] = dec["severity"]
                 inc["notify_now"] = bool(dec["notify_now"])
                 inc["policy_floor"] = dec["policy_floor"]
+            else:
+                inc["decision"] = None
+            try:
+                inc["sensors"] = json.loads(inc.pop("sensors_json") or "{}")
+            except (json.JSONDecodeError, TypeError):
+                inc["sensors"] = {}
+            try:
+                inc["agent"] = json.loads(inc.pop("agent_json") or "null")
+            except (json.JSONDecodeError, TypeError):
+                inc["agent"] = None
             try:
                 inc["evidence"] = json.loads(inc.pop("evidence_json") or "[]")
             except (json.JSONDecodeError, TypeError):
                 inc["evidence"] = []
             inc.pop("features_json", None)
-            inc.pop("sensors_json", None)
             inc.pop("privacy_json", None)
             inc.pop("sam_json", None)
             out.append(inc)
@@ -302,10 +377,10 @@ def _decode_decision(row: sqlite3.Row) -> dict:
 
 def add_decision(incident_id: str, phase: int, floor: str, floor_reasons: list[str],
                  decision, model: str, prompt_version: str, violations: list[str],
-                 latency_ms: int) -> None:
+                 latency_ms: int) -> str:
     with connect() as conn:
         conn.execute(
-            """INSERT INTO decisions
+            """INSERT OR REPLACE INTO decisions
                (id, incident_id, phase, severity, policy_floor, floor_reasons_json, title, body,
                 evidence_json, actions_json, confidence, notify_now, follow_up_s, rationale,
                 model, prompt_version, violations_json, latency_ms, created_at)
@@ -319,9 +394,15 @@ def add_decision(incident_id: str, phase: int, floor: str, floor_reasons: list[s
                 latency_ms, now(),
             ),
         )
-        conn.execute("UPDATE incidents SET severity=? WHERE id=?",
-                     (decision.severity, incident_id))
+        # A late phase-2 enrichment must never quietly lower a phase-3
+        # check-in escalation that has already reached a phone.
+        order = {"info": 0, "watch": 1, "urgent": 2, "emergency": 3}
+        row = conn.execute("SELECT severity FROM incidents WHERE id=?", (incident_id,)).fetchone()
+        current = row["severity"] if row else "info"
+        chosen = decision.severity if order.get(decision.severity, 0) >= order.get(current, 0) else current
+        conn.execute("UPDATE incidents SET severity=? WHERE id=?", (chosen, incident_id))
         conn.commit()
+        return chosen
 
 
 def add_outbound(incident_id: str | None, destination: str, purpose: str, nbytes: int,
@@ -375,10 +456,11 @@ def add_heartbeat(payload: dict) -> None:
     with connect() as conn:
         conn.execute(
             "INSERT INTO device_heartbeats (camera_id, ts, fps, frames, queue_depth,"
-            " camera_state, detector) VALUES (?,?,?,?,?,?,?)",
+            " camera_state, detector, scene_json, scene_at) VALUES (?,?,?,?,?,?,?,?,?)",
             (payload.get("camera_id"), payload.get("ts_local"), payload.get("fps"),
              payload.get("frames"), payload.get("queue_depth"),
-             payload.get("camera_state"), payload.get("detector")),
+             payload.get("camera_state"), payload.get("detector"),
+             json.dumps(payload.get("objects") or []), payload.get("objects_at")),
         )
         conn.execute("UPDATE cameras SET last_heartbeat_at=?, status=?, detector=? WHERE id=?",
                      (now(), payload.get("camera_state", "online"),
@@ -391,7 +473,15 @@ def last_heartbeat() -> dict | None:
         row = conn.execute(
             "SELECT * FROM device_heartbeats ORDER BY id DESC LIMIT 1"
         ).fetchone()
-    return dict(row) if row else None
+    if not row:
+        return None
+    hb = dict(row)
+    try:
+        hb["objects"] = json.loads(hb.pop("scene_json", None) or "[]")
+    except (json.JSONDecodeError, TypeError):
+        hb["objects"] = []
+    hb["objects_at"] = hb.get("scene_at")
+    return hb
 
 
 def add_ack(incident_id: str, action: str) -> None:
@@ -425,13 +515,7 @@ def drop_subscription(sub_id: str) -> None:
 
 
 def record_failure(incident_id: str, reason: str) -> None:
-    """Leave the reason on record without touching status.
-
-    Without a failure record, one exception retries forever at 1 Hz and starves
-    every other incident in the loop — the worst possible failure for an alerting
-    system. The status is set by the caller, which decides whether the incident
-    ended up notified anyway.
-    """
+    """Record a failed delivery and release it for retry."""
     with connect() as conn:
         conn.execute(
             "INSERT INTO outbound_requests (incident_id, destination, purpose, bytes, frames,"
@@ -453,20 +537,7 @@ def bump_attempt(incident_id: str) -> int:
 
 def pending_for_processing(limit: int = 10, grace_s: float = 8.0,
                            lease_s: float = 180.0) -> list[dict]:
-    """Claim incidents ready for enrichment.
-
-    An incident is not ready until its clip has arrived, or until the grace
-    window expires — otherwise the worker races the upload and enriches an
-    incident with `no_clip`, which silently loses the SAM stage.
-
-    This **claims** what it returns. §8.5 asks for a lease, and without one two
-    workers enrich the same incident: the second one overwrites a good model
-    decision with a fail-open template row, which is how an incident ended up
-    `notified` with `attempts=4` and a phase-9 decision on top of a phase-2
-    decision that had already succeeded. The claim is a single conditional
-    UPDATE, so it is atomic across processes; `lease_s` bounds how long a claim
-    survives a crashed worker before the incident is offered again.
-    """
+    """Claim enrichable incidents with a lease so two workers cannot process one row."""
     cutoff = time.time() - grace_s
     lease_cutoff = time.time() - lease_s
     claimed: list[dict] = []
@@ -744,7 +815,7 @@ def person_inside(incident_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# memory and letters
+# memory
 # ---------------------------------------------------------------------------
 def add_memory(household_id: str, fact: str, confidence: float, source: str,
                expires_at: str) -> None:
@@ -774,43 +845,116 @@ def clear_memory(household_id: str = "hh_demo") -> None:
         conn.commit()
 
 
-def add_letter(letter_id: str, household_id: str, kind: str, week_start: str,
-               body: str, facts: list[str], model: str) -> None:
-    with connect() as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO letters (id, household_id, kind, week_start, body,"
-            " facts_json, model, created_at) VALUES (?,?,?,?,?,?,?,?)",
-            (letter_id, household_id, kind, week_start, body, json.dumps(facts),
-             model, now()),
-        )
-        conn.commit()
-
-
-def letters(limit: int = 10) -> list[dict]:
-    with connect() as conn:
-        rows = conn.execute(
-            "SELECT * FROM letters ORDER BY created_at DESC LIMIT ?", (limit,)
-        ).fetchall()
-    out = []
-    for r in rows:
-        d = dict(r)
-        try:
-            d["facts"] = json.loads(d.pop("facts_json") or "[]")
-        except json.JSONDecodeError:
-            d["facts"] = []
-        out.append(d)
-    return out
 
 
 def add_checkin(checkin_id: str, incident_id: str, transcript: str, outcome: str,
-                model: str) -> None:
+                model: str, read: dict | None = None) -> None:
     with connect() as conn:
         conn.execute(
             "INSERT OR REPLACE INTO checkins (id, incident_id, transcript, outcome,"
-            " model, created_at) VALUES (?,?,?,?,?,?)",
-            (checkin_id, incident_id, transcript, outcome, model, now()),
+            " model, read_json, created_at) VALUES (?,?,?,?,?,?,?)",
+            (checkin_id, incident_id, transcript, outcome, model,
+             json.dumps(read) if read else None, now()),
         )
         conn.commit()
+
+
+def _decode_checkin(row: dict) -> dict:
+    try:
+        row["read"] = json.loads(row.pop("read_json", None) or "null")
+    except (json.JSONDecodeError, TypeError):
+        row["read"] = None
+    return row
+
+
+def latest_checkin(incident_id: str) -> dict | None:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM checkins WHERE incident_id=? ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            (incident_id,),
+        ).fetchone()
+    return _decode_checkin(dict(row)) if row else None
+
+
+# ---------------------------------------------------------------------------
+# check-in state: asking -> answered | no_answer | cancelled
+# ---------------------------------------------------------------------------
+def start_checkin(incident_id: str, prompt: str, due_at: float,
+                  timeout_s: float) -> bool:
+    """Claim the one check-in for this incident. Returns False if one exists."""
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE incidents SET checkin_status='asking', checkin_prompt=?,"
+            " checkin_due_at=?, checkin_started_at=?, checkin_answered_at=NULL,"
+            " checkin_timeout_s=?"
+            " WHERE id=? AND (checkin_status IS NULL OR checkin_status IN ('failed','cancelled'))",
+            (prompt, due_at, time.time(), timeout_s, incident_id),
+        )
+        conn.commit()
+    return bool(cur.rowcount)
+
+
+def mark_checkin_answered(incident_id: str) -> bool:
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE incidents SET checkin_status='answered', checkin_due_at=NULL,"
+            " checkin_answered_at=? WHERE id=?",
+            (now(), incident_id),
+        )
+        conn.commit()
+    return bool(cur.rowcount)
+
+
+def mark_checkin_no_answer(incident_id: str) -> bool:
+    """Atomically claim the timeout so two loops cannot both send the escalation."""
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE incidents SET checkin_status='no_answer', checkin_due_at=NULL"
+            " WHERE id=? AND checkin_status='asking'",
+            (incident_id,),
+        )
+        conn.commit()
+    return bool(cur.rowcount)
+
+
+def cancel_open_checkins(reason: str = "paused") -> int:
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE incidents SET checkin_status='cancelled', checkin_due_at=NULL"
+            " WHERE checkin_status='asking'"
+        )
+        conn.commit()
+    return int(cur.rowcount)
+
+
+def cancel_checkin(incident_id: str, reason: str = "paused") -> bool:
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE incidents SET checkin_status='cancelled', checkin_due_at=NULL"
+            " WHERE id=? AND checkin_status='asking'",
+            (incident_id,),
+        )
+        conn.commit()
+    return bool(cur.rowcount)
+
+
+def due_checkins(now_ts: float, limit: int = 20) -> list[dict]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM incidents WHERE checkin_status='asking'"
+            " AND checkin_due_at IS NOT NULL AND checkin_due_at <= ?"
+            " ORDER BY checkin_due_at LIMIT ?",
+            (now_ts, limit),
+        ).fetchall()
+    return [_decode_incident(dict(r)) for r in rows]
+
+
+def checkin_pending(incident_id: str) -> bool:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT checkin_status FROM incidents WHERE id=?", (incident_id,)
+        ).fetchone()
+    return bool(row and row["checkin_status"] == "asking")
 
 
 def checkins(limit: int = 20) -> list[dict]:
@@ -818,16 +962,11 @@ def checkins(limit: int = 20) -> list[dict]:
         rows = conn.execute(
             "SELECT * FROM checkins ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall()
-    return [dict(r) for r in rows]
+    return [_decode_checkin(dict(r)) for r in rows]
 
 
 def stats(days: int = 7) -> dict:
-    """Every figure here is a COUNT at call time. Nothing is estimated.
-
-    All alert accounting comes from `events`, not from `incidents`: an incident
-    row exists for events that were deliberately never escalated, so counting
-    incidents as alerts would inflate the product's one honest number.
-    """
+    """Dashboard totals for the current retention window."""
     with connect() as conn:
         events = conn.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
         suppressed = conn.execute(
@@ -927,13 +1066,7 @@ def set_state(key: str, value) -> None:
 
 
 def latest_still() -> dict | None:
-    """The most recent frame the system actually kept.
-
-    The live page shows this instead of pretending to stream: it is the honest
-    thing to put on screen, because it is exactly the frame a family would see
-    if they opened the alert. A camera tile that is secretly a stock photo
-    would be the most dishonest element in a privacy product.
-    """
+    """The most recent kept still, for the camera page."""
     with connect() as conn:
         row = conn.execute(
             "SELECT id, still_path, thumb_path, created_at, local_time, zone_id, type"
@@ -943,12 +1076,7 @@ def latest_still() -> dict | None:
 
 
 def zones(household_id: str = "hh_demo") -> list[dict]:
-    """Zones come from config/edge.yaml — the same file the edge reads.
-
-    Duplicating polygons into SQLite would let the backend and the camera
-    disagree about where the front door is, and the disagreement would be
-    invisible until an alert fired on the wrong room.
-    """
+    """Stored zone geometry for the household."""
     path = Path("config/edge.yaml")
     if not path.exists():
         return []

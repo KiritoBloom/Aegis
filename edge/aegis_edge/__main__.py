@@ -20,7 +20,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fast", action="store_true",
                     help="replay as fast as possible instead of real time")
     ap.add_argument("--no-loop", action="store_true", help="stop at end of file")
+    ap.add_argument("--audio", action="store_true",
+                    help="enable the microphone loudness gate")
     args = ap.parse_args(argv)
+    if args.audio:
+        os.environ["AEGIS_AUDIO"] = "on"
 
     cfg: Config = config_mod.load(args.config)
     if args.source or args.fast or args.no_loop:

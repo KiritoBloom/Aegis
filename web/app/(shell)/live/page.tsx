@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Banner, CameraFrame, Fact, Icon, Skeleton } from "@/components/ui";
+import { Icon } from "@/components/icons";
+import { Banner, CameraFrame, Skeleton } from "@/components/ui";
 import {
   ago,
   clock,
@@ -14,16 +15,7 @@ import {
 } from "@/lib/api";
 import { useApi, useStream } from "@/lib/useApi";
 
-/**
- * The camera.
- *
- * A CCTV page that shows a live video feed is easy and dishonest: it implies
- * the family can watch her all day, which is the exact thing this product is
- * built not to do. So this page shows the *last frame the system kept*, with the
- * geometry the rules actually use drawn on top of it, plus the state machine's
- * current opinion. It answers "is the camera alive and what is it thinking",
- * which is the question someone asks at 11 PM when the app has gone quiet.
- */
+/** Single edge-camera diagnostics: liveness, last still, zones, and masks. */
 export default function LivePage() {
   const camera = useApi<Camera>("/api/camera", 6000);
   const events = useApi<{ items: AegisEvent[] }>("/api/events", 6000);
@@ -52,18 +44,27 @@ export default function LivePage() {
   const zones = useMemo(() => camera.data?.zones ?? [], [camera.data]);
   const masks = camera.data?.masks ?? [];
   const drawn = showMasks ? zones : zones.filter((z) => !z.private);
+  const stillUrl = camera.data?.still?.url ?? null;
 
   const lastEvent = newest;
   const lastIncident = incidents.data?.items?.[0];
 
   return (
-    <div style={{ maxWidth: 1000 }}>
-      <header style={{ marginBottom: 18 }}>
+    <div style={{ maxWidth: 1080 }}>
+      <header className="reveal" style={{ marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 14 }}>
           <p className="eyebrow">Camera</p>
-          <span className="mono micro">{cam ? `${cam.id}` : "—"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Link href="/" className="mono micro" style={{ textDecoration: "underline" }}>
+              Camera wall →
+            </Link>
+            <Link href="/night" className="mono micro" style={{ textDecoration: "underline" }}>
+              Night watch →
+            </Link>
+            <span className="mono micro">{cam ? `${cam.id}` : "—"}</span>
+          </div>
         </div>
-        <h1 className="h1" style={{ margin: "8px 0 0" }}>What the house can see.</h1>
+        <h1 className="h1" style={{ margin: "8px 0 0" }}>What the camera kept.</h1>
         <p className="lede" style={{ marginTop: 10, maxWidth: 600 }}>
           One camera, pointing at the hall and the front door. The frame below is
           the last one Aegis kept — it is not a live feed, because watching her all
@@ -83,35 +84,31 @@ export default function LivePage() {
 
       <div style={{ display: "grid", gap: 16, gridTemplateColumns: "1fr" }} className="lg:grid-cols-[1.5fr_1fr]">
         {/* the frame */}
-        <section>
+        <section className="reveal" style={{ animationDelay: "50ms" }}>
           {camera.loading && !camera.data ? (
-            <Skeleton h={340} r={12} />
+            <Skeleton h={380} r={14} />
           ) : (
-            <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--color-line-2)" }}>
+            <div className="camera-stage">
+              <div className="camera-chrome">
+                <span className="camera-chrome-state">
+                  <span
+                    className={cam?.online ? "dot dot-live" : "dot"}
+                    aria-hidden="true"
+                  />
+                  {cam?.online ? "camera online" : "no signal"}
+                </span>
+                <span className="mono micro">
+                  {stillUrl ? `${clock(camera.data?.still?.at)} · ${typeLabel(camera.data?.still?.type)}` : "no frame yet"}
+                </span>
+              </div>
               <CameraFrame
                 src={camera.data?.still?.url ?? null}
                 zones={drawn}
                 activeZone={active}
                 caption={
                   <>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <span
-                        className={cam?.online ? "dot dot-live" : "dot"}
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: 999,
-                          background: cam?.online ? "#8fb89b" : "#c9822f",
-                          display: "inline-block",
-                        }}
-                      />
-                      {cam?.online ? "camera online" : "no signal"}
-                    </span>
-                    <span>
-                      {camera.data?.still
-                        ? `${clock(camera.data.still.at)} · ${typeLabel(camera.data.still.type)}`
-                        : "no frame yet"}
-                    </span>
+                    <span>{cam?.detector ?? "—"} · {cam?.fps ? `${cam.fps} fps` : "—"}</span>
+                    <span>{stillUrl ? `last frame ${ago(camera.data?.still?.at)}` : "waiting for the first frame"}</span>
                   </>
                 }
               />
@@ -142,12 +139,17 @@ export default function LivePage() {
             </span>
           </div>
 
-          <div style={{ display: "flex", gap: 14, marginTop: 14, flexWrap: "wrap" }}>
-            <Fact label="Detector" value={cam?.detector ?? "—"} />
-            <Fact label="Frame rate" value={cam?.fps ? `${cam.fps} fps` : "—"} />
-            <Fact label="Upload queue" value={cam?.queue_depth ?? 0} />
-            <Fact label="Last heartbeat" value={ago(cam?.last_seen)} />
+          <div className="signal-strip">
+            <Signal label="Detector" value={cam?.detector ?? "—"} />
+            <Signal label="Frame rate" value={cam?.fps ? `${cam.fps} fps` : "—"} />
+            <Signal label="Upload queue" value={cam?.queue_depth ?? 0} />
+            <Signal label="Last heartbeat" value={ago(cam?.last_seen)} />
           </div>
+
+          <ObjectContext
+            objects={camera.data?.objects ?? []}
+            at={camera.data?.objects_at}
+          />
         </section>
 
         {/* what it is thinking */}
@@ -226,9 +228,14 @@ export default function LivePage() {
               something happened. The frame above is the most recent one that
               survived that rule.
             </p>
-            <Link href="/privacy" className="mono micro" style={{ display: "inline-block", marginTop: 8, textDecoration: "underline" }}>
-              What is kept →
-            </Link>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8 }}>
+              <Link href="/privacy" className="mono micro" style={{ textDecoration: "underline" }}>
+                What is kept →
+              </Link>
+              <Link href="/night" className="mono micro" style={{ textDecoration: "underline" }}>
+                The dark hours →
+              </Link>
+            </div>
           </div>
         </section>
       </div>
@@ -274,6 +281,48 @@ export default function LivePage() {
           </p>
         ) : null}
       </section>
+    </div>
+  );
+}
+
+function Signal({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="signal-cell">
+      <span className="signal-label">{label}</span>
+      <span className="signal-value">{value}</span>
+    </div>
+  );
+}
+
+function ObjectContext({
+  objects,
+  at,
+}: {
+  objects: { label: string; conf: number; zone?: string | null }[];
+  at?: string | null;
+}) {
+  return (
+    <div className="object-context">
+      <div className="object-context-head">
+        <span className="eyebrow">Objects in the last scene</span>
+        <span className="mono micro">{at ? ago(at) : "not reported"}</span>
+      </div>
+      {objects.length ? (
+        <div className="object-chips">
+          {objects.map((obj, i) => (
+            <span key={`${obj.label}-${i}`} className="object-chip">
+              <strong>{obj.label}</strong>
+              <span className="mono">{Math.round(obj.conf * 100)}%</span>
+              {obj.zone ? <span className="object-zone">{zoneLabel(obj.zone)}</span> : null}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="micro" style={{ margin: "7px 0 0" }}>
+          No objects have been reported since the edge last saw motion. A bed, chair
+          or table is context, not an identity.
+        </p>
+      )}
     </div>
   );
 }

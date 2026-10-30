@@ -1,29 +1,11 @@
-"""Privacy controls that actually do something.
-
-The plan's privacy claims are only defensible if each one is a code path with a
-visible effect, so this module owns the four that a family can check:
-
-* **consent** — the resident agrees, on their own device, and the record stores
-  the version of the text they saw. A family member cannot consent for them.
-* **pause** — one call stops uploads, clears the ring buffer, and shows the
-  family "paused by Margaret at 9:12 PM", never an error state.
-* **delete everything** — media on disk, rows in the database, and a recorded
-  request to delete the clips held upstream. Each step reports its own result,
-  because a partial delete reported as complete is a lie.
-* **retention sweep** — escalation clips expire after 7 days locally and 1 hour
-  at the API. This is the job that makes the expiry claim true rather than
-  aspirational.
-
-Nothing here needs a model, a network call, or a permission check beyond the
-resident's own token.
-"""
+"""Consent, pause, retention, and deletion. Each promise maps to a code path with a visible result."""
 from __future__ import annotations
 
 import logging
 import os
 import shutil
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import db
@@ -31,15 +13,18 @@ from . import db
 log = logging.getLogger("aegis.privacy")
 
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", "data/media"))
-CONSENT_VERSION = "2026-11-consent-1"
+CONSENT_VERSION = "2026-11-consent-2"
 LOCAL_RETENTION_DAYS = 7
 API_RETENTION_S = 3600
 
 CONSENT_TEXT = (
     "Aegis watches for a small number of specific situations: someone going out "
-    "of the front door at night, a fall with no recovery, and a stove left on. "
-    "Video stays on a device in this home. A short clip leaves only when one of "
-    "those situations happens, and it is deleted within an hour. You can pause "
+    "of the front door at night, a fall with no recovery, a stove left on, and a "
+    "call for help. Video stays on a device in this home. A short clip leaves only "
+    "when one of those situations happens, and it is deleted within an hour. "
+    "After a safety event Aegis may speak a short check-in question in the room "
+    "and listen for your answer. The microphone is not on between events; the "
+    "audio of an answer is transcribed and deleted immediately. You can pause "
     "this at any time, and you can delete everything."
 )
 
@@ -146,7 +131,8 @@ def clear_buffer() -> int:
 # delete everything
 # ---------------------------------------------------------------------------
 TABLES = ("incidents", "decisions", "outbound_requests", "events", "notifications",
-          "acks", "device_heartbeats", "household_memory", "letters", "checkins")
+          "acks", "device_heartbeats", "household_memory", "household_state",
+          "checkins")
 
 
 def delete_everything(confirm: str) -> dict:

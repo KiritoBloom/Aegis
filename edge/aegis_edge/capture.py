@@ -1,8 +1,4 @@
-"""Camera sources: file replay, USB, MJPEG phone, RTSP.
-
-One interface, four backends, plus realtime pacing so a replayed reel produces
-genuine latency numbers instead of a fast-forward.
-"""
+"""Camera capture with reconnect and frame-rate control."""
 from __future__ import annotations
 
 import json
@@ -48,6 +44,10 @@ class Cues:
             if c.get("sensor") == sensor:
                 val = c.get("state", c.get("value", val))
         return val
+
+    def has(self, sensor: str) -> bool:
+        """Whether a cue exists at all. Unknown and off are different facts."""
+        return any(c.get("sensor") == sensor for c in self.items)
 
 
 class CameraSource:

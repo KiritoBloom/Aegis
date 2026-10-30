@@ -1,9 +1,4 @@
-"""Ring buffer and clip packaging.
-
-Frames live in RAM only. Twelve seconds of JPEG, overwritten continuously, never
-written to disk except in the seconds around a trigger — which is the whole
-privacy claim, expressed as a data structure.
-"""
+"""Short clip assembly from the in-memory ring buffer."""
 from __future__ import annotations
 
 import hashlib

@@ -1,16 +1,4 @@
-"""Meta Model API client: Spark (judgment), SAM 3.1 (geometry), Transcribe.
-
-Three things learned the hard way and encoded here:
-
-1. `reasoning.effort` defaults to "high" and reasoning tokens count against
-   `max_output_tokens`. A 16-token budget returns `status: incomplete` and no
-   text at all. Every call therefore sets effort explicitly and budgets tokens
-   for reasoning *plus* the answer.
-2. SAM returns one line of text per frame, not JSON. Parsing is a regex, and a
-   zero-match response is a valid result, not an error.
-3. A 429 or a 5xx is not an incident. Retry twice with jitter, then fall back to
-   the deterministic template.
-"""
+"""Thin client for the Meta Model API: Spark decisions, SAM tracking, and transcription."""
 from __future__ import annotations
 
 import base64
@@ -30,13 +18,11 @@ BASE = "https://api.meta.ai/v1"
 SPARK_MODEL = "muse-spark-1.3"
 SAM_MODEL = "sam-3.1"
 TRANSCRIBE_MODEL = "muse-voice-transcribe-1.0"
-WONDER_MODEL = "muse-wonder-1.0"
 # Back-compat aliases: the names read better in prose, the _MODEL forms cannot
 # be confused with a local variable called `meta`.
 SPARK = SPARK_MODEL
 SAM = SAM_MODEL
 TRANSCRIBE = TRANSCRIBE_MODEL
-WONDER = WONDER_MODEL
 
 # observed: ~105 reasoning tokens even for a one-word answer at effort=low
 MIN_TOKENS = 900
@@ -222,13 +208,7 @@ class MetaClient:
 
     # -- Transcribe -------------------------------------------------------
     def transcribe(self, wav_path: str | Path, session: str = "aegis-checkin") -> str:
-        """Transcribe a short answer.
-
-        The endpoint is multipart with a JSON `request` part *and* an `audio`
-        part. Sending the file alone returns 400 "Both a 'request' and an
-        'audio' part are required" — which is exactly what a check-in must not
-        fail with, so the shape is pinned by the API docs, not guessed.
-        """
+        """Transcribe one WAV and return text plus usage."""
         wav = Path(wav_path)
         request = json.dumps({"model": TRANSCRIBE_MODEL,
                               "audioEncoding": "WAV",

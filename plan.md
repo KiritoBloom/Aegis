@@ -1,5 +1,11 @@
 # Aegis — 9-Day Build Plan
 
+> **Current implementation note (Oct 29):** Muse Wonder and the weekly letter have been removed.
+> Muse Spark now maintains expiring household memory and runs the tool-using Evidence Agent
+> (SAM evidence, memory, recent events, audio context) that verifies wall candidates and produces
+> phase-2 decisions. Sections below that mention Wonder are historical planning, not current scope.
+
+
 **Meta Global AI Developer Hackathon · Indie Developer Track · Oct 26 – Nov 4, 2026**
 Built from Cairo, Egypt. Solo builder.
 
@@ -3324,4 +3330,3 @@ Run this on Day 9 between 13:00 and 14:00, alone, honestly, with the video open 
 2. "Is there any sentence in the video or README I would have to walk back if a judge asked?" If yes, delete the sentence. A smaller true claim always outscores a bigger shaky one.
 
 **Submit. Then close the laptop.**
-

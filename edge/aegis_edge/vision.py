@@ -1,9 +1,4 @@
-"""On-device perception: motion gate, person check, tracking, door-region watch.
-
-Everything here runs on CPU. If a model is unavailable (no torch, no weights, no
-disk) each stage degrades honestly and reports that it degraded — it never
-silently pretends to see something it did not.
-"""
+"""Local detection: motion gate, YOLO, pose, and scene objects."""
 from __future__ import annotations
 
 import logging
@@ -13,7 +8,7 @@ import cv2
 import numpy as np
 
 from .config import Config, Zone
-from .geometry import Point, point_in_polygon
+from .geometry import Point
 
 log = logging.getLogger("aegis.vision")
 
@@ -47,6 +42,60 @@ class Detection:
             "track_id": self.track_id,
             "box": [round(v, 4) for v in self.box],
             "conf": round(self.conf, 3),
+        }
+
+
+# COCO classes worth knowing for a care room. This is deliberately a small
+# scene vocabulary, not "detect everything": a chair, a bed, a table and a
+# television explain more about a posture than a hundred unrelated labels.
+OBJECT_CLASSES = {
+    56: "chair", 57: "couch", 59: "bed", 60: "dining table",
+    62: "tv", 63: "laptop", 65: "remote", 67: "cell phone",
+    68: "microwave", 69: "oven", 71: "sink", 72: "refrigerator",
+    73: "book", 74: "clock", 75: "vase",
+}
+SUPPORT_CLASSES = {"bed", "couch"}
+
+
+@dataclass
+class SceneObject:
+    """A non-person object in normalized frame space."""
+
+    label: str
+    conf: float
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+    zone: str | None = None
+
+    @property
+    def box(self) -> tuple[float, float, float, float]:
+        return (self.x1, self.y1, self.x2, self.y2)
+
+    @property
+    def centre(self) -> Point:
+        return ((self.x1 + self.x2) / 2, (self.y1 + self.y2) / 2)
+
+    def overlap(self, other: "SceneObject | Detection") -> float:
+        """Intersection over the other object's area; useful for support surfaces."""
+        ax1, ay1, ax2, ay2 = self.box
+        if isinstance(other, Detection):
+            bx1, by1, bx2, by2 = other.box
+        else:
+            bx1, by1, bx2, by2 = other.box
+        ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+        ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+        inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+        base = (bx2 - bx1) * (by2 - by1)
+        return inter / base if base > 0 else 0.0
+
+    def as_dict(self, zone: str | None = None) -> dict:
+        return {
+            "label": self.label,
+            "conf": round(self.conf, 3),
+            "box": [round(v, 4) for v in self.box],
+            "zone": zone if zone is not None else self.zone,
         }
 
 
@@ -136,6 +185,7 @@ class PersonDetector:
         self._pose = None
         self._hog = None
         self._tracker: SimpleTracker | None = None
+        self._pose_tracker: SimpleTracker | None = None
         self._try_load()
 
     def _try_load(self) -> None:
@@ -214,7 +264,48 @@ class PersonDetector:
                 det = Detection(tid, x1 / w, y1 / h, x2 / w, y2 / h, float(r.boxes.conf[i]))
                 if self._filter(det):
                     out.append(det)
+        if not out and self._pose is not None:
+            # The person box detector misses horizontal bodies: on our own fall
+            # clip it found nobody once the man was on the floor, while pose
+            # found him at 0.75. Falling back to a full-frame pose pass is what
+            # keeps a fall from becoming "camera empty".
+            out = self._pose_people(frame)
         return out
+
+    def _pose_people(self, frame: np.ndarray, conf: float = 0.4) -> list[Detection]:
+        """Full-frame pose detection, used when the box detector finds nobody."""
+        assert self._pose is not None
+        h, w = frame.shape[:2]
+        try:
+            results = self._pose.predict(frame, imgsz=512, conf=conf, verbose=False)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("pose fallback failed: %s", exc)
+            return []
+        dets: list[Detection] = []
+        for r in results:
+            if r.boxes is None:
+                continue
+            kp_all = r.keypoints.data if r.keypoints is not None else None
+            for i, box in enumerate(r.boxes.xyxy):
+                if str(r.names[int(r.boxes.cls[i])]) != "person":
+                    continue
+                x1, y1, x2, y2 = (float(v) for v in box.tolist())
+                det = Detection(-1, x1 / w, y1 / h, x2 / w, y2 / h, float(r.boxes.conf[i]))
+                if not self._filter(det):
+                    continue
+                if kp_all is not None and i < len(kp_all):
+                    bw, bh = max(1.0, x2 - x1), max(1.0, y2 - y1)
+                    det.keypoints = [
+                        ((float(p[0]) - x1) / bw, (float(p[1]) - y1) / bh, float(p[2]))
+                        for p in kp_all[i].tolist()
+                    ]
+                dets.append(det)
+        if self._pose_tracker is None:
+            self._pose_tracker = SimpleTracker()
+        tracked = self._pose_tracker.update(dets)
+        for det in tracked:
+            det.track_id += 100000
+        return tracked
 
     def _track_hog(self, frame: np.ndarray) -> list[Detection]:
         assert self._hog is not None and self._tracker is not None
@@ -261,9 +352,88 @@ class PersonDetector:
         return [(p[0] / cw, p[1] / ch, p[2]) for p in arr]
 
 
+class SceneDetector:
+    """Sampled detector state for motion gating and object context."""
+
+    def __init__(self, cfg: Config) -> None:
+        self.cfg = cfg
+        self.mode = "none"
+        self._model = None
+        if cfg.objects.enabled:
+            self._load()
+
+    def _load(self) -> None:
+        try:
+            from ultralytics import YOLO  # noqa: PLC0415
+
+            self._model = YOLO(self.cfg.objects.model)
+            self.mode = "yolo"
+            log.info("scene objects: YOLO (%s), sampled every %.1fs",
+                     self.cfg.objects.model, self.cfg.objects.every_s)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("scene object detector unavailable (%s)", exc)
+            self.mode = "none"
+
+    @property
+    def available(self) -> bool:
+        return self.mode != "none"
+
+    def detect(self, frame: np.ndarray) -> list[SceneObject]:
+        if self._model is None:
+            return []
+        h, w = frame.shape[:2]
+        try:
+            results = self._model.predict(
+                frame,
+                imgsz=self.cfg.objects.imgsz,
+                conf=self.cfg.objects.conf,
+                classes=list(OBJECT_CLASSES),
+                verbose=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("scene object predict failed: %s", exc)
+            return []
+        out: list[SceneObject] = []
+        for r in results:
+            if r.boxes is None:
+                continue
+            for i, box in enumerate(r.boxes.xyxy):
+                x1, y1, x2, y2 = (float(v) for v in box.tolist())
+                cw, ch = (x2 - x1) / w, (y2 - y1) / h
+                if cw * ch < self.cfg.objects.min_area_ratio:
+                    continue
+                cls_id = int(r.boxes.cls[i])
+                label = OBJECT_CLASSES.get(cls_id)
+                if not label:
+                    continue
+                out.append(SceneObject(
+                    label, float(r.boxes.conf[i]),
+                    x1 / w, y1 / h, x2 / w, y2 / h,
+                ))
+        out.sort(key=lambda o: o.conf, reverse=True)
+        return out[: self.cfg.objects.max_items]
+
+
+def support_surface(person: Detection, objects: list[SceneObject]) -> SceneObject | None:
+    """The bed/couch the person is actually on, if object evidence is clear."""
+    best: SceneObject | None = None
+    best_score = 0.0
+    for obj in objects:
+        if obj.label not in SUPPORT_CLASSES:
+            continue
+        x1, y1, x2, y2 = obj.box
+        inside = x1 <= person.foot[0] <= x2 and y1 <= person.foot[1] <= y2
+        score = obj.overlap(person)
+        # A lying body can hang over the edge, putting the foot point just
+        # outside the bed. Substantial overlap of the person's box is enough.
+        qualifies = (inside and score >= 0.18) or score >= 0.30
+        if qualifies and score > best_score:
+            best, best_score = obj, score
+    return best
+
+
 class SimpleTracker:
     """Minimal IoU tracker for the HOG path. ByteTrack when YOLO is present."""
-
     def __init__(self, iou_threshold: float = 0.3, max_age: int = 15) -> None:
         self.iou_threshold = iou_threshold
         self.max_age = max_age
@@ -336,39 +506,9 @@ class DoorRegionWatcher:
 
 
 def posture_for(det: Detection) -> str:
-    """Posture, only when the pose model actually saw a body.
-
-    Deliberately refuses to guess from the bounding box. A box is wide for a
-    thousand reasons — a close camera, a wheelchair, a laundry basket, a wide
-    coat — and inventing "lying" from one produced a false fall alert on a woman
-    walking toward the camera on the first real clip we ran.
-
-    `unknown` is a first-class answer: it never raises an alert on its own.
-    """
+    """Map pose keypoints to upright, sitting, lying, or unknown."""
     if not det.keypoints:
         return "unknown"
     from .geometry import posture_from_keypoints  # noqa: PLC0415
 
     return posture_from_keypoints(det.keypoints)
-
-
-def blurness(frame: np.ndarray) -> float:
-    """Laplacian variance. Low values mean a smeared or fogged lens."""
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    return float(cv2.Laplacian(gray, cv2.CV_64F).var())
-
-
-def in_any_rest(det: Detection, zones: tuple[Zone, ...]) -> bool:
-    for z in zones:
-        if z.rest and point_in_polygon(det.foot, z.points):
-            return True
-    return False
-
-
-def zone_at(det: Detection, zones: tuple[Zone, ...]) -> Zone | None:
-    """The most specific zone containing the foot point (rest zones win ties)."""
-    hits = [z for z in zones if not z.is_exclusion and point_in_polygon(det.foot, z.points)]
-    if not hits:
-        return None
-    hits.sort(key=lambda z: (not z.rest, len(z.points)))
-    return hits[0]

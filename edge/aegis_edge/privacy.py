@@ -1,10 +1,4 @@
-"""Privacy masks, applied at capture.
-
-This runs *before* the ring buffer, not before the upload. A masked pixel never
-enters RAM, so it cannot leak through a crash dump, a saved clip, an encoder, or
-a model call. That is a stronger claim than "we blur it later", and it is the one
-a family can actually check.
-"""
+"""Capture-time privacy masks. Masked pixels never enter the ring buffer."""
 from __future__ import annotations
 
 import cv2
@@ -40,17 +34,3 @@ class PrivacyMasker:
         for poly in self._polys(frame.shape[:2]):
             cv2.fillPoly(out, [poly], (0, 0, 0))
         return out
-
-
-def masked_ratio(frame: np.ndarray, zones: tuple[Zone, ...]) -> float:
-    """Fraction of the frame hidden. Surfaced in the UI as proof, not decoration."""
-    masker = PrivacyMasker(zones)
-    if not masker.zones:
-        return 0.0
-    h, w = frame.shape[:2]
-    total = 0
-    for poly in masker._polys((h, w)):
-        m = np.zeros((h, w), dtype=np.uint8)
-        cv2.fillPoly(m, [poly], 255)
-        total += int(np.count_nonzero(m))
-    return min(1.0, total / float(h * w))

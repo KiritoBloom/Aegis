@@ -1,8 +1,4 @@
-"""Typed access to config/edge.yaml.
-
-Deliberately dependency-light: the edge must start on a machine that has nothing
-but Python, OpenCV and ffmpeg.
-"""
+"""Edge configuration loaded from YAML with strict, explicit defaults."""
 from __future__ import annotations
 
 import os
@@ -51,6 +47,18 @@ class Person:
 
 
 @dataclass(frozen=True)
+class Objects:
+    """Small, curated scene vocabulary. Not an open-ended object detector."""
+    enabled: bool = True
+    model: str = "yolov8n.pt"
+    imgsz: int = 416
+    conf: float = 0.30
+    every_s: float = 2.0
+    max_items: int = 10
+    min_area_ratio: float = 0.001
+
+
+@dataclass(frozen=True)
 class Fall:
     enabled: bool = True
     suspect_score: float = 0.60
@@ -73,6 +81,30 @@ class Door:
     dwell_s: float = 3.0
     region_diff_ratio: float = 0.12
     left_open_s: float = 120.0
+
+
+@dataclass(frozen=True)
+class Restlessness:
+    """Repeated back-and-forth movement; a care signal, not a diagnosis."""
+    enabled: bool = True
+    min_present_s: float = 8.0
+    min_path: float = 0.80
+    min_direction_changes: int = 6
+    cooldown_s: float = 600.0
+    night_cooldown_s: float = 300.0
+
+
+@dataclass(frozen=True)
+class Audio:
+    """Local loudness gate. Audio is only sent after the gate fires."""
+    enabled: bool = False
+    device: int | str | None = None
+    sample_rate: int = 16000
+    block_s: float = 0.1
+    pre_s: float = 5.0
+    threshold_dbfs: float = -30.0
+    sustain_s: float = 0.6
+    cooldown_s: float = 30.0
 
 
 @dataclass(frozen=True)
@@ -108,6 +140,9 @@ class Config:
     clip: Clip
     door: Door
     upload: Upload
+    objects: Objects = field(default_factory=Objects)
+    audio: Audio = field(default_factory=Audio)
+    restlessness: Restlessness = field(default_factory=Restlessness)
     zones: tuple[Zone, ...] = field(default_factory=tuple)
     heartbeat_s: float = 10.0
     log_level: str = "INFO"
@@ -152,6 +187,9 @@ def load(path: str | Path = "config/edge.yaml") -> Config:
     env_url = os.environ.get("BACKEND_URL")
     if env_url:
         upload = Upload(**{**upload.__dict__, "backend_url": env_url})
+    audio = _section(Audio, raw, "audio")
+    if os.environ.get("AEGIS_AUDIO", "").lower() in ("1", "on", "true"):
+        audio = Audio(**{**audio.__dict__, "enabled": True})
 
     return Config(
         camera=_section(Camera, raw, "camera"),
@@ -162,6 +200,9 @@ def load(path: str | Path = "config/edge.yaml") -> Config:
         clip=_section(Clip, raw, "clip"),
         door=_section(Door, raw, "door"),
         upload=upload,
+        objects=_section(Objects, raw, "objects"),
+        audio=audio,
+        restlessness=_section(Restlessness, raw, "restlessness"),
         zones=tuple(zones),
         heartbeat_s=float(raw.get("heartbeat_s", 10)),
         log_level=str(raw.get("log_level", "INFO")),

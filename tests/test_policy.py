@@ -42,6 +42,40 @@ def test_fall_confirmed_is_always_emergency():
     assert f.severity == "emergency" and f.notifies
 
 
+def test_a_person_still_down_for_two_seconds_has_not_recovered():
+    """A short no-recovery window is a fresh fall, not a recovery.
+
+    The edge (and the wall) sends `recovered: false` while the person is still
+    on the floor. Treating any no_recovery_s under eight as recovered sent the
+    first phase-1 alert home and left only the 15s check-in escalation.
+    """
+    f = policy.evaluate({
+        "type": "fall_suspected",
+        "sensors": {"no_recovery_s": 2, "recovered": False},
+    }, PROFILE, local_hour=14)
+    assert f.severity == "urgent" and f.notifies
+
+
+def test_an_explicit_recovery_lowers_the_suspected_floor():
+    f = policy.evaluate({
+        "type": "fall_suspected",
+        "sensors": {"no_recovery_s": 2, "recovered": True},
+    }, PROFILE, local_hour=14)
+    assert f.severity == "info"
+
+
+def test_pacing_is_a_care_note_by_day_and_a_quiet_check_at_night():
+    day = policy.evaluate({"type": "restlessness",
+                           "sensors": {"direction_changes": 8, "night": False}},
+                          PROFILE, local_hour=14)
+    assert day.severity == "info" and not day.notifies
+    night = policy.evaluate({"type": "restlessness",
+                             "sensors": {"direction_changes": 8, "night": True}},
+                            PROFILE, local_hour=3)
+    assert night.severity == "watch" and not night.notifies
+    assert "night_hours" in night.reasons
+
+
 def test_night_door_open_with_cognitive_condition_is_urgent():
     f = policy.evaluate({"type": "door_open", "sensors": {"door_contact": "open"}},
                         PROFILE, local_hour=3)
@@ -164,6 +198,19 @@ def test_template_decision_still_notifies_on_emergency():
     assert d.severity == "emergency" and d.notify_now and d.actions
 
 
+def test_fall_message_names_the_resident_and_the_fall():
+    d = dec(title="Possible fall", body="A person is on the floor.")
+    out = policy.ensure_fall_copy(d, "fall_suspected", PROFILE)
+    assert "Margaret" in out.title and "fallen" in out.title.lower()
+    assert "Margaret" in out.body
+
+
+def test_non_fall_message_is_not_renamed():
+    d = dec(title="Front door opened", body="The front door opened at 03:12.")
+    out = policy.ensure_fall_copy(d, "door_open", PROFILE)
+    assert out.title == "Front door opened"
+
+
 def test_worker_sees_the_same_sensors_the_ingest_saw():
     # The queue used to hand `enrich` a raw row whose sensors were still in
     # `sensors_json`, so the ritual/recovery/stove rules silently missed and a
@@ -235,6 +282,119 @@ def test_unclear_answer_never_changes_severity():
     for cls in ("confused", "other"):
         out = policy.checkin_outcome(cls, upright_moving=True, on_floor=False)
         assert out["severity_delta"] == 0 and out["contradiction"] is False
+
+
+# --- audio distress, media context, and the check-in prompt ---------------
+def help_incident(tv=None, radio=None, verified=True, person_count=1, posture="upright",
+                  distress=True, transcript="Help me, please."):
+    return {
+        "type": "help_call",
+        "track": {"person_count": person_count, "posture": posture},
+        "sensors": {
+            "audio": {"distress": distress,
+                      "kind": "help_words" if distress else "no_distress",
+                      "transcript": transcript},
+            "media": {"tv_on": tv, "radio_on": radio, "verified": verified},
+        },
+    }
+
+
+def test_cry_for_help_with_no_media_is_urgent():
+    f = policy.evaluate(help_incident(tv=False, radio=False), PROFILE, local_hour=14)
+    assert f.severity == "urgent" and f.notifies
+    assert "no_media_source" in f.reasons
+
+
+def test_cry_over_a_tv_with_a_person_is_ambiguous_and_asks_first():
+    f = policy.evaluate(help_incident(tv=True, radio=False), PROFILE, local_hour=14)
+    assert f.severity == "watch" and not f.notifies
+    assert "media_source_possible" in f.reasons
+    assert policy.should_checkin(help_incident(tv=True, radio=False))
+
+
+def test_cry_over_a_tv_with_nobody_in_frame_stays_quiet():
+    f = policy.evaluate(help_incident(tv=True, radio=False, person_count=0),
+                        PROFILE, local_hour=14)
+    assert f.severity == "info" and not f.notifies
+    assert not policy.should_checkin(help_incident(tv=True, radio=False, person_count=0))
+
+
+def test_cry_on_the_floor_outranks_the_television():
+    f = policy.evaluate(help_incident(tv=True, radio=False, posture="lying"),
+                        PROFILE, local_hour=14)
+    assert f.severity == "emergency"
+
+
+def test_unknown_media_state_is_not_treated_as_off_but_is_not_silent():
+    f = policy.evaluate(help_incident(tv=None, radio=None, verified=False),
+                        PROFILE, local_hour=14)
+    assert f.severity == "urgent"
+    assert "media_state_unknown" in f.reasons
+
+
+def test_no_distress_audio_never_pages_anyone():
+    f = policy.evaluate(help_incident(tv=False, radio=False, distress=False, transcript=""),
+                        PROFILE, local_hour=14)
+    assert f.severity == "info"
+    assert not policy.should_checkin(help_incident(tv=False, radio=False, distress=False,
+                                                   transcript=""))
+
+
+def test_checkin_is_reserved_for_falls_and_help_calls():
+    assert policy.should_checkin({"type": "fall_confirmed"})
+    assert policy.should_checkin({"type": "fall_suspected"})
+    assert not policy.should_checkin({"type": "door_open"})
+    assert not policy.should_checkin({"type": "stove_unattended"})
+
+
+def test_silence_escalation_stops_at_emergency():
+    assert policy.raise_one("watch") == "urgent"
+    assert policy.raise_one("urgent") == "emergency"
+    assert policy.raise_one("emergency") == "emergency"
+
+
+# --- unexpected presence after dark ---------------------------------------
+def presence_incident(people=2, expected=False, hour=3, door="open", resident=True):
+    f = policy.evaluate({
+        "type": "unexpected_presence",
+        "track": {"person_count": people, "posture": "upright"},
+        "sensors": {
+            "person_count": people,
+            "second_person_present": people > 1,
+            "expected_visitor": expected,
+            "door_contact": door,
+            "resident_present": resident,
+        },
+    }, PROFILE, local_hour=hour)
+    return f
+
+
+def test_two_people_after_dark_is_a_family_check():
+    f = presence_incident()
+    assert f.severity == "urgent" and f.notifies
+    assert "night_hours" in f.reasons and "second_person_present" in f.reasons
+
+
+def test_an_expected_visitor_keeps_the_night_quiet():
+    f = presence_incident(expected=True)
+    assert f.severity == "info" and not f.notifies
+    assert "expected_visitor" in f.reasons
+
+
+def test_two_people_in_daylight_are_not_an_alert():
+    f = presence_incident(hour=14)
+    assert f.severity == "info" and not f.notifies
+
+
+def test_a_single_person_after_dark_is_not_an_unexpected_presence():
+    f = presence_incident(people=1)
+    assert f.severity == "info" and not f.notifies
+
+
+def test_unexpected_presence_never_claims_identity():
+    f = presence_incident()
+    assert "unexpected_presence" in f.reasons
+    assert not any("face" in r or "identity" in r for r in f.reasons)
 
 
 if __name__ == "__main__":

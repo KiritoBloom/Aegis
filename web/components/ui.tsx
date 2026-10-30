@@ -4,114 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Zone } from "@/lib/api";
-
-/* ---------------------------------------------------------------------------
-   Icons. Hand-drawn 1.5px strokes on a 20px grid: a care product should not
-   look like it shipped with an icon font, and at this weight they sit calmly
-   next to 16px text instead of shouting over it.
---------------------------------------------------------------------------- */
-type IconName =
-  | "today"
-  | "alerts"
-  | "live"
-  | "privacy"
-  | "profile"
-  | "sim"
-  | "arrow"
-  | "check"
-  | "back"
-  | "chevron"
-  | "pause"
-  | "door"
-  | "camera"
-  | "shield";
-
-const PATHS: Record<IconName, React.ReactNode> = {
-  today: (
-    <>
-      <path d="M3 9.5 10 3l7 6.5" />
-      <path d="M5 8.5V17h10V8.5" />
-    </>
-  ),
-  alerts: (
-    <>
-      <path d="M10 3.5c-2.6 0-4.2 2-4.2 4.6 0 3.4-1.3 4.4-1.3 4.4h11s-1.3-1-1.3-4.4C14.2 5.5 12.6 3.5 10 3.5Z" />
-      <path d="M8.4 15.2a1.7 1.7 0 0 0 3.2 0" />
-    </>
-  ),
-  live: (
-    <>
-      <rect x="2.5" y="5.5" width="11" height="9" rx="2" />
-      <path d="M13.5 9.5 17.5 7v6l-4-2.5Z" />
-    </>
-  ),
-  privacy: (
-    <>
-      <path d="M10 2.8 4 5v5c0 3.3 2.5 5.9 6 7.2 3.5-1.3 6-3.9 6-7.2V5l-6-2.2Z" />
-      <path d="M7.6 9.9 9.4 12l3.2-3.6" />
-    </>
-  ),
-  profile: (
-    <>
-      <circle cx="10" cy="7" r="2.9" />
-      <path d="M4.4 16.5c.6-2.8 2.8-4.3 5.6-4.3s5 1.5 5.6 4.3" />
-    </>
-  ),
-  sim: (
-    <>
-      <path d="M4 6.5h12M4 10h12M4 13.5h7" />
-      <circle cx="14.5" cy="13.5" r="1.4" />
-    </>
-  ),
-  arrow: <path d="M4 10h11m-4.2-4.2L15 10l-4.2 4.2" />,
-  check: <path d="M4.5 10.5 8 14l7.5-8" />,
-  back: <path d="M15 10H4m4.2-4.2L4 10l4.2 4.2" />,
-  chevron: <path d="M8 5l5 5-5 5" />,
-  pause: (
-    <>
-      <rect x="6" y="4.5" width="2.6" height="11" rx="1" />
-      <rect x="11.4" y="4.5" width="2.6" height="11" rx="1" />
-    </>
-  ),
-  door: (
-    <>
-      <path d="M4 17V4.5h8V17" />
-      <path d="M12 17h4" />
-      <circle cx="9.6" cy="10.5" r="0.7" />
-    </>
-  ),
-  camera: (
-    <>
-      <path d="M3 6.5h9v7H3z" />
-      <path d="M12 9.2 17 7v6l-5-2.2Z" />
-      <path d="M3 17h14" />
-    </>
-  ),
-  shield: (
-    <>
-      <path d="M10 2.8 4 5v5c0 3.3 2.5 5.9 6 7.2 3.5-1.3 6-3.9 6-7.2V5l-6-2.2Z" />
-    </>
-  ),
-};
-
-export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 20 20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      style={{ flex: "none" }}
-    >
-      {PATHS[name]}
-    </svg>
-  );
-}
+import { Icon, type IconName } from "./icons";
 
 /* ---------------------------------------------------------------------------
    Severity. Never colour alone — every chip carries its word, and the bar has
@@ -135,91 +28,6 @@ export function SeverityChip({ severity }: { severity: string }) {
   return <span className={`chip ${tone}`}>{word}</span>;
 }
 
-export function SeverityBar({ severity }: { severity: string }) {
-  const color =
-    severity === "emergency" || severity === "urgent"
-      ? "var(--color-red)"
-      : severity === "watch"
-        ? "var(--color-amber)"
-        : "var(--color-sage)";
-  return <span className="sev-bar" style={{ background: color }} aria-hidden="true" />;
-}
-
-/* ---------------------------------------------------------------------------
-   The floor plan. A top-down sketch, not a camera view: it answers "which part
-   of the house" in one glance, which a fisheye frame never does.
---------------------------------------------------------------------------- */
-export function FloorPlan({
-  zones,
-  activeZone,
-  residentZone,
-  height = 260,
-}: {
-  zones: Zone[];
-  activeZone?: string | null;
-  residentZone?: string | null;
-  height?: number;
-}) {
-  // The config's coordinates are normalised against the camera frame, which is
-  // a perspective view. Mapped onto a flat plan they are still the right
-  // relative arrangement, which is all a schematic needs to be.
-  const pad = 14;
-  const w = 340;
-  const h = 220;
-  const sx = (x: number) => pad + x * (w - pad * 2);
-  const sy = (y: number) => pad + y * (h - pad * 2);
-
-  return (
-    <svg
-      viewBox={`0 0 ${w} ${h}`}
-      style={{ width: "100%", height, display: "block" }}
-      role="img"
-      aria-label={`Floor plan with ${zones.length} watched areas`}
-    >
-      <defs>
-        <pattern id="grid" width="17" height="17" patternUnits="userSpaceOnUse">
-          <path d="M17 0H0V17" fill="none" stroke="#e9e3d9" strokeWidth="1" />
-        </pattern>
-      </defs>
-      <rect x="0" y="0" width={w} height={h} fill="url(#grid)" />
-      {zones.map((z) => {
-        const pts = z.points.map(([x, y]) => `${sx(x)},${sy(y)}`).join(" ");
-        const active = activeZone === z.name;
-        const hasResident = residentZone === z.name;
-        const fill = z.private
-          ? "#2a2f34"
-          : active
-            ? "rgba(169,59,50,0.14)"
-            : hasResident
-              ? "rgba(95,127,106,0.16)"
-              : "rgba(20,24,28,0.035)";
-        const stroke = z.private ? "#2a2f34" : active ? "var(--color-red)" : "var(--color-line-2)";
-        return (
-          <g key={z.name}>
-            <polygon
-              points={pts}
-              fill={fill}
-              stroke={stroke}
-              strokeWidth={active ? 1.8 : 1}
-              strokeDasharray={z.private ? "3 3" : undefined}
-            />
-            <text
-              x={sx(z.points.reduce((a, p) => a + p[0], 0) / z.points.length)}
-              y={sy(z.points.reduce((a, p) => a + p[1], 0) / z.points.length)}
-              textAnchor="middle"
-              fontSize="9.5"
-              fontFamily="var(--font-mono)"
-              fill={z.private ? "#f6f3ed" : "var(--color-ink-3)"}
-              letterSpacing="0.04em"
-            >
-              {z.private ? "not watched" : z.name.replace(/_/g, " ")}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
 
 /* ---------------------------------------------------------------------------
    The live frame with zones drawn on it. This is the single most "CCTV" element
@@ -390,9 +198,9 @@ export function Banner({
    The rail (desktop) and tab bar (mobile). Same links, one component each.
 --------------------------------------------------------------------------- */
 const LINKS = [
-  { href: "/", label: "Today", icon: "today" as IconName },
-  { href: "/alerts", label: "Alerts", icon: "alerts" as IconName },
-  { href: "/live", label: "Camera", icon: "live" as IconName },
+  { href: "/", label: "Console", icon: "grid" as IconName },
+  { href: "/night", label: "Night", icon: "night" as IconName },
+  { href: "/live", label: "Edge camera", icon: "live" as IconName },
   { href: "/privacy", label: "Privacy", icon: "privacy" as IconName },
 ];
 

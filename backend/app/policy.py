@@ -1,12 +1,4 @@
-"""The policy floor: deterministic, model-free, and the only thing allowed to
-set a minimum severity.
-
-The rule is one line long and it is the safety guarantee of the whole product:
-
-    the model may raise the alarm, never lower it.
-
-Everything else here exists to make that line auditable.
-"""
+"""Deterministic safety floor and evidence gate. A model may raise an alarm but never lower it."""
 from __future__ import annotations
 
 import re
@@ -39,6 +31,74 @@ class ResidentProfile:
     uses_mobility_aid: bool = False
     anticoagulant: bool = False
     lives_alone: bool = True
+    conditions: list[str] = field(default_factory=list)
+
+
+CHECKIN_TYPES = ("fall_suspected", "fall_confirmed", "help_call")
+
+
+def audio_context(incident: dict) -> dict:
+    """Summarize event-gated audio evidence without exposing raw audio."""
+    sensors = incident.get("sensors") or {}
+    track = incident.get("track") or {}
+    audio = dict(sensors.get("audio") or {})
+    media = dict(sensors.get("media") or {})
+    transcript = str(audio.get("transcript") or sensors.get("transcript") or "")
+    kind = str(audio.get("kind") or "")
+    cls = classify_transcript(transcript) if transcript else "no_response"
+    distress = bool(audio.get("distress")) or kind in (
+        "help_words", "scream_like", "call_for_help") or cls == "help"
+    posture = str(track.get("posture") or sensors.get("posture") or "").lower()
+    no_recovery = float(sensors.get("no_recovery_s") or track.get("no_recovery_s") or 0)
+    person_count = int(track.get("person_count") or sensors.get("person_count") or 0)
+    if sensors.get("person_present") is True:
+        person_count = max(1, person_count)
+    on_floor = bool(sensors.get("on_floor")) or posture in ("lying", "fallen", "on_floor") \
+        or no_recovery >= 3.0
+    tv = media.get("tv_on")
+    radio = media.get("radio_on")
+    if "verified" in media:
+        verified = bool(media.get("verified"))
+    else:
+        verified = ("tv_on" in media and "radio_on" in media
+                    and tv is not None and radio is not None)
+    return {
+        "distress": distress,
+        "kind": kind or ("help_words" if cls == "help" else "unknown"),
+        "transcript": transcript,
+        "heard_words": cls == "help",
+        "on_floor": on_floor,
+        "person_present": person_count > 0,
+        "person_count": person_count,
+        "tv_on": tv,
+        "radio_on": radio,
+        "media_on": bool(tv) or bool(radio),
+        "media_verified": verified,
+    }
+
+
+def should_checkin(incident: dict) -> bool:
+    """Whether an incident warrants a spoken check-in before escalation."""
+    itype = str(incident.get("type") or "")
+    if itype not in CHECKIN_TYPES:
+        return False
+    sensors = incident.get("sensors") or {}
+    if sensors.get("checkin_declined"):
+        return False
+    if itype == "help_call":
+        ctx = audio_context(incident)
+        if not ctx["distress"]:
+            return False
+        if ctx["media_on"] and not ctx["person_present"]:
+            return False
+    return True
+
+
+def raise_one(severity: str) -> str:
+    """One step louder, capped at emergency. Used only by the silence path."""
+    order = ["info", "watch", "urgent", "emergency"]
+    idx = min(order.index(severity) + 1, len(order) - 1) if severity in order else 2
+    return order[idx]
 
 
 def evaluate(
@@ -61,8 +121,7 @@ def evaluate(
         # between waking a daughter at 3AM and telling her at breakfast, so the
         # rule has to look at recovery, company, and whether this is a shape the
         # household makes every day on purpose.
-        recovery = float(sensors.get("no_recovery_s", 0) or 0)
-        recovered = bool(sensors.get("recovered")) or 0 < recovery < 8
+        recovered = bool(sensors.get("recovered"))
         helper = bool(sensors.get("helper_present") or sensors.get("caregiver_present")
                       or sensors.get("second_person_present"))
         ritual = (int(sensors.get("posture_transitions", 0) or 0) >= 6
@@ -91,6 +150,47 @@ def evaluate(
 
     if itype == "fall_assisted":
         return Floor("urgent", ["second_person_present"])
+
+    if itype == "unexpected_presence":
+        # A second person after dark is a family check, not a verdict about who
+        # they are. Aegis does not identify faces and does not dispatch anyone.
+        track = incident.get("track") or {}
+        people = int(track.get("person_count") or sensors.get("person_count") or 0)
+        second = bool(sensors.get("second_person_present")) or people > 1
+        expected = bool(sensors.get("expected_visitor")
+                        or sensors.get("visitor_expected")
+                        or sensors.get("caregiver_expected"))
+        if expected:
+            return Floor("info", ["expected_visitor"])
+        if not is_night:
+            return Floor("info", ["daytime_visitor"])
+        if not second:
+            return Floor("info", ["no_second_person"])
+        reasons = ["unexpected_presence", "second_person_present", "night_hours"]
+        if str(sensors.get("door_contact", "")) == "open":
+            reasons.append("door_open")
+        if sensors.get("resident_present") is False:
+            reasons.append("resident_not_in_frame")
+        return Floor("urgent", reasons)
+
+    if itype == "help_call":
+        # The question is not "was it loud?" — it is "is there a competing
+        # source, and is anyone there?" A cry over a television with a person in
+        # frame is ambiguous; the spoken check-in is the tie-breaker. A cry with
+        # no television or radio to explain it is treated as a person in need.
+        ctx = audio_context(incident)
+        if not ctx["distress"]:
+            return Floor("info", ["no_audio_distress"])
+        reasons = ["call_for_help", ctx["kind"]]
+        if ctx["on_floor"]:
+            return Floor("emergency", reasons + ["person_down"])
+        if ctx["media_on"]:
+            if not ctx["person_present"]:
+                return Floor("info", reasons + ["media_source_possible", "no_person_in_frame"])
+            return Floor("watch", reasons + ["media_source_possible", "checkin"])
+        if ctx["media_verified"]:
+            return Floor("urgent", reasons + ["no_media_source"])
+        return Floor("urgent", reasons + ["media_state_unknown"])
 
     if itype == "door_open":
         reasons = ["door_open"]
@@ -139,6 +239,19 @@ def evaluate(
         if still_min >= 720 and not sensors.get("caregiver_visit"):
             return Floor("watch", ["no_movement_12h"])
         return Floor("info", ["still_but_recent_activity"])
+    if itype == "restlessness":
+        # Pacing is a pattern, not a diagnosis. It becomes a dashboard note by
+        # day and a quiet check after dark; the Evidence Agent decides whether
+        # it is new enough to contact the family, and may raise but never lower
+        # this floor.
+        turns = int(sensors.get("direction_changes") or 0)
+        reasons = ["restless_movement"]
+        if is_night:
+            reasons.append("night_hours")
+            return Floor("watch", reasons)
+        if turns >= 12:
+            reasons.append("high_turn_count")
+        return Floor("info", reasons)
 
     return Floor("info", ["no_rule"])
 
@@ -157,6 +270,22 @@ class Decision:
     rationale: str
 
 
+def place_phrase(incident: dict) -> str:
+    """Where a fall happened, using the wall's own feed name when there is one.
+
+    The old template said "the hallway" for every fall, including a wall feed
+    labelled Bedroom. A family reading an alert needs the place to be true.
+    """
+    feed = ((incident.get("sensors") or {}).get("wall_feed") or {}).get("feed_name")
+    if feed:
+        name = " ".join(str(feed).replace("-", " ").replace("_", " ").split())
+        return f"the room labelled {name}"
+    zone = str(incident.get("zone_id") or "").strip()
+    if zone:
+        return f"the {zone.replace('_', ' ')}"
+    return "the room"
+
+
 TEMPLATES: dict[str, tuple[str, str, list[dict]]] = {
     "door_open": (
         "Door opened",
@@ -167,7 +296,7 @@ TEMPLATES: dict[str, tuple[str, str, list[dict]]] = {
     ),
     "fall_suspected": (
         "Possible fall",
-        "{name} may have fallen in the hallway and has not stood up.",
+        "{name} may have fallen in {place} and has not stood up.",
         [{"id": "call_resident", "label": "Call now"},
          {"id": "send_help", "label": "Send help"},
          {"id": "false_alarm", "label": "False alarm"}],
@@ -186,6 +315,27 @@ TEMPLATES: dict[str, tuple[str, str, list[dict]]] = {
          {"id": "im_checking", "label": "I'm checking"},
          {"id": "false_alarm", "label": "False alarm"}],
     ),
+    "help_call": (
+        "A call for help",
+        "{name} called for help. Someone should check on her now.",
+        [{"id": "call_resident", "label": "Call now"},
+         {"id": "send_help", "label": "Send help"},
+         {"id": "false_alarm", "label": "False alarm"}],
+    ),
+    "unexpected_presence": (
+        "Someone else at night",
+        "{name}'s home shows a second person after dark. Look at the clip and call her.",
+        [{"id": "call_resident", "label": "Call now"},
+         {"id": "im_checking", "label": "I'm checking"},
+         {"id": "false_alarm", "label": "Expected visitor"}],
+    ),
+    "checkin_no_response": (
+        "No answer from {name}",
+        "{name} did not answer the check-in. Please call her now.",
+        [{"id": "call_resident", "label": "Call now"},
+         {"id": "send_help", "label": "Send help"},
+         {"id": "im_checking", "label": "I'm checking"}],
+    ),
 }
 
 
@@ -193,13 +343,19 @@ def template_decision(floor: Floor, incident: dict, profile: ResidentProfile,
                       local_time: str = "") -> Decision:
     """The fail-open path. No model, no network, still an alert."""
     itype = incident.get("type", "")
+    first = profile.display_name.split()[0] if profile.display_name.strip() else "Resident"
     title, body, actions = TEMPLATES.get(
         itype,
         ("Aegis alert", "An event needs your attention at {time}.",
          [{"id": "im_checking", "label": "I'm checking"},
           {"id": "false_alarm", "label": "False alarm"}]),
     )
-    body = body.format(name=profile.display_name.split()[0], time=local_time or "now")
+    if itype.startswith("fall"):
+        # A lock-screen line has one job: say whose fall this is. "Possible
+        # fall" alone makes the reader open the app to find out who is down.
+        title = f"{first} may have fallen" if itype == "fall_suspected" else f"{first} has fallen"
+    body = body.format(name=first, time=local_time or "now",
+                       place=place_phrase(incident))
     return Decision(
         severity=floor.severity,
         notify_now=floor.notifies,
@@ -212,6 +368,25 @@ def template_decision(floor: Floor, incident: dict, profile: ResidentProfile,
         escalate_if_no_ack=True,
         rationale="Deterministic policy floor; the model was unavailable.",
     )
+
+
+def ensure_fall_copy(decision: Decision, incident_type: str,
+                     profile: ResidentProfile) -> Decision:
+    """Make a fall message name the resident and state the fall."""
+    if not str(incident_type).startswith("fall"):
+        return decision
+    first = profile.display_name.split()[0] if profile.display_name.strip() else "Resident"
+    title = decision.title.lower()
+    if first.lower() not in title or not any(w in title for w in ("fall", "fell")):
+        decision.title = (f"{first} may have fallen" if not incident_type.endswith("confirmed")
+                          else f"{first} has fallen")[:60]
+    body = decision.body.lower()
+    if first.lower() not in body:
+        if any(w in body for w in ("fall", "fell")):
+            decision.body = f"{first}: {decision.body}"[:240]
+        else:
+            decision.body = f"{first} may have fallen. {decision.body}"[:240]
+    return decision
 
 
 ALLOWED_ACTIONS = {
@@ -238,12 +413,7 @@ def _num(v: float) -> set[str]:
 
 
 def packet_vocabulary(packet: dict) -> set[str]:
-    """Every fact the packet actually contains, as comparable lowercase words.
-
-    This is what makes the evidence gate honest in both directions: a token may
-    only survive if the packet says it, and a token the packet *does* support must
-    not be thrown away for being phrased differently from the schema.
-    """
+    """Every fact the evidence packet supports, as comparable words."""
     vocab: set[str] = set()
 
     def walk(node) -> None:
@@ -410,13 +580,7 @@ QUIET_END_HOUR = 7
 
 
 def in_quiet_hours(local_hour: int, quiet: dict | None = None) -> bool:
-    """Is this hour inside the household's quiet window?
-
-    The window is configurable during onboarding, because a night-shift
-    daughter and a sleeping resident do not share a definition of "night". The
-    default is the plan's 22:00-07:00. `quiet=None` keeps the pure-function
-    contract the tests rely on.
-    """
+    """Whether a local hour falls inside the household quiet window."""
     if quiet is not None:
         if not quiet.get("enabled", True):
             return False
@@ -501,13 +665,7 @@ CHECKIN_CLASSES = ("affirmative", "help", "confused", "other", "no_response")
 
 
 def classify_transcript(text: str) -> str:
-    """Map a short answer to one of five classes.
-
-    Deliberately a word list, not a model call: this runs on the safety path
-    after an alert, and a classifier that can be argued with is a classifier
-    that can be talked into "fine". Negation is checked first so "I'm not okay"
-    is never read as affirmative.
-    """
+    """Classify a short spoken answer into the fixed check-in vocabulary."""
     t = f" {text.lower().strip()} "
     if not t.strip():
         return "no_response"
@@ -522,7 +680,9 @@ def classify_transcript(text: str) -> str:
         return "help"
     help_words = (" help ", " hurts ", " hurt ", " pain ", " fell ", " fall ",
                   " stuck ", " can't move ", " cannot move ", " dizzy ",
-                  " bleeding ", " ambulance ", " doctor ", " emergency ")
+                  " bleeding ", " ambulance ", " doctor ", " emergency ",
+                  " can't breathe ", " cannot breathe ", " chest pain ",
+                  " call 911 ", " call an ambulance ", " hurry ", " come here ")
     if any(h in t for h in help_words):
         return "help"
     confused_words = (" what ", " where am i ", " who is ", " don't know ",
@@ -539,17 +699,7 @@ def classify_transcript(text: str) -> str:
 
 def checkin_outcome(transcript_class: str, *, upright_moving: bool,
                     on_floor: bool, still_s: float = 0.0) -> dict:
-    """The de-escalation table from plan §7.10, as a pure function.
-
-    Returns `{"severity_delta": int, "resolution": str, "contradiction": bool,
-    "reason": str}`. A positive delta escalates; a negative delta is only ever
-    granted when perception independently agrees.
-
-    `affirmative` + upright and moving is the *only* path to de-escalation.
-    `affirmative` from the floor is a contradiction: keep the severity and say
-    so in the copy, because that is exactly the case a posture-only system
-    misses and a transcript-only system gets dangerously wrong.
-    """
+    """Resolve a check-in answer. Perception must independently agree before resolution."""
     cls = transcript_class if transcript_class in CHECKIN_CLASSES else "other"
     lying = on_floor or still_s > 10.0
 
@@ -559,7 +709,7 @@ def checkin_outcome(transcript_class: str, *, upright_moving: bool,
                 "reason": "resident asked for help"}
     if cls == "no_response":
         return {"severity_delta": 1, "resolution": "escalated",
-                "contradiction": False, "reason": "no answer after 20s"}
+                "contradiction": False, "reason": "no answer to the check-in"}
     if cls == "affirmative":
         if on_floor or still_s > 10.0:
             return {"severity_delta": 0, "resolution": "contradiction",

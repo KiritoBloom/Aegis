@@ -10,14 +10,7 @@ import {
   type PushStatus,
 } from "@/lib/push";
 
-/**
- * The one setting that decides whether any of this works at 3 AM.
- *
- * Rendered as its own card rather than a checkbox in a list, because "did the
- * phone actually receive it" is the question the family will ask the first
- * night it matters. It reports the real browser state, including the awkward
- * ones: iOS before install, permission denied, subscribed-but-never-delivered.
- */
+/** Push subscription controls for the family device. */
 
 const COPY: Record<PushStatus, { title: string; body: string; action?: string }> = {
   unsupported: {

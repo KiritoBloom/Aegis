@@ -1,16 +1,11 @@
-"""Event rules and the capture gate.
-
-Both are pure functions of (observation, now). No camera, no clock, no network —
-so every transition is unit-testable, which is the only way to trust a safety
-system you cannot run 10,000 times.
-"""
+"""State machine connecting perception to the event and upload pipeline."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
 
 from .config import Config, Zone
-from .geometry import TrackHistory, point_in_polygon
+from .geometry import TrackHistory
 
 
 class Severity(str, Enum):
@@ -66,6 +61,7 @@ class Context:
     prayer_cycles: int = 0
     zone: Zone | None = None
     inside_any_rest: bool = False
+    expected_visitor: bool = False
 
 
 class RulesEngine:
@@ -94,6 +90,8 @@ class RulesEngine:
         out.extend(self._door(ctx))
         out.extend(self._fall(ctx))
         out.extend(self._stove(ctx))
+        out.extend(self._presence(ctx))
+        out.extend(self._restlessness(ctx))
         return out
 
     def _door(self, ctx: Context) -> list[Event]:
@@ -236,6 +234,65 @@ class RulesEngine:
             )
         ]
 
+    def _presence(self, ctx: Context) -> list[Event]:
+        """Track whether a person is present long enough to matter."""
+        if not ctx.night or ctx.person_count < 2 or ctx.expected_visitor:
+            return []
+        key = "unexpected_presence:house"
+        if not self._fresh(key, ctx.t, cooldown=300.0):
+            return []
+        zone_name = ctx.zone.name if ctx.zone else "hallway"
+        return [
+            self._emit(
+                Event(
+                    "unexpected_presence",
+                    ctx.t,
+                    zone_name,
+                    Severity.URGENT,
+                    {
+                        "person_count": ctx.person_count,
+                        "second_person_present": True,
+                        "night": True,
+                        "expected_visitor": False,
+                    },
+                )
+            )
+        ]
+
+
+    def _restlessness(self, ctx: Context) -> list[Event]:
+        """Detect long, many-turn paths with little net displacement."""
+        cfg = self.cfg.restlessness
+        if not cfg.enabled or ctx.track is None or ctx.person_count > 1:
+            return []
+        if ctx.zone is not None and ctx.zone.name == "prayer_mat" and ctx.prayer_cycles >= 3:
+            return []
+        feats = ctx.track.to_features(ctx.zone.points if ctx.zone else None)
+        if (float(feats.get("present_s") or 0) < cfg.min_present_s
+                or float(feats.get("path_length") or 0) < cfg.min_path
+                or int(feats.get("direction_changes") or 0) < cfg.min_direction_changes):
+            return []
+        key = f"restlessness:{ctx.zone.name if ctx.zone else 'house'}"
+        cooldown = cfg.night_cooldown_s if ctx.night else cfg.cooldown_s
+        if not self._fresh(key, ctx.t, cooldown=cooldown):
+            return []
+        return [
+            self._emit(
+                Event(
+                    "restlessness",
+                    ctx.t,
+                    ctx.zone.name if ctx.zone else None,
+                    Severity.WATCH if ctx.night else Severity.INFO,
+                    {
+                        **feats,
+                        "night": ctx.night,
+                        "person_count": ctx.person_count,
+                        "pattern": "repeated_pacing",
+                    },
+                )
+            )
+        ]
+
 
 class Gate:
     """Tracks which capture state we are in, and when a clip must be cut."""
@@ -294,8 +351,3 @@ class Gate:
 
 def night_at(local_hour: int) -> bool:
     return local_hour >= 22 or local_hour < 6
-
-
-def merge_severity(floor: str, model: str) -> str:
-    """The model may raise the alarm. It may never lower it."""
-    return floor if ORDER.get(model, 0) <= ORDER.get(floor, 0) else model

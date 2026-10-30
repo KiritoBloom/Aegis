@@ -1,16 +1,4 @@
-/**
- * Record a short answer in the browser, as a WAV the backend can transcribe.
- *
- * The awkward part: `MediaRecorder` produces webm/opus, and the transcription
- * endpoint takes WAV only (`audioEncoding: "WAV"`). Rather than adding a
- * server-side transcoder for one button, the conversion happens here — decode
- * the recording with the Web Audio API, mix to mono, resample to 16 kHz, and
- * write a 16-bit PCM header. That is about forty lines and it removes a whole
- * failure mode from the demo (ffmpeg missing on the machine running Aegis).
- *
- * The audio never touches disk in the browser; it is held in memory, posted
- * once, and the backend deletes it after transcription.
- */
+/** Record a short WAV in the browser for the backend to transcribe. */
 
 const TARGET_RATE = 16000;
 
