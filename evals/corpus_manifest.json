@@ -1,0 +1,1102 @@
+[
+  {
+    "clip": "gmdcsa24-fall-01.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Falling from sitting on the chair to the ground. Left side Fall. Full body not visible",
+    "fall_start": 3.4,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmdcsa24-fall-02.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Falling from sitting on the chair to the ground. Left side Fall. Full body not visible",
+    "fall_start": 1.9,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmdcsa24-fall-03.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Falling from sitting on the chair to the ground. Left side fall",
+    "fall_start": 2.5,
+    "fall_end": 5.0,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmdcsa24-fall-04.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Falling from sitting on the chair to the ground. Right side fall",
+    "fall_start": 2.3,
+    "fall_end": 4.0,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmdcsa24-fall-05.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Walking to falling. Right side fall",
+    "fall_start": 1.8,
+    "fall_end": 5.0,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmdcsa24-fall-06.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Walking to falling. Right side fall",
+    "fall_start": 2.2,
+    "fall_end": 5.0,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmdcsa24-fall-07.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Walking to falling. Right side fall",
+    "fall_start": 1.1,
+    "fall_end": 5.0,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmdcsa24-fall-08.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Walking to falling. Left side fall",
+    "fall_start": 0.8,
+    "fall_end": 4.0,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmdcsa24-fall-09.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Standing position to falling. Forward Fall. Full body (head) not visible",
+    "fall_start": 0.7,
+    "fall_end": 4.0,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmdcsa24-fall-10.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Standing position to falling. Forward Fall. Full body (right eye) not visible",
+    "fall_start": 0.7,
+    "fall_end": 4.0,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmdcsa24-fall-11.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Standing position to falling",
+    "fall_start": 1.0,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmdcsa24-fall-12.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Standing position to falling. Backward Fall",
+    "fall_start": 1.9,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmdcsa24-fall-13.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Standing position to falling. Backward fall. Full body (head) is not visible",
+    "fall_start": 0.4,
+    "fall_end": 4.0,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmdcsa24-fall-14.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Standing position to falling. Backward fall. Full body (both ankles) is not visible",
+    "fall_start": 0.3,
+    "fall_end": 5.0,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmdcsa24-fall-15.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Sitting on the chair (side view) to right side fall",
+    "fall_start": 1.8,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmdcsa24-fall-16.mp4",
+    "subject": 1,
+    "label": "fall_ground",
+    "description": "Sitting on the chair (side view) to the left side fall",
+    "fall_start": 2.8,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmdcsa24-adl-01.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Sitting on the bed to sleeping right side on the bed. Face towards camera",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "08"
+  },
+  {
+    "clip": "gmdcsa24-adl-02.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Sitting on the bed to sleeping left side on the bed. Face towards the camera",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmdcsa24-adl-03.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Sitting on the bed to sleeping left side on the bed. Face towards the ceiling",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmdcsa24-adl-04.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "From sleeping left side on the bed (Face towards the ceiling) to sitting on the bed",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmdcsa24-adl-05.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Coming to the bed and reading book in the sitting position. Front view of the subject. One leg folded",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "10"
+  },
+  {
+    "clip": "gmdcsa24-adl-06.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Sitting on the bed (front view) to reading the book while supporting towards the wall. Side view",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "12"
+  },
+  {
+    "clip": "gmdcsa24-adl-07.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Reading book while sitting on the chair; Front view;Leg straight",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "07"
+  },
+  {
+    "clip": "gmdcsa24-adl-08.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Walking in the room",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmdcsa24-adl-09.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Reading book while walking in the room",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmdcsa24-adl-10.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Reading book while walking in the room",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "03"
+  },
+  {
+    "clip": "gmdcsa24-adl-11.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Walking to sitting on the chair and then reading book",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "09"
+  },
+  {
+    "clip": "gmdcsa24-adl-12.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Reading book while sitting on the chair to stand up and keeping the book on the chair and going out of the room",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "07"
+  },
+  {
+    "clip": "gmdcsa24-adl-13.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Walking to sitting on the chair (side view)",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmdcsa24-adl-14.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Sitting on the chair (side view) to walking",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmdcsa24-adl-15.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Walking to picking a mobile phone from the ground and then sitting on the chair",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "07"
+  },
+  {
+    "clip": "gmdcsa24-adl-16.mp4",
+    "subject": 1,
+    "label": "adl",
+    "description": "Picking the mobile phone from the ground while sitting on the chair",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "03"
+  },
+  {
+    "clip": "gmd-sub2-fall-01.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Right side fall on the ground",
+    "fall_start": 1.4,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmd-sub2-fall-02.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Right side fall on the ground after walking",
+    "fall_start": 2.7,
+    "fall_end": 8.0,
+    "night": false,
+    "seconds": "08"
+  },
+  {
+    "clip": "gmd-sub2-fall-03.mp4",
+    "subject": 2,
+    "label": "fall_bed",
+    "description": "Forward fall on the bed",
+    "fall_start": 0.0,
+    "fall_end": 7.0,
+    "night": false,
+    "seconds": "07"
+  },
+  {
+    "clip": "gmd-sub2-fall-04.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Seeing outside the window then backward fall",
+    "fall_start": 3.3,
+    "fall_end": 10.0,
+    "night": false,
+    "seconds": "10"
+  },
+  {
+    "clip": "gmd-sub2-fall-05.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Left side fall (face hidden by hand)",
+    "fall_start": 0.8,
+    "fall_end": 4.0,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmd-sub2-fall-06.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Walking while seeing the mobile phone then fall backward (left hand not fully in the frame)",
+    "fall_start": 2.1,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmd-sub2-fall-07.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Falling (forward) after trying to pick the bottle from the ground",
+    "fall_start": 2.0,
+    "fall_end": 4.0,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmd-sub2-fall-08.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Reading a newspaper in the sitting position on the ground then falling backward",
+    "fall_start": 3.2,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmd-sub2-fall-09.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Falling backward after walking",
+    "fall_start": 1.8,
+    "fall_end": 5.0,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmd-sub2-fall-10.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Right side fall then backward",
+    "fall_start": 2.0,
+    "fall_end": 4.0,
+    "night": true,
+    "seconds": "11"
+  },
+  {
+    "clip": "gmd-sub2-fall-11.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Falling from bed to ground",
+    "fall_start": 5.9,
+    "fall_end": 10.0,
+    "night": true,
+    "seconds": "10"
+  },
+  {
+    "clip": "gmd-sub2-fall-12.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Drinking water from the water bottle then falling backwards",
+    "fall_start": 6.9,
+    "fall_end": 12.0,
+    "night": true,
+    "seconds": "12"
+  },
+  {
+    "clip": "gmd-sub2-fall-13.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Falling backward (side view)",
+    "fall_start": 2.5,
+    "fall_end": 8.0,
+    "night": true,
+    "seconds": "08"
+  },
+  {
+    "clip": "gmd-sub2-fall-14.mp4",
+    "subject": 2,
+    "label": "fall_bed",
+    "description": "Falling backward on the bed",
+    "fall_start": 3.4,
+    "fall_end": 11.0,
+    "night": true,
+    "seconds": "11"
+  },
+  {
+    "clip": "gmd-sub2-fall-15.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Writing while sitting on the bed; then falling on the ground",
+    "fall_start": 7.7,
+    "fall_end": 11.0,
+    "night": false,
+    "seconds": "11"
+  },
+  {
+    "clip": "gmd-sub2-fall-16.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Walking then falling forward",
+    "fall_start": 0.8,
+    "fall_end": 4.0,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmd-sub2-fall-17.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Walking then falling forward",
+    "fall_start": 2.5,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmd-sub2-fall-18.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Picking a water bottle from the ground and drinking water from it then falling forward on the ground",
+    "fall_start": 9.8,
+    "fall_end": 11.0,
+    "night": false,
+    "seconds": "11"
+  },
+  {
+    "clip": "gmd-sub2-fall-19.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Eating in standing position then falling forward",
+    "fall_start": 8.2,
+    "fall_end": 15.0,
+    "night": false,
+    "seconds": "15"
+  },
+  {
+    "clip": "gmd-sub2-fall-20.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Eating in standing position then falling forward",
+    "fall_start": 7.9,
+    "fall_end": 11.0,
+    "night": false,
+    "seconds": "11"
+  },
+  {
+    "clip": "gmd-sub2-fall-21.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Standing then falling sideways",
+    "fall_start": 6.2,
+    "fall_end": 9.0,
+    "night": false,
+    "seconds": "09"
+  },
+  {
+    "clip": "gmd-sub2-fall-22.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Walking then falling forward",
+    "fall_start": 1.3,
+    "fall_end": 5.0,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmd-sub2-fall-23.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Standing then falling sideways",
+    "fall_start": 3.6,
+    "fall_end": 7.0,
+    "night": false,
+    "seconds": "07"
+  },
+  {
+    "clip": "gmd-sub2-fall-24.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Standing from the bed and then falling sideways on the ground",
+    "fall_start": 3.3,
+    "fall_end": 6.4,
+    "night": false,
+    "seconds": "07"
+  },
+  {
+    "clip": "gmd-sub2-fall-25.mp4",
+    "subject": 2,
+    "label": "fall_ground",
+    "description": "Standing then falling backward on the ground",
+    "fall_start": 3.0,
+    "fall_end": 7.0,
+    "night": false,
+    "seconds": "07"
+  },
+  {
+    "clip": "gmd-sub2-adl-01.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Talking on the mobile phone while sitting on the bed and walking",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "11"
+  },
+  {
+    "clip": "gmd-sub2-adl-02.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Picking up a water bottle from the ground and drinking while sitting on the bed",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "11"
+  },
+  {
+    "clip": "gmd-sub2-adl-03.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Walking; removing dust from the bed using a pillow; and sleeping on the bed",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "11"
+  },
+  {
+    "clip": "gmd-sub2-adl-04.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Yoga: Standing forward bend (Uttanasana)",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "70"
+  },
+  {
+    "clip": "gmd-sub2-adl-05.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Throwing a book on the bed; standing up from the ground; walking; and opening the curtain",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "10"
+  },
+  {
+    "clip": "gmd-sub2-adl-06.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Picking up the mobile phone from the ground; placing it on the bed; and sitting on the bed",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "10"
+  },
+  {
+    "clip": "gmd-sub2-adl-07.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Exercising (Moving both hands up and down)",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "13"
+  },
+  {
+    "clip": "gmd-sub2-adl-08.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Exercising (Stretching thigh and trying to touch the ground:Pyramid Pose)",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "13"
+  },
+  {
+    "clip": "gmd-sub2-adl-09.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Standing up from a sitting position on the bed and then sitting on the ground",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "10"
+  },
+  {
+    "clip": "gmd-sub2-adl-10.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Standing up from the ground and closing the curtain",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "07"
+  },
+  {
+    "clip": "gmd-sub2-adl-11.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Removing the shirt and hanging it on the hanger",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "10"
+  },
+  {
+    "clip": "gmd-sub2-adl-12.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Going to bed and sleeping (belly facing downwards)",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "07"
+  },
+  {
+    "clip": "gmd-sub2-adl-13.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Sitting on the ground and reading a book",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmd-sub2-adl-14.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Walking and reading something while sitting on the bed",
+    "fall_start": null,
+    "fall_end": null,
+    "night": true,
+    "seconds": "11"
+  },
+  {
+    "clip": "gmd-sub2-adl-15.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Reading a newspaper while sitting on the bed and placing a pillow on the lap",
+    "fall_start": null,
+    "fall_end": null,
+    "night": true,
+    "seconds": "11"
+  },
+  {
+    "clip": "gmd-sub2-adl-16.mp4",
+    "subject": 2,
+    "label": "adl",
+    "description": "Reading a newspaper; throwing the newspaper; and sleeping",
+    "fall_start": null,
+    "fall_end": null,
+    "night": true,
+    "seconds": "11"
+  },
+  {
+    "clip": "gmd-sub3-fall-01.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "falling forward",
+    "fall_start": 0.0,
+    "fall_end": 3.0,
+    "night": false,
+    "seconds": "03"
+  },
+  {
+    "clip": "gmd-sub3-fall-02.mp4",
+    "subject": 3,
+    "label": "fall_bed",
+    "description": "Falling on the bed (forward)",
+    "fall_start": 2.6,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmd-sub3-fall-03.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Falling backward on the floor",
+    "fall_start": 1.5,
+    "fall_end": 5.0,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmd-sub3-fall-04.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Walking and then falling backward on the floor",
+    "fall_start": 1.2,
+    "fall_end": 5.0,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmd-sub3-fall-05.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Falling slowly from standing position to the floor",
+    "fall_start": 3.2,
+    "fall_end": 10.0,
+    "night": false,
+    "seconds": "10"
+  },
+  {
+    "clip": "gmd-sub3-fall-06.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Falling (backward) on the floor from the sitting position",
+    "fall_start": 0.0,
+    "fall_end": 5.0,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmd-sub3-fall-07.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Falling on the floor from the standing position",
+    "fall_start": 1.0,
+    "fall_end": 9.0,
+    "night": false,
+    "seconds": "09"
+  },
+  {
+    "clip": "gmd-sub3-fall-08.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Falling on the right side onto the floor from a standing position",
+    "fall_start": 0.0,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmd-sub3-fall-09.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Reading the book while sitting on the ground; then falling backward",
+    "fall_start": 3.3,
+    "fall_end": 6.0,
+    "night": false,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmd-sub3-fall-10.mp4",
+    "subject": 3,
+    "label": "fall_bed",
+    "description": "Falling forward on the bed",
+    "fall_start": 1.7,
+    "fall_end": 4.0,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmd-sub3-fall-11.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Eating in standing position then falling forward",
+    "fall_start": 4.7,
+    "fall_end": 8.0,
+    "night": false,
+    "seconds": "08"
+  },
+  {
+    "clip": "gmd-sub3-fall-12.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Falling backward from the bed (to the floor)",
+    "fall_start": 1.6,
+    "fall_end": 4.0,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmd-sub3-fall-13.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Writing something in a notebook while sitting position on the floor; then falling backward",
+    "fall_start": 1.4,
+    "fall_end": 4.0,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmd-sub3-fall-14.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Falling backward on the floor while removing the shirt and trying to hang it on the hangar",
+    "fall_start": 8.1,
+    "fall_end": 12.0,
+    "night": false,
+    "seconds": "12"
+  },
+  {
+    "clip": "gmd-sub3-fall-15.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Trying to drink water from the water bottle and then falling on the floor",
+    "fall_start": 1.9,
+    "fall_end": 5.0,
+    "night": true,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmd-sub3-fall-16.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Walking and then falling left side on the floor",
+    "fall_start": 1.8,
+    "fall_end": 7.0,
+    "night": true,
+    "seconds": "07"
+  },
+  {
+    "clip": "gmd-sub3-fall-17.mp4",
+    "subject": 3,
+    "label": "fall_bed",
+    "description": "Reading newspaper then falling Backward on the bed",
+    "fall_start": 1.4,
+    "fall_end": 8.0,
+    "night": true,
+    "seconds": "08"
+  },
+  {
+    "clip": "gmd-sub3-fall-18.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Sitting on the bed; then falling on the floor",
+    "fall_start": 4.2,
+    "fall_end": 11.0,
+    "night": true,
+    "seconds": "11"
+  },
+  {
+    "clip": "gmd-sub3-fall-19.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Falling on the floor from the standing position",
+    "fall_start": 2.0,
+    "fall_end": 5.0,
+    "night": true,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmd-sub3-fall-20.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Walking then falling forward on the floor",
+    "fall_start": 2.3,
+    "fall_end": 6.0,
+    "night": true,
+    "seconds": "06"
+  },
+  {
+    "clip": "gmd-sub3-fall-21.mp4",
+    "subject": 3,
+    "label": "fall_ground",
+    "description": "Drinking in standing position then falling sideways",
+    "fall_start": 5.4,
+    "fall_end": 9.0,
+    "night": false,
+    "seconds": "09"
+  },
+  {
+    "clip": "gmd-sub3-adl-01.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Writing something in the notebook while sitting on the bed",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "08"
+  },
+  {
+    "clip": "gmd-sub3-adl-02.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Exercise (Hand up & down)",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "09"
+  },
+  {
+    "clip": "gmd-sub3-adl-03.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Getting up from the sleeping position from the bed; Putting a mask on the face; then walking",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "09"
+  },
+  {
+    "clip": "gmd-sub3-adl-04.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Picking a book from the floor and putting it on the bed; sitting on the bed",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "10"
+  },
+  {
+    "clip": "gmd-sub3-adl-05.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Exercising (hand down & up with body bending)",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "05"
+  },
+  {
+    "clip": "gmd-sub3-adl-06.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Exercising then sitting down on the floor",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "08"
+  },
+  {
+    "clip": "gmd-sub3-adl-07.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Exercising (sitting and standing)",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "03"
+  },
+  {
+    "clip": "gmd-sub3-adl-08.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Sitting to sleeping on the floor",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "04"
+  },
+  {
+    "clip": "gmd-sub3-adl-09.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Sleeping on the floor to sitting and then standing",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "07"
+  },
+  {
+    "clip": "gmd-sub3-adl-10.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Opening the window curtain and the window",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "12"
+  },
+  {
+    "clip": "gmd-sub3-adl-11.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Closing the window curtain and the window",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "12"
+  },
+  {
+    "clip": "gmd-sub3-adl-12.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Changing pages of a book while sitting on the bed; standing",
+    "fall_start": null,
+    "fall_end": null,
+    "night": true,
+    "seconds": "10"
+  },
+  {
+    "clip": "gmd-sub3-adl-13.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Sitting on the floor",
+    "fall_start": null,
+    "fall_end": null,
+    "night": true,
+    "seconds": "08"
+  },
+  {
+    "clip": "gmd-sub3-adl-14.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Sitting on the floor & drinking water from the water bottle",
+    "fall_start": null,
+    "fall_end": null,
+    "night": true,
+    "seconds": "08"
+  },
+  {
+    "clip": "gmd-sub3-adl-15.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Reading newspaper while sitting on the floor",
+    "fall_start": null,
+    "fall_end": null,
+    "night": true,
+    "seconds": "07"
+  },
+  {
+    "clip": "gmd-sub3-adl-16.mp4",
+    "subject": 3,
+    "label": "adl",
+    "description": "Eating while sitting on the ground",
+    "fall_start": null,
+    "fall_end": null,
+    "night": false,
+    "seconds": "10"
+  }
+]

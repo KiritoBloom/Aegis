@@ -44,6 +44,17 @@ function sessionId(): string {
   return `console_${c?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`}`;
 }
 
+function requestSignal(parent: AbortSignal): AbortSignal {
+  const timeout = (AbortSignal as typeof AbortSignal & {
+    timeout?: (ms: number) => AbortSignal;
+    any?: (signals: AbortSignal[]) => AbortSignal;
+  });
+  if (timeout.timeout && timeout.any) {
+    return timeout.any([parent, timeout.timeout(20000)]);
+  }
+  return parent;
+}
+
 function loadLogs(): Record<string, LogEntry[]> {
   if (typeof window === "undefined") return {};
   try {
@@ -78,6 +89,7 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   const feedStateRef = useRef<Record<string, { started: boolean; persons: number; posture: string; objects: string; alertId: string | null; lastPosture: number; lastHeartbeat: number }>>({});
   const verificationRef = useRef<Record<string, boolean>>({});
   const seenIncidentsRef = useRef<Record<string, boolean>>({});
+  const activeRef = useRef(false);
 
   const resident = setup ? primaryOccupant(setup) : null;
   const residentName = resident?.name?.trim() || "Resident";
@@ -112,7 +124,12 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
     }
     setSetup(loaded);
     setupRef.current = loaded;
-    setLogs(loadLogs());
+    const storedLogs = loadLogs();
+    const maxLogId = Object.values(storedLogs)
+      .flat()
+      .reduce((max, entry) => Math.max(max, entry.id), 0);
+    logSeq.current = maxLogId;
+    setLogs(storedLogs);
     setReady(true);
   }, [router]);
 
@@ -125,6 +142,10 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   }, [sources]);
 
   useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(LOG_KEY, JSON.stringify(logs));
@@ -133,20 +154,34 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [logs]);
 
-  useEffect(() => () => {
-    workersRef.current.forEach((controller) => controller.abort());
-    const session = sessionRef.current;
-    if (session) {
-      void fetch("/api/wall/session/close", {
+  useEffect(() => {
+    const stopForUnload = () => {
+      if (!activeRef.current) return;
+      const session = sessionRef.current;
+      if (session) {
+        void fetch("/api/wall/session/close", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ session }),
+          keepalive: true,
+        }).catch(() => {});
+      }
+      void fetch("/api/privacy/pause", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ session }),
+        body: JSON.stringify({ by: "household console", reason: "console closed" }),
         keepalive: true,
       }).catch(() => {});
-    }
-    Object.values(objectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
-    Object.values(cameraStreamsRef.current).forEach((stream) => stream.getTracks().forEach((t) => t.stop()));
-    toastTimers.current.forEach((timer) => window.clearTimeout(timer));
+    };
+    window.addEventListener("beforeunload", stopForUnload);
+    return () => {
+      window.removeEventListener("beforeunload", stopForUnload);
+      stopForUnload();
+      workersRef.current.forEach((controller) => controller.abort());
+      Object.values(objectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+      Object.values(cameraStreamsRef.current).forEach((stream) => stream.getTracks().forEach((t) => t.stop()));
+      toastTimers.current.forEach((timer) => window.clearTimeout(timer));
+    };
   }, []);
 
   // Resolve local videos and demo URLs into playable sources.
@@ -322,7 +357,9 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
       form.append("feed", JSON.stringify({ id: feed.id, name: feed.name || feed.label, kind: feed.kind }));
       form.append("frame", blob, `${feed.id}.jpg`);
       try {
-        const res = await fetch("/api/wall/frame", { method: "POST", body: form, signal });
+        const res = await fetch("/api/wall/frame", {
+          method: "POST", body: form, signal: requestSignal(signal),
+        });
         if (!res.ok) {
           const text = await res.text();
           let detail = `analysis failed (${res.status})`;
@@ -387,6 +424,7 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   const setActive = useCallback(async (on: boolean) => {
     if (on) {
       const current = setupRef.current;
+      if (!current) return;
       const readiness = setupReadyToWatch(current);
       if (!readiness.ready) {
         setBlockedReason(readiness.reason);
@@ -394,6 +432,9 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
       }
       if (!sessionRef.current) sessionRef.current = sessionId();
       setActiveState(true);
+      setLive(Object.fromEntries(current.feeds.map((feed) => [
+        feed.id, { status: "idle" as const, receivedAt: Date.now() },
+      ])));
       addLogForAll("System", "good", "Watching started", "Local tracking is active.");
       try { await send("/api/privacy/resume", {}); } catch { /* local demo may not need it */ }
       await startCameras();

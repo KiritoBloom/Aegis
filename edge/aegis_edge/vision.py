@@ -294,10 +294,12 @@ class PersonDetector:
                 if not self._filter(det):
                     continue
                 if kp_all is not None and i < len(kp_all):
-                    bw, bh = max(1.0, x2 - x1), max(1.0, y2 - y1)
+                    scale = max(1.0, x2 - x1, y2 - y1)
                     det.keypoints = [
-                        ((float(p[0]) - x1) / bw, (float(p[1]) - y1) / bh, float(p[2]))
-                        for p in kp_all[i].tolist()
+                        ((float(point[0]) - x1) / scale,
+                         (float(point[1]) - y1) / scale,
+                         float(point[2]))
+                        for point in kp_all[i].tolist()
                     ]
                 dets.append(det)
         if self._pose_tracker is None:
@@ -327,7 +329,7 @@ class PersonDetector:
         return self._tracker.update(dets)
 
     def keypoints(self, frame: np.ndarray, det: Detection) -> list[tuple[float, float, float]] | None:
-        """Pose keypoints for one person crop, in crop-relative normalized coords."""
+        """Pose keypoints for one person crop, uniformly scaled so angles hold."""
         if self._pose is None:
             return None
         h, w = frame.shape[:2]
@@ -349,7 +351,10 @@ class PersonDetector:
             return None
         arr = kp[0].tolist()
         ch, cw = crop.shape[:2]
-        return [(p[0] / cw, p[1] / ch, p[2]) for p in arr]
+        # One scale for both axes. Dividing x by width and y by height stretches
+        # the torso vector and turns upright bodies into diagonal ones.
+        scale = max(1, cw, ch)
+        return [(p[0] / scale, p[1] / scale, p[2]) for p in arr]
 
 
 class SceneDetector:
@@ -423,10 +428,12 @@ def support_surface(person: Detection, objects: list[SceneObject]) -> SceneObjec
             continue
         x1, y1, x2, y2 = obj.box
         inside = x1 <= person.foot[0] <= x2 and y1 <= person.foot[1] <= y2
+        cx, cy = (person.x1 + person.x2) / 2, (person.y1 + person.y2) / 2
+        centre_inside = x1 <= cx <= x2 and y1 <= cy <= y2
         score = obj.overlap(person)
-        # A lying body can hang over the edge, putting the foot point just
-        # outside the bed. Substantial overlap of the person's box is enough.
-        qualifies = (inside and score >= 0.18) or score >= 0.30
+        # Overlap alone catches a floor fall in front of a bed. The foot or
+        # body centre must actually be on the furniture.
+        qualifies = (inside or centre_inside) and score >= 0.30
         if qualifies and score > best_score:
             best, best_score = obj, score
     return best

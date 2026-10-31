@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 import uuid
 from datetime import datetime
@@ -92,6 +93,8 @@ class EdgeRunner:
 
         self.tracks: dict[int, TrackHistory] = {}
         self.pending: dict | None = None
+        self.last_fall_incident: str | None = None
+        self.fall_up_since: float | None = None
         self.last_check = -1e9
         self.last_pose = -1e9
         self.last_heartbeat = -1e9
@@ -105,6 +108,7 @@ class EdgeRunner:
         self._last_frame = None
         self.person_count = 0
         self.audio_monitor: AudioMonitor | None = None
+        self._workers: list[threading.Thread] = []
         self.stats = {"frames": 0, "person_frames": 0, "triggers": 0, "alerts": 0}
 
     # -- helpers ---------------------------------------------------------
@@ -229,12 +233,14 @@ class EdgeRunner:
             if not self.audio_monitor.start():
                 self.audio_monitor = None
         started = time.monotonic()
+        last_t = 0.0
         try:
             while True:
                 frame, t = self.source.read()
                 if frame is None:
                     log.warning("source ended or stalled")
                     break
+                last_t = t
                 if self.max_seconds and (time.monotonic() - started) > self.max_seconds:
                     break
 
@@ -273,6 +279,7 @@ class EdgeRunner:
                 person = bool(dets)
                 self.person_count = len(dets)
                 self.gate.update(t, motion, person)
+                self._check_recovery(t, person)
 
                 # Objects are sampled, not tracked every frame. A bed or chair
                 # does not move; spending the always-on budget on it would take
@@ -329,6 +336,9 @@ class EdgeRunner:
                             person_count=len(dets), surface=surface,
                         )
                         self.uploader.post_incident(incident)
+                        if ev.type.startswith("fall"):
+                            self.last_fall_incident = incident["incident_id"]
+                            self.fall_up_since = None
                         self.pending = {"incident": incident, "t": t, "event": ev}
 
                 if self.pending and t >= self.pending["t"] + self.cfg.clip.post_s:
@@ -342,9 +352,15 @@ class EdgeRunner:
                     self.stats["_logged"] = int(t)
                     log.info("t=%5.1fs frames=%d persons=%d state=%s",
                              t, self.stats["frames"], self.stats["person_frames"], self.gate.state.value)
+            if self.pending is not None:
+                # A camera can disappear one second after a fall. Flush the
+                # pre/post window instead of losing the clip with the stream.
+                self._finish_pending(last_t, wait=True)
         finally:
             if self.audio_monitor is not None:
                 self.audio_monitor.stop()
+            for worker in list(self._workers):
+                worker.join(timeout=30)
             self.source.release()
             self.uploader.close()
         return self.stats
@@ -384,30 +400,83 @@ class EdgeRunner:
             expected_visitor=bool(self.source.cues.state("expected_visitor", False)),
         )
 
-    def _finish_pending(self, t: float) -> None:
+    def _check_recovery(self, t: float, person: bool) -> None:
+        """Report a seen recovery to the backend so a stale page stops."""
+        if not self.last_fall_incident:
+            return
+        # Only a clearly standing body closes a fall. Sitting up on the floor
+        # for two seconds is not recovery and must not stand the family down.
+        upright = ("upright",)
+        if not person or self.posture not in upright:
+            self.fall_up_since = None
+            return
+        if self.fall_up_since is None:
+            self.fall_up_since = t
+            return
+        if t - self.fall_up_since < self.cfg.fall.no_recovery_s / 4:
+            return
+        incident_id = self.last_fall_incident
+        posture = self.posture
+        # Never block capture on the recovery POST. Three attempts run off-loop.
+        worker = threading.Thread(target=self._report_recovery,
+                                  args=(incident_id, posture), daemon=True,
+                                  name=f"aegis-recovery-{incident_id}")
+        self._workers.append(worker)
+        worker.start()
+        self.rules.clear_fall_cooldown()
+        self.last_fall_incident = None
+        self.fall_up_since = None
+
+    def _report_recovery(self, incident_id: str, posture: str) -> None:
+        for attempt in range(3):
+            ok = self.uploader.post_recovery(incident_id, posture)
+            log.info("RECOVERY %s posture=%s reported=%s (attempt %d)",
+                     incident_id, posture, ok, attempt + 1)
+            if ok:
+                return
+            time.sleep(1.0)
+
+    def _finish_pending(self, t: float, wait: bool = False) -> None:
         pending = self.pending
         self.pending = None
+        # Snapshot only the evidence window, then encode and upload off the
+        # capture loop. ffmpeg plus a slow uplink used to blind the camera.
+        frames = self.ring.window(
+            pending["t"] - self.cfg.clip.pre_s,
+            pending["t"] + self.cfg.clip.post_s,
+        )
+        self.gate.captured(t)
+        worker = threading.Thread(target=self._render_and_upload,
+                                  args=(pending, frames), daemon=True,
+                                  name=f"aegis-upload-{pending['incident']['incident_id']}")
+        self._workers.append(worker)
+        worker.start()
+        if wait:
+            worker.join(timeout=30)
+
+    def _render_and_upload(self, pending: dict, frames: list) -> None:
         incident = pending["incident"]
         out_dir = Path("data/media") / incident["incident_id"]
-        arts = build(self.ring, pending["t"], out_dir, incident["incident_id"],
-                     pre_s=self.cfg.clip.pre_s, post_s=self.cfg.clip.post_s,
-                     fps=self.cfg.clip.fps, crf=self.cfg.clip.crf)
-        if arts is None:
-            log.warning("no clip for %s; incident already sent", incident["incident_id"])
-            self.gate.captured(t)
-            return
-        if not probe_ok(Path(arts.clip_path)):
-            log.warning("clip failed probe; not uploading")
-            self.gate.captured(t)
-            return
-        ok = self.uploader.post_clip(
-            incident["incident_id"], Path(arts.clip_path),
-            Path(arts.still_path), Path(arts.thumb_path),
-        )
-        self.stats["alerts"] += 1
-        log.info("clip %s: %d frames, %.1f KB, uploaded=%s",
-                 incident["incident_id"], arts.frames, arts.bytes / 1024, ok)
-        self.gate.captured(t)
+        try:
+            arts = build(self.ring, pending["t"], out_dir, incident["incident_id"],
+                         pre_s=self.cfg.clip.pre_s, post_s=self.cfg.clip.post_s,
+                         fps=self.cfg.clip.fps, crf=self.cfg.clip.crf, frames=frames)
+            if arts is None:
+                log.warning("no clip for %s; incident already sent", incident["incident_id"])
+                return
+            if not probe_ok(Path(arts.clip_path)):
+                log.warning("clip failed probe; not uploading")
+                return
+            ok = self.uploader.post_clip(
+                incident["incident_id"], Path(arts.clip_path),
+                Path(arts.still_path), Path(arts.thumb_path),
+            )
+            self.stats["alerts"] += 1
+            log.info("clip %s: %d frames, %.1f KB, uploaded=%s",
+                     incident["incident_id"], arts.frames, arts.bytes / 1024, ok)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("clip finalization failed for %s: %s",
+                          incident["incident_id"], exc)
 
     def _place_objects(self, objects) -> list:
         """Attach a public zone to each object and drop private-room labels."""

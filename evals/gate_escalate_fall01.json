@@ -1,0 +1,142 @@
+{
+  "clip": "data\\footage\\external\\gmdcsa24-fall-01.mp4",
+  "sampled_seconds": [
+    0.0,
+    7.0
+  ],
+  "incident_id": "inc_gate_ed52d16098",
+  "status": "notified",
+  "severity": "urgent",
+  "verification": "sam_muse_verified",
+  "sam": {
+    "person_count": 1,
+    "frames_present": 54,
+    "frames_total": 54,
+    "vertical_drop": 0.2523,
+    "height_ratio": 0.29,
+    "aspect_start": 0.224,
+    "aspect_end": 2.25,
+    "track_unavailable": false
+  },
+  "agent": [
+    {
+      "step": "observe",
+      "tool": "sam_track_clip",
+      "summary": "1 person \u00b7 54 frames"
+    },
+    {
+      "step": "plan",
+      "tools": [
+        "household_memory",
+        "recent_events",
+        "inspect_frame"
+      ],
+      "calls": [
+        {
+          "tool": "household_memory",
+          "question": ""
+        },
+        {
+          "tool": "recent_events",
+          "question": ""
+        },
+        {
+          "tool": "inspect_frame",
+          "question": "Is the person lying on the floor or on furniture?"
+        }
+      ],
+      "summary": "Possible fall with unknown surface needs floor-vs-furniture check plus routine and repeat history to decide alert.",
+      "latency_ms": 2246
+    },
+    {
+      "step": "tool",
+      "tool": "household_memory",
+      "ok": true,
+      "question": "",
+      "summary": "facts=6"
+    },
+    {
+      "step": "tool",
+      "tool": "recent_events",
+      "ok": true,
+      "question": "",
+      "summary": "items=12"
+    },
+    {
+      "step": "tool",
+      "tool": "inspect_frame",
+      "ok": true,
+      "question": "Is the person lying on the floor or on furniture?",
+      "summary": "person_count=1 \u00b7 observation=Partial body of one person lying on patterned tile floor in lower right foreground. \u00b7 posture=lying \u00b7 support_surface=floor \u00b7 person_visible=True"
+    },
+    {
+      "step": "plan",
+      "follow_up": true,
+      "tools": [],
+      "calls": [],
+      "summary": "inspect_frame confirms lying on floor with high confidence; support surface resolved, no further check needed.",
+      "latency_ms": 2260
+    },
+    {
+      "step": "decision",
+      "verdict": "escalate",
+      "severity": "urgent",
+      "summary": "SAM saw one person in 54 frames and still shows lying on floor with no bed or couch support, matching local possible_fall. No contradictory evidence.",
+      "latency_ms": 3548
+    }
+  ],
+  "decision": {
+    "id": "dec_inc_gate_ed52d16098_2",
+    "incident_id": "inc_gate_ed52d16098",
+    "phase": 2,
+    "severity": "urgent",
+    "policy_floor": "urgent",
+    "title": "Margaret may have fallen",
+    "body": "Margaret: A person appears to be lying on the floor in the Living room. This could mean a fall and help may be needed. Please check in now.",
+    "confidence": 0.88,
+    "notify_now": 1,
+    "follow_up_s": 300,
+    "rationale": "SAM saw one person in 54 frames and still shows lying on floor with no bed or couch support, matching local possible_fall. No contradictory evidence.",
+    "model": "muse-spark-1.3",
+    "prompt_version": "aegis-v4-objects",
+    "latency_ms": 12147,
+    "created_at": "2026-10-31T16:47:36Z",
+    "packet_json": null,
+    "evidence": [
+      "lying",
+      "floor",
+      "Living room",
+      "fall_suspected",
+      "frames_present"
+    ],
+    "actions": [
+      {
+        "id": "im_checking",
+        "label": "I'm checking"
+      },
+      {
+        "id": "call_resident",
+        "label": "Call resident"
+      },
+      {
+        "id": "view_clip",
+        "label": "View clip"
+      }
+    ],
+    "floor_reasons": [
+      "fall_suspected"
+    ],
+    "violations": []
+  },
+  "dispatch_calls": [
+    {
+      "phase": 2,
+      "title": "Margaret may have fallen",
+      "severity": "urgent"
+    }
+  ],
+  "checkin_calls": [
+    "inc_gate_ed52d16098"
+  ],
+  "media": []
+}

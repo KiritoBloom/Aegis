@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { LiveFeed } from "@/components/live-feed";
 import { useConsole } from "@/components/console-provider";
+import { useNow } from "@/lib/useApi";
 import type { FeedSource, LogEntry, WallFrame } from "@/lib/console-types";
 import type { ConsoleFeed } from "@/lib/console";
 import shared from "@/components/console-shared.module.css";
@@ -33,6 +34,7 @@ function feedState(active: boolean, error: string | undefined, frame: WallFrame 
 export default function ConsoleHome() {
   const { setup, resident, active, setActive, feeds, sources, live, logs } = useConsole();
   const [focusId, setFocusId] = useState<string | null>(null);
+  const now = useNow(3000);
 
   const residentName = resident?.name?.trim() || "Resident";
   const focused = feeds.find((feed) => feed.id === focusId) ?? null;
@@ -96,10 +98,15 @@ export default function ConsoleHome() {
             const feedSource = sources[feed.id];
             const mapped = Boolean(setup.mapping[feed.id]);
             const error = feedSource?.error || state?.error;
+            const receivedAt = state?.receivedAt;
+            const stalled = active && receivedAt != null
+              && now - receivedAt > 12000 && !error;
             const status = active && !mapped
               ? { tone: "", label: "Mapping required", urgent: false, alert: false }
-              : feedState(active, error, data);
-            const person = data?.persons?.[0];
+              : stalled
+                ? { tone: "alert", label: "Analysis stalled", urgent: false, alert: true }
+                : feedState(active, error, data);
+            const person = data?.persons?.find((item) => item.primary) ?? data?.persons?.[0];
             return (
               <button
                 key={feed.id}
@@ -137,6 +144,12 @@ export default function ConsoleHome() {
                 ) : (
                   <LiveFeed feed={feed} source={feedSource} frame={data} active={active} />
                 )}
+                {stalled ? (
+                  <span className={styles.tileError}>
+                    <p>Analysis has stopped returning frames for this feed.</p>
+                    <p className={styles.mono}>The video may still play; tracking is not current.</p>
+                  </span>
+                ) : null}
 
                 <span className={styles.tileChrome}>
                   <span className={styles.tileIdent}>
@@ -206,7 +219,7 @@ function FocusView({
   onClose: () => void;
 }) {
   const state = feedState(true, source?.error, frame);
-  const person = frame?.persons?.[0];
+  const person = frame?.persons?.find((item) => item.primary) ?? frame?.persons?.[0];
   return (
     <div className={styles.focus} role="dialog" aria-modal="true" aria-labelledby="focus-title">
       <div className={styles.focusStage}>
@@ -244,7 +257,7 @@ function FocusView({
           </div>
           {logs.length ? (
             logs.slice().reverse().map((entry) => (
-              <div key={entry.id} className={shared.logRow}>
+              <div key={`${entry.at}-${entry.id}`} className={shared.logRow}>
                 <span className={shared.logTime}>{timeOf(new Date(entry.at).toISOString())}</span>
                 <span className={shared.logSource} data-tone={entry.tone}>{entry.source}</span>
                 <span className={shared.logMessage}>

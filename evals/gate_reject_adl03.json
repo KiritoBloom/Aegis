@@ -1,0 +1,92 @@
+{
+  "clip": "data\\footage\\external\\gmdcsa24-adl-03.mp4",
+  "sampled_seconds": [
+    0.0,
+    6.0
+  ],
+  "incident_id": "inc_gate_a6d9efd2ac",
+  "status": "resolved",
+  "severity": "urgent",
+  "verification": null,
+  "sam": {
+    "person_count": 1,
+    "frames_present": 48,
+    "frames_total": 48,
+    "vertical_drop": -0.0231,
+    "height_ratio": 0.155,
+    "aspect_start": 0.254,
+    "aspect_end": 4.098,
+    "track_unavailable": false
+  },
+  "agent": [
+    {
+      "step": "observe",
+      "tool": "sam_track_clip",
+      "summary": "1 person \u00b7 48 frames"
+    },
+    {
+      "step": "plan",
+      "tools": [
+        "household_memory",
+        "recent_events",
+        "inspect_frame"
+      ],
+      "calls": [
+        {
+          "tool": "household_memory",
+          "question": ""
+        },
+        {
+          "tool": "recent_events",
+          "question": ""
+        },
+        {
+          "tool": "inspect_frame",
+          "question": "Is the lying person on the floor or on furniture such as a bed?"
+        }
+      ],
+      "summary": "Suspected fall with null support surface needs floor-vs-furniture sight, plus memory and recent events for routine and repeat context.",
+      "latency_ms": 3029
+    },
+    {
+      "step": "tool",
+      "tool": "household_memory",
+      "ok": true,
+      "question": "",
+      "summary": "facts=6"
+    },
+    {
+      "step": "tool",
+      "tool": "recent_events",
+      "ok": true,
+      "question": "",
+      "summary": "items=12"
+    },
+    {
+      "step": "tool",
+      "tool": "inspect_frame",
+      "ok": true,
+      "question": "Is the lying person on the floor or on furniture such as a bed?",
+      "summary": "person_count=1 \u00b7 observation=One person lying on a bed with yellow and blue patterned cover, head on a pillow. \u00b7 posture=lying \u00b7 support_surface=bed \u00b7 person_visible=True"
+    },
+    {
+      "step": "plan",
+      "follow_up": true,
+      "tools": [],
+      "calls": [],
+      "summary": "Visual confirms person on bed, not floor; 2s lying insufficient for fall. No audio evidence to justify further check.",
+      "latency_ms": 1724
+    },
+    {
+      "step": "decision",
+      "verdict": "reject",
+      "severity": "watch",
+      "summary": "Reject: inspect_frame shows person lying on bed with head on pillow, support_surface bed. Contradicts fall candidate with null support.",
+      "latency_ms": 4283
+    }
+  ],
+  "decision": null,
+  "dispatch_calls": [],
+  "checkin_calls": [],
+  "media": []
+}

@@ -227,6 +227,7 @@ export default function EventsPage() {
                                   <span className={step.ok === false ? styles.bad : styles.ok}>{step.ok === false ? "×" : "·"}</span>
                                   <span className={styles.tool}>
                                     {step.tool || step.step}
+                                    {step.question ? ` — “${step.question}”` : ""}
                                     {step.summary ? ` — ${step.summary}` : ""}
                                   </span>
                                   <span>{step.latency_ms ? `${step.latency_ms} ms` : ""}</span>
@@ -258,7 +259,7 @@ export default function EventsPage() {
                               controls
                               preload="metadata"
                               poster={incident.still_url}
-                              src={incident.annotated_url || incident.clip_url}
+                              src={incident.annotated_url || incident.redacted_url || incident.clip_url}
                             />
                           </div>
                         ) : incident.still_url ? (

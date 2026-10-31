@@ -8,9 +8,17 @@ import { Notifications } from "@/components/notifications";
 import { hourLabel, send, type Household } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
+type DeliveryReadiness = {
+  webpush: { configured: boolean; devices: number };
+  webhook: { configured: boolean; endpoints: number };
+  sms: { configured: boolean; recipients: number };
+  remote_ready: boolean;
+};
+
 /** Household profile and the push subscription that makes alerts deliverable. */
 export default function ProfilePage() {
   const household = useApi<Household>("/api/household", 30000);
+  const delivery = useApi<DeliveryReadiness>("/api/notifications/readiness", 30000);
   const [profile, setProfile] = useState<Household["profile"] | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
@@ -197,6 +205,37 @@ export default function ProfilePage() {
           </div>
 
           <Notifications memberId={household.data.profile.display_name} />
+
+          <div className="card" style={{ padding: 20 }}>
+            <p className="h3" style={{ margin: 0 }}>Reaching you away from this screen</p>
+            <div style={{ marginTop: 8 }}>
+              <Fact
+                label="Push devices"
+                value={delivery.data ? String(delivery.data.webpush.devices) : "—"}
+              />
+              <Fact
+                label="Caregiver webhook"
+                value={
+                  delivery.data?.webhook.configured
+                    ? `${delivery.data.webhook.endpoints} endpoint${delivery.data.webhook.endpoints === 1 ? "" : "s"}`
+                    : "not configured"
+                }
+              />
+              <Fact
+                label="SMS"
+                value={
+                  delivery.data?.sms.configured
+                    ? `${delivery.data.sms.recipients} number${delivery.data.sms.recipients === 1 ? "" : "s"}`
+                    : "not configured"
+                }
+              />
+            </div>
+            <p className="small" style={{ margin: "8px 0 0" }}>
+              {delivery.data?.remote_ready
+                ? "At least one channel can reach someone outside this house. The alert carries words and a link, never a clip."
+                : "Only this dashboard can see alerts. Register a phone above or configure SMS/webhook delivery before relying on Aegis overnight."}
+            </p>
+          </div>
 
           <div className="card-flat" style={{ padding: 16 }}>
             <p className="eyebrow" style={{ margin: 0 }}>Caregiver mode</p>

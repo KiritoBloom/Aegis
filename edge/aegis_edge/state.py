@@ -84,6 +84,12 @@ class RulesEngine:
         self._last_emit[ev.dedupe_key] = ev.t
         return ev
 
+    def clear_fall_cooldown(self) -> None:
+        """A seen recovery ends this fall; the next one is a new emergency."""
+        for key in [k for k in self._last_emit if k.startswith("fall_")]:
+            self._last_emit.pop(key, None)
+        self._lying_since = None
+
     # -- rules -----------------------------------------------------------
     def evaluate(self, ctx: Context) -> list[Event]:
         out: list[Event] = []

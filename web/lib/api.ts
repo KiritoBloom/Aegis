@@ -31,6 +31,9 @@ export type Incident = {
   has_clip?: boolean;
   clip_url?: string;
   annotated_url?: string;
+  redacted_url?: string;
+  redacted_still_url?: string;
+  people_redacted?: number;
   still_url?: string;
   thumb_url?: string;
   evidence?: string[];
@@ -50,9 +53,11 @@ export type Incident = {
   agent?: {
     step: string;
     tool?: string;
+    question?: string;
     summary?: string;
     ok?: boolean;
     latency_ms?: number;
+    follow_up?: boolean;
   }[] | null;
 };
 
@@ -191,6 +196,7 @@ export type LedgerTotals = {
   rows: number;
   idle_bytes: number;
   video_bytes: number;
+  image_bytes?: number;
   audio_rows: number;
   audio_bytes: number;
 };
@@ -205,6 +211,7 @@ export type LedgerRow = {
   retention: string;
   contains_video: number;
   contains_audio: number;
+  contains_image?: number;
   created_at: string;
   latency_ms: number;
   model: string | null;

@@ -36,26 +36,28 @@ def _models():
 
 
 def posture_from_keypoints(kp: list[tuple[float, float, float]] | None) -> str:
-    """The edge's conservative posture classifier, copied for the wall.
+    """Classify posture from 17 COCO keypoints in one uniform coordinate scale.
 
-    A single snapshot cannot see a fall transition. This only labels the pose
-    in this frame; `unknown` is allowed and never becomes a warning by itself.
+    Coordinates must be aspect-correct: x and y need the same divisor, otherwise
+    a wide box turns a standing person into a lying one.
     """
     if not kp or len(kp) < 17:
         return "unknown"
     ls, rs, lh, rh = kp[5], kp[6], kp[11], kp[12]
-    lk, rk = kp[13], kp[14]
-    visible = [p for p in (ls, rs, lh, rh) if p[2] >= 0.3]
-    if len(visible) < 3:
+    shoulders = [point for point in (ls, rs) if point[2] >= 0.3]
+    hips = [point for point in (lh, rh) if point[2] >= 0.3]
+    if len(shoulders) + len(hips) < 3 or not shoulders or not hips:
         return "unknown"
-    sh = ((ls[0] + rs[0]) / 2, (ls[1] + rs[1]) / 2)
-    hp = ((lh[0] + rh[0]) / 2, (lh[1] + rh[1]) / 2)
+    sh = (sum(p[0] for p in shoulders) / len(shoulders),
+          sum(p[1] for p in shoulders) / len(shoulders))
+    hp = (sum(p[0] for p in hips) / len(hips),
+          sum(p[1] for p in hips) / len(hips))
     dx, dy = hp[0] - sh[0], hp[1] - sh[1]
     if abs(dx) < 1e-6 and abs(dy) < 1e-6:
         return "unknown"
     angle = abs(math.degrees(math.atan2(dx, dy)))
-    knees_visible = lk[2] >= 0.3 or rk[2] >= 0.3
-    knee_y = (lk[1] + rk[1]) / 2 if knees_visible else None
+    knees = [point for point in (kp[13], kp[14]) if point[2] >= 0.3]
+    knee_y = sum(p[1] for p in knees) / len(knees) if knees else None
     if angle > 70:
         return "lying"
     if angle > 45:
@@ -94,7 +96,7 @@ def _pose_people(pose, frame) -> list[dict]:
     """Find people with pose when the detector misses a lying body."""
     h, w = frame.shape[:2]
     try:
-        result = pose.predict(frame, imgsz=512, conf=0.40, verbose=False)
+        result = pose.predict(frame, imgsz=448, conf=0.40, verbose=False)
     except Exception:  # noqa: BLE001
         return []
     if not result:
@@ -109,13 +111,15 @@ def _pose_people(pose, frame) -> list[dict]:
             continue
         x1, y1, x2, y2 = (float(v) for v in box.tolist())
         norm = (x1 / w, y1 / h, x2 / w, y2 / h)
+        if _is_edge_sliver(norm):
+            continue
         posture = "unknown"
         if kp_all is not None and i < len(kp_all):
-            bw, bh = max(1e-6, norm[2] - norm[0]), max(1e-6, norm[3] - norm[1])
+            scale = max(1.0, x2 - x1, y2 - y1)
             kp = kp_all[i].tolist()
-            points = [((float(p[0]) / w - norm[0]) / bw,
-                       (float(p[1]) / h - norm[1]) / bh,
-                       float(p[2])) for p in kp]
+            points = [((float(point[0]) - x1) / scale,
+                       (float(point[1]) - y1) / scale,
+                       float(point[2])) for point in kp]
             posture = posture_from_keypoints(points)
         out.append({
             "box": [round(v, 4) for v in norm],
@@ -125,6 +129,16 @@ def _pose_people(pose, frame) -> list[dict]:
         })
     return out
 
+
+
+def _is_edge_sliver(box: list[float] | tuple[float, ...]) -> bool:
+    """Reject edge artifacts without discarding a small, distant person."""
+    w, h = box[2] - box[0], box[3] - box[1]
+    if w < 0.02 or h < 0.025:
+        return True
+    if w < 0.15 and (box[0] <= 0.02 or box[2] >= 0.98):
+        return True
+    return h < 0.10 and (box[1] <= 0.02 or box[3] >= 0.98)
 
 def _same_person(a: dict, b: dict) -> bool:
     abox, bbox = tuple(a["box"]), tuple(b["box"])
@@ -144,6 +158,10 @@ def _merge_people(yolo_people: list[dict], pose_people: list[dict]) -> list[dict
             if score > best_iou:
                 best_idx, best_iou = i, score
         if best_idx < 0:
+            # A pose-only box with no usable keypoints adds a duplicate person
+            # without adding posture evidence. YOLO already covers that body.
+            if pp.get("posture") == "unknown":
+                continue
             merged.append(pp)
             continue
         yp = merged[best_idx]
@@ -179,7 +197,11 @@ def _pose_for_crop(pose, frame, box: tuple[float, float, float, float]) -> str:
     if len(kp) == 0:
         return "unknown"
     ch, cw = crop.shape[:2]
-    points = [(float(p[0]) / cw, float(p[1]) / ch, float(p[2])) for p in kp[0].tolist()]
+    skeletons = kp.tolist()
+    best = max(skeletons, key=lambda skeleton: sum(1 for point in skeleton if point[2] >= 0.3))
+    scale = max(1, cw, ch)
+    points = [(float(point[0]) / scale, float(point[1]) / scale, float(point[2]))
+              for point in best]
     return posture_from_keypoints(points)
 
 
@@ -210,32 +232,39 @@ def _analyze(frame, yolo, pose, w: int, h: int,
     objects: list[dict] = []
     if detect_objects or cached_objects is None:
         result = yolo.predict(frame, imgsz=416, conf=0.30, verbose=False)
-        if result:
-            r = result[0]
-            if r.boxes is not None:
-                for i, box in enumerate(r.boxes.xyxy):
-                    x1, y1, x2, y2 = (float(v) for v in box.tolist())
-                    label = str(r.names[int(r.boxes.cls[i])])
-                    conf = float(r.boxes.conf[i])
-                    norm = (x1 / w, y1 / h, x2 / w, y2 / h)
-                    if label == "person":
-                        yolo_people.append({
-                            "box": [round(v, 4) for v in norm],
-                            "conf": round(conf, 3),
-                            "posture": "unknown",
-                        })
-                    elif label in SCENE_OBJECTS:
-                        objects.append({
-                            "label": label,
-                            "conf": round(conf, 3),
-                            "box": [round(v, 4) for v in norm],
-                        })
     else:
+        # Objects are cached, people are not: a person can enter at any time.
         objects = [dict(obj) for obj in cached_objects]
+        result = yolo.predict(frame, imgsz=320, conf=0.30, classes=[0], verbose=False)
+    if result:
+        r = result[0]
+        if r.boxes is not None:
+            for i, box in enumerate(r.boxes.xyxy):
+                x1, y1, x2, y2 = (float(v) for v in box.tolist())
+                label = str(r.names[int(r.boxes.cls[i])])
+                conf = float(r.boxes.conf[i])
+                norm = (x1 / w, y1 / h, x2 / w, y2 / h)
+                if label == "person":
+                    if _is_edge_sliver(norm):
+                        continue
+                    yolo_people.append({
+                        "box": [round(v, 4) for v in norm],
+                        "conf": round(conf, 3),
+                        "posture": "unknown",
+                    })
+                elif detect_objects and label in SCENE_OBJECTS:
+                    objects.append({
+                        "label": label,
+                        "conf": round(conf, 3),
+                        "box": [round(v, 4) for v in norm],
+                    })
     persons = _merge_people(yolo_people, _pose_people(pose, frame))
     for person in persons:
         if person["seen_by"] == "person":
             person["posture"] = _pose_for_crop(pose, frame, tuple(person["box"]))
+        height = max(1e-6, person["box"][3] - person["box"][1])
+        person["distance"] = ("near" if height >= 0.50 else
+                              "mid" if height >= 0.18 else "far")
     objects.sort(key=lambda o: o["conf"], reverse=True)
     objects = objects[:8]
     for person in persons:
@@ -249,10 +278,14 @@ def _analyze(frame, yolo, pose, w: int, h: int,
             obox = tuple(obj["box"])
             ox1, oy1, ox2, oy2 = obox
             cover = _cover(box, obox)
-            # A lying body hangs over the edge of a bed, so the foot point is
-            # not enough. Substantial overlap with the person's box counts.
-            on_it = ox1 <= foot[0] <= ox2 and oy1 <= foot[1] <= oy2
-            if (cover >= 0.30 or (on_it and cover >= 0.18)) and cover > best_cover:
+            cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+            # A lying body hangs over the edge, so the foot point alone is not
+            # enough. But overlap alone is not support either: a person on the
+            # floor in front of a bed overlaps its box in perspective. Require
+            # the body's foot or centre to be on the furniture.
+            foot_on = ox1 <= foot[0] <= ox2 and oy1 <= foot[1] <= oy2
+            centre_on = ox1 <= cx <= ox2 and oy1 <= cy <= oy2
+            if (foot_on or centre_on) and cover >= 0.30 and cover > best_cover:
                 support, best_cover = obj["label"], cover
         person["support_surface"] = support
     person_count = len(persons)

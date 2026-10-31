@@ -62,3 +62,32 @@ def test_heartbeat_round_trips_the_sampled_scene(monkeypatch, tmp_path):
     hb = db.last_heartbeat()
     assert hb["objects"][0]["label"] == "bed"
     assert hb["objects_at"] == "2026-10-27T21:59:58+03:00"
+
+
+def test_first_seen_inside_a_tripwire_is_not_a_crossing():
+    from aegis_edge.geometry import TrackHistory
+
+    polygon = ((0.5, 0.0), (1.0, 0.0), (1.0, 1.0), (0.5, 1.0))
+    inside = TrackHistory()
+    inside.add(0.0, 0.8, 0.5, 0.2, 0.5, 0.9)
+    assert inside.entries(polygon) == 0
+
+    crossing = TrackHistory()
+    crossing.add(0.0, 0.2, 0.5, 0.2, 0.5, 0.9)
+    crossing.add(1.0, 0.8, 0.5, 0.2, 0.5, 0.9)
+    assert crossing.entries(polygon) == 1
+
+
+def test_a_floor_fall_in_front_of_a_bed_is_not_supported():
+    # The bodies overlap in perspective, but the person is below the mattress:
+    # both foot and centre are outside the bed box.
+    person = Detection(1, 0.30, 0.50, 0.90, 0.85, 0.9)
+    bed = SceneObject("bed", 0.9, 0.20, 0.20, 0.80, 0.65)
+    assert bed.overlap(person) > 0.3  # the trap the old rule fell into
+    assert support_surface(person, [bed]) is None
+
+
+def test_a_body_centred_on_the_bed_is_supported_even_if_feet_hang_off():
+    person = Detection(1, 0.30, 0.55, 0.70, 0.90, 0.9)
+    bed = SceneObject("bed", 0.9, 0.20, 0.40, 0.80, 0.85)
+    assert support_surface(person, [bed]) is bed

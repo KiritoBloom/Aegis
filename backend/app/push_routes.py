@@ -27,6 +27,12 @@ def push_public_key():
     return {"key": notify.VAPID_PUBLIC, "enabled": bool(notify.VAPID_PUBLIC)}
 
 
+@router.get("/api/notifications/readiness")
+def notifications_readiness():
+    """Remote delivery channels, so a family can see what is armed before 3 a.m."""
+    return notify.readiness()
+
+
 @router.post("/api/push/subscribe")
 def push_subscribe(body: SubscriptionIn):
     db.add_subscription(f"sub_{uuid.uuid4().hex[:12]}", body.endpoint,

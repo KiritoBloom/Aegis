@@ -170,7 +170,11 @@ export default function PrivacyPage() {
           )}
           <p className="small" style={{ margin: "8px 0 0", maxWidth: 320 }}>
             across {todayRows.length} request{todayRows.length === 1 ? "" : "s"}, for{" "}
-            {totals?.video_bytes ? "video that needed a closer look" : "nothing yet"}.
+            {totals?.video_bytes
+              ? "video that needed a closer look"
+              : totals?.image_bytes
+                ? "one still that needed a closer look"
+                : "nothing yet"}.
             {totals?.audio_rows ? ` ${totals.audio_rows} of them carried her voice.` : ""}
           </p>
         </div>
@@ -230,6 +234,7 @@ export default function PrivacyPage() {
                         {purposeLabel(row.purpose)}
                         {row.contains_audio ? <span className="chip chip-amber" style={{ marginLeft: 8 }}>voice</span> : null}
                         {row.contains_video ? <span className="chip" style={{ marginLeft: 8 }}>video</span> : null}
+                        {row.contains_image ? <span className="chip" style={{ marginLeft: 8 }}>still</span> : null}
                       </span>
                       <span className="micro" style={{ display: "block", marginTop: 2 }}>
                         {dayLabel(row.created_at)} {clock(row.created_at)} · {row.destination}
@@ -249,6 +254,7 @@ export default function PrivacyPage() {
                         <Fact label="Model" value={row.model || "—"} />
                         <Fact label="Frames" value={row.frames || 0} />
                         <Fact label="Contains video" value={row.contains_video ? "yes" : "no"} />
+                        <Fact label="Contains still image" value={row.contains_image ? "yes" : "no"} />
                         <Fact label="Contains voice" value={row.contains_audio ? "yes" : "no"} />
                         <Fact label="Provider keeps it" value={row.retention} />
                         <Fact label="Took" value={row.latency_ms ? `${row.latency_ms} ms` : "—"} />

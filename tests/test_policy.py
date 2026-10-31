@@ -409,3 +409,13 @@ if __name__ == "__main__":
                 print(f"  FAIL {name}: {exc}")
     print(f"\n{fails} failure(s)")
     sys.exit(1 if fails else 0)
+
+
+def test_a_door_false_alarm_never_suppresses_a_different_safety_event():
+    from app import policy
+    previous = {"type": "door_open", "zone_id": "front_door", "outcome": "false_alarm"}
+    stove = {"type": "stove_unattended", "zone_id": "kitchen", "age_s": 700}
+    assert policy.dedupe_action(previous, stove) == "notify"
+    assert policy.dedupe_action(previous, {
+        "type": "door_open", "zone_id": "front_door", "age_s": 700,
+    }) == "suppress"

@@ -3,13 +3,26 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
+import secrets
 import time
 
 from fastapi import HTTPException, Request
 
+log = logging.getLogger("aegis.auth")
+
 PIN = os.environ.get("HOUSEHOLD_PIN", "")
-SECRET = os.environ.get("SESSION_SECRET", "") or PIN or "aegis-demo-session"
+SECRET = os.environ.get("SESSION_SECRET", "")
+if not SECRET:
+    if PIN:
+        # A four-digit PIN is guessable offline. Never use it as the signing
+        # key; a per-process secret makes stolen tokens unusable after restart.
+        SECRET = secrets.token_urlsafe(32)
+        log.warning("HOUSEHOLD_PIN set without SESSION_SECRET; using a volatile "
+                    "signing key. Set SESSION_SECRET for sessions that survive restart.")
+    else:
+        SECRET = "aegis-demo-session"
 COOKIE = "aegis_session"
 SESSION_S = 7 * 24 * 3600
 MEDIA_URL_S = 300
@@ -91,4 +104,12 @@ def check_pin(pin: str, who: str = "local") -> tuple[str, int]:
 
 
 def client_of(request: Request) -> str:
-    return request.client.host if request.client else "local"
+    host = request.client.host if request.client else "local"
+    # Behind the Next rewrite every request appears to come from 127.0.0.1.
+    # Trust a forwarded address only from a local proxy, so one bad PIN cannot
+    # lock out the whole household.
+    if host in ("127.0.0.1", "::1", "localhost"):
+        forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+        if forwarded:
+            return forwarded[:64]
+    return host

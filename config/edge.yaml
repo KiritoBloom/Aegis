@@ -2,7 +2,7 @@
 # Hot-reloadable: the runner re-reads this file when mtime changes.
 
 camera:
-  source: "file:data/reels/day.mp4"   # usb:0 | http://phone:8080/video | rtsp://... | file:...
+  source: "usb:0"   # usb:0 | http://phone:8080/video | rtsp://... | file:...
   width: 640
   height: 480
   fps: 15

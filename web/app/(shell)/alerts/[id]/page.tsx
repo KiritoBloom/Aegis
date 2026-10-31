@@ -97,7 +97,10 @@ export default function AlertDetail() {
   const title = decision?.title || inc.title || typeLabel(inc.type);
   const body = decision?.body || inc.body || "";
   const at = inc.local_time || inc.created_at || "";
-  const clip = view === "clean" ? inc.clip_url : view === "mask" ? inc.clip_url : inc.annotated_url || inc.clip_url;
+  const rawAllowed = !(inc.people_redacted && inc.people_redacted > 0);
+  const maskedClip = inc.redacted_url || inc.annotated_url || inc.clip_url;
+  const clip = view === "mask" ? maskedClip : view === "clean" && rawAllowed
+    ? inc.clip_url : inc.annotated_url || maskedClip;
   const acked = (inc.acks ?? []).length > 0;
   const sim = inc.source === "sim";
 
@@ -183,7 +186,7 @@ export default function AlertDetail() {
               [
                 ["boxes", "With the person marked"],
                 ["mask", "With the room masked"],
-                ["clean", "As the camera saw it"],
+                ...(rawAllowed ? [["clean", "As the camera saw it"] as const] : []),
               ] as const
             ).map(([key, label]) => (
               <button
@@ -204,6 +207,12 @@ export default function AlertDetail() {
               </button>
             ))}
           </div>
+          {!rawAllowed ? (
+            <p className="micro" style={{ marginTop: 8 }}>
+              Raw footage is withheld because another person appears in it. The masked
+              view is the family-safe clip.
+            </p>
+          ) : null}
         </section>
       ) : (
         <section
@@ -296,6 +305,7 @@ export default function AlertDetail() {
                         {step.tool ? `${step.step} · ${step.tool}` : step.step}
                       </span>
                       <span style={{ fontSize: 11.5, lineHeight: 1.5, color: "var(--color-ink-2)" }}>
+                        {step.question ? `“${step.question}” ` : ""}
                         {step.summary || "recorded"}
                       </span>
                     </li>

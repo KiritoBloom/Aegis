@@ -95,13 +95,25 @@ def build(
     post_s: float = 4.0,
     fps: int = 10,
     crf: int = 26,
+    frames: list[Frame] | None = None,
 ) -> ClipArtifacts | None:
     """Cut pre-roll + post-roll into an MP4 plus a still and a thumbnail.
 
-    Returns None when there is not enough buffered footage; the caller then
-    ships the incident without a clip rather than blocking the alert.
+    `frames` lets the runner hand over a snapshot so encoding and upload do not
+    stall the capture loop. Returns None when there is not enough buffered
+    footage; the caller then ships the incident without a clip rather than
+    blocking the alert.
     """
-    frames = ring.window(trigger_t - pre_s, trigger_t + post_s)
+    frames = frames if frames is not None else ring.window(trigger_t - pre_s,
+                                                            trigger_t + post_s)
+    frames = [f for f in frames if trigger_t - pre_s <= f.t <= trigger_t + post_s]
+    if fps > 0:
+        picked, last = [], -1e9
+        for frame in frames:
+            if frame.t - last >= (1.0 / fps) - 1e-6:
+                picked.append(frame)
+                last = frame.t
+        frames = picked
     if len(frames) < 3:
         log.warning("not enough buffered frames for %s (%d)", event_id, len(frames))
         return None
@@ -110,7 +122,7 @@ def build(
     clip_path = out_dir / "clip.mp4"
     encode(frames, clip_path, fps=fps, crf=crf)
 
-    still_src = ring.nearest(trigger_t) or frames[0]
+    still_src = min(frames, key=lambda f: abs(f.t - trigger_t))
     still = cv2.imdecode(np.frombuffer(still_src.jpeg, np.uint8), cv2.IMREAD_COLOR)
     still_path = out_dir / "still.jpg"
     thumb_path = out_dir / "thumb.jpg"

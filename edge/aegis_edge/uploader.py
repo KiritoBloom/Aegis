@@ -104,6 +104,23 @@ class Uploader:
             log.warning("audio upload failed: %s", exc)
         return False
 
+    def post_recovery(self, incident_id: str, posture: str = "upright") -> bool:
+        """Tell the backend a reported fall is over, so a stale page stops."""
+        body = json.dumps({"incident_id": incident_id, "posture": posture},
+                          separators=(",", ":")).encode()
+        try:
+            r = self.client.post(
+                f"{self.base}/api/ingest/recovery", content=body,
+                headers={**self._headers(body), "Content-Type": "application/json"},
+                timeout=5.0,
+            )
+            if r.status_code in (200, 201, 202):
+                return True
+            log.warning("recovery rejected: %s %s", r.status_code, r.text[:200])
+        except Exception as exc:  # noqa: BLE001
+            log.warning("recovery upload failed: %s", exc)
+        return False
+
     def heartbeat(self, status: dict) -> bool:
         body = json.dumps(status, separators=(",", ":")).encode()
         try:

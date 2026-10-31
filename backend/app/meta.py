@@ -356,6 +356,10 @@ def track_features(objects: list[SamObject]) -> dict:
     path = sum(
         ((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5 for a, b in zip(feet[:-1], feet[1:])
     )
+    start, end = track[0].box_norm, track[-1].box_norm
+    start_h, end_h = start[3] - start[1], end[3] - end[1]
+    start_w, end_w = start[2] - start[0], end[2] - end[0]
+    start_mid, end_mid = (start[1] + start[3]) / 2, (end[1] + end[3]) / 2
     return {
         "track_unavailable": False,
         "primary_track_id": primary_id,
@@ -368,6 +372,13 @@ def track_features(objects: list[SamObject]) -> dict:
         "path_length": round(path, 4),
         "start_foot": [round(v, 4) for v in feet[0]],
         "end_foot": [round(v, 4) for v in feet[-1]],
+        "vertical_drop": round(end_mid - start_mid, 4),
+        "height_change": round(end_h - start_h, 4),
+        "height_ratio": round(end_h / start_h, 3) if start_h > 1e-6 else None,
+        "aspect_start": round(start_w / start_h, 3) if start_h > 1e-6 else None,
+        "aspect_end": round(end_w / end_h, 3) if end_h > 1e-6 else None,
+        "start_box": [round(v, 4) for v in start],
+        "end_box": [round(v, 4) for v in end],
         "median_conf": round(sorted(o.conf for o in track)[len(track) // 2], 3),
         "boxes": [[round(v, 4) for v in o.box_norm] for o in track[:60]],
     }

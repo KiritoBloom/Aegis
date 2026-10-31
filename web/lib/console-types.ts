@@ -4,6 +4,10 @@ export type Person = {
   posture: string;
   support_surface?: string | null;
   track_id?: number;
+  primary?: boolean;
+  track_hits?: number;
+  track_age_s?: number;
+  distance?: "near" | "mid" | "far";
 };
 
 export type WallFrame = {

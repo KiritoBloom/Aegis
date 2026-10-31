@@ -21,17 +21,62 @@ def _decode_mask(obj) -> tuple[int, int, bytes] | None:
         return None
 
 
-def _primary_track(objects) -> int | None:
-    per: dict[int, int] = {}
+def _primary_track(objects, resident_box: list[float] | None = None) -> int | None:
+    """Pick the resident's SAM track.
+
+    With a local hint (the box that triggered the alert) match by overlap, so a
+    visitor walking through the frame is not mistaken for the resident. Without
+    one, prefer the track seen longest, then the larger body: in a fall clip the
+    person on the floor is both.
+    """
+    per: dict[int, list] = {}
     for o in objects:
-        per[o.obj_id] = per.get(o.obj_id, 0) + 1
+        per.setdefault(o.obj_id, []).append(o)
     if not per:
         return None
-    return max(per, key=lambda k: per[k])
+    hint = tuple(resident_box) if resident_box and len(resident_box) == 4 else None
+
+    def overlap(o) -> float:
+        if hint is None:
+            return 0.0
+        ax1, ay1, ax2, ay2 = hint
+        bx1, by1, bx2, by2 = o.box_norm
+        ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+        ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+        inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+        union = ((ax2 - ax1) * (ay2 - ay1) + (bx2 - bx1) * (by2 - by1) - inter)
+        return inter / union if union > 0 else 0.0
+
+    if hint is not None:
+        best = max(per, key=lambda k: max(overlap(o) for o in per[k]))
+        if max(overlap(o) for o in per[best]) >= 0.15:
+            return best
+    return max(per, key=lambda k: (
+        len(per[k]),
+        sum((o.x2 - o.x1) * (o.y2 - o.y1) for o in per[k]) / len(per[k]),
+    ))
+
+
+def _write_still(video: Path, dst: Path) -> bool:
+    """Write the last frame: the evidence state, not the pre-fall scene."""
+    try:
+        import cv2
+        cap = cv2.VideoCapture(str(video))
+        frame = None
+        while True:
+            ok, current = cap.read()
+            if not ok:
+                break
+            frame = current
+        cap.release()
+        return bool(frame is not None and cv2.imwrite(str(dst), frame))
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def render(src: Path | str, dst: Path | str, objects, *, timestamp: str = "",
-           trail: bool = True, redact: bool = True) -> dict:
+           trail: bool = True, redact: bool = True, annotate: bool = True,
+           resident_box: list[float] | None = None) -> dict:
     """Composite the overlay onto every frame. Returns a small manifest.
 
     The manifest is what the API returns to the UI: how many people were seen,
@@ -48,7 +93,7 @@ def render(src: Path | str, dst: Path | str, objects, *, timestamp: str = "",
     if not src.exists() or not objects:
         return {"rendered": False, "reason": "no_input"}
 
-    primary = _primary_track(objects)
+    primary = _primary_track(objects, resident_box)
     by_frame: dict[int, list] = {}
     for o in objects:
         by_frame.setdefault(o.frame, []).append(o)
@@ -118,7 +163,7 @@ def render(src: Path | str, dst: Path | str, objects, *, timestamp: str = "",
                 break
 
         for o in frame_objs:
-            if o.obj_id == primary:
+            if annotate and o.obj_id == primary:
                 x1, y1, x2, y2 = int(o.x1), int(o.y1), int(o.x2), int(o.y2)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), PERSON, 2)
                 raster = _decode_mask(o)
@@ -142,18 +187,19 @@ def render(src: Path | str, dst: Path | str, objects, *, timestamp: str = "",
                 feet.append((fx, fy))
                 drawn += 1
 
-        if trail and len(feet) > 1:
+        if annotate and trail and len(feet) > 1:
             for a, b in zip(feet[-max(2, int(fps * 3)):-1], feet[-max(1, int(fps * 3)):]):
                 cv2.line(frame, a, b, MASK_FILL, 1, cv2.LINE_AA)
 
-        if timestamp:
+        if annotate and timestamp:
             cv2.putText(frame, timestamp, (10, h - 12), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, PERSON, 1, cv2.LINE_AA)
-        # wordmark, low opacity so it reads as a watermark, not a bug
-        overlay = frame.copy()
-        cv2.putText(overlay, "AEGIS", (w - 84, 26), cv2.FONT_HERSHEY_SIMPLEX,
-                    0.55, PERSON, 1, cv2.LINE_AA)
-        cv2.addWeighted(overlay, 0.4, frame, 0.6, 0, frame)
+        if annotate:
+            # wordmark, low opacity so it reads as a watermark, not a bug
+            overlay = frame.copy()
+            cv2.putText(overlay, "AEGIS", (w - 84, 26), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55, PERSON, 1, cv2.LINE_AA)
+            cv2.addWeighted(overlay, 0.4, frame, 0.6, 0, frame)
 
         writer.write(frame)
 
@@ -174,6 +220,7 @@ def render(src: Path | str, dst: Path | str, objects, *, timestamp: str = "",
         if tmp.exists():
             tmp.replace(dst)
 
+    still = _write_still(dst, dst.with_suffix(".jpg")) if not annotate else False
     return {
         "rendered": dst.exists() and dst.stat().st_size > 1024,
         "frames_annotated": drawn,
@@ -183,4 +230,5 @@ def render(src: Path | str, dst: Path | str, objects, *, timestamp: str = "",
                             + ("s" if len(redacted_ids) != 1 else ""))
         if redacted_ids else None,
         "primary_track": primary,
+        "still": dst.with_suffix(".jpg").name if still else None,
     }

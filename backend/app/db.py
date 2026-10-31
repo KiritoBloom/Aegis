@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS outbound_requests (
   id INTEGER PRIMARY KEY AUTOINCREMENT, incident_id TEXT, destination TEXT,
   purpose TEXT, bytes INTEGER, frames INTEGER, retention TEXT,
   contains_video INTEGER, contains_audio INTEGER DEFAULT 0,
+  contains_image INTEGER DEFAULT 0,
   created_at TEXT, latency_ms INTEGER, model TEXT
 );
 CREATE TABLE IF NOT EXISTS device_heartbeats (
@@ -124,6 +125,7 @@ MIGRATIONS = [
     ("outbound_requests", "latency_ms", "INTEGER"),
     ("outbound_requests", "model", "TEXT"),
     ("outbound_requests", "contains_audio", "INTEGER DEFAULT 0"),
+    ("outbound_requests", "contains_image", "INTEGER DEFAULT 0"),
     ("incidents", "enrich_lease", "REAL"),
     ("decisions", "packet_json", "TEXT"),
     # The spoken check-in is a state machine, not a button. These columns make
@@ -242,8 +244,65 @@ def update_incident_sensors(incident_id: str, patch: dict) -> None:
         conn.commit()
 
 
+def recover_wall_incident(incident_id: str) -> dict:
+    """Close an incident because the feed shows the resident back on her feet.
+
+    This is one transaction on purpose: a recovery that clears the escalation
+    timer but leaves the check-in asking (or vice versa) is how an upright
+    resident receives a "still needs help" page sixty seconds later.
+    """
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT status, checkin_status, sensors_json FROM incidents WHERE id=?",
+            (incident_id,)).fetchone()
+        if row is None:
+            return {"changed": False}
+        if row["status"] in ("resolved", "cancelled"):
+            return {"changed": False, "status": row["status"]}
+        sensors = json.loads(row["sensors_json"] or "{}")
+        sensors.update({"recovered": True, "still_s": 0, "recovered_at": now()})
+        cur = conn.execute(
+            "UPDATE incidents SET status='resolved', escalation_due_at=NULL,"
+            " sensors_json=?,"
+            " checkin_status=CASE WHEN checkin_status='asking' THEN 'cancelled'"
+            "                     ELSE checkin_status END,"
+            " checkin_due_at=CASE WHEN checkin_status='asking' THEN NULL"
+            "                    ELSE checkin_due_at END"
+            " WHERE id=? AND status NOT IN ('resolved','cancelled')",
+            (json.dumps(sensors), incident_id),
+        )
+        conn.commit()
+    return {"changed": bool(cur.rowcount), "status": row["status"],
+            "checkin": row["checkin_status"]}
+
+
 def set_status(incident_id: str, status: str, severity: str | None = None) -> None:
     with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT status, severity FROM incidents WHERE id=?",
+                           (incident_id,)).fetchone()
+        if row is None:
+            return
+        # Resolved and cancelled are terminal. A late model, a stale worker or
+        # a duplicate answer must not put a closed conversation back on a phone.
+        if row["status"] in ("resolved", "cancelled") \
+                and status not in ("resolved", "cancelled"):
+            return
+        if status in ("resolved", "cancelled"):
+            # A resolution is the one path allowed to settle severity lower.
+            if severity:
+                conn.execute(
+                    "UPDATE incidents SET status=?, severity=?, escalation_due_at=NULL"
+                    " WHERE id=?", (status, severity, incident_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE incidents SET status=?, escalation_due_at=NULL WHERE id=?",
+                    (status, incident_id),
+                )
+            conn.commit()
+            return
         if severity:
             # Only an explicit resolution may lower severity. A late model write
             # or a status refresh must not undo an escalation that already
@@ -266,6 +325,7 @@ def raise_incident_severity(incident_id: str, severity: str) -> None:
     """Raise severity without ever lowering it."""
     order = {"info": 0, "watch": 1, "urgent": 2, "emergency": 3}
     with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute("SELECT severity FROM incidents WHERE id=?", (incident_id,)).fetchone()
         current = row["severity"] if row else "info"
         chosen = severity if order.get(severity, 0) >= order.get(current, 0) else current
@@ -379,6 +439,7 @@ def add_decision(incident_id: str, phase: int, floor: str, floor_reasons: list[s
                  decision, model: str, prompt_version: str, violations: list[str],
                  latency_ms: int) -> str:
     with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         conn.execute(
             """INSERT OR REPLACE INTO decisions
                (id, incident_id, phase, severity, policy_floor, floor_reasons_json, title, body,
@@ -408,14 +469,15 @@ def add_decision(incident_id: str, phase: int, floor: str, floor_reasons: list[s
 def add_outbound(incident_id: str | None, destination: str, purpose: str, nbytes: int,
                  frames: int = 0, retention: str = "-", contains_video: bool = False,
                  latency_ms: int = 0, model: str | None = None,
-                 contains_audio: bool = False) -> None:
+                 contains_audio: bool = False, contains_image: bool = False) -> None:
     with connect() as conn:
         conn.execute(
             "INSERT INTO outbound_requests (incident_id, destination, purpose, bytes, frames,"
-            " retention, contains_video, contains_audio, created_at, latency_ms, model)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            " retention, contains_video, contains_audio, contains_image, created_at,"
+            " latency_ms, model) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (incident_id, destination, purpose, nbytes, frames, retention,
-             int(contains_video), int(contains_audio), now(), latency_ms, model),
+             int(contains_video), int(contains_audio), int(contains_image),
+             now(), latency_ms, model),
         )
         conn.commit()
 
@@ -447,8 +509,12 @@ def ledger_totals() -> dict:
             "SELECT COUNT(*) AS n, COALESCE(SUM(bytes),0) AS b FROM outbound_requests"
             " WHERE contains_audio=1"
         ).fetchone()
+        images = conn.execute(
+            "SELECT COALESCE(SUM(bytes),0) AS b FROM outbound_requests"
+            " WHERE contains_image=1"
+        ).fetchone()
     return {"total_bytes": row["total"], "rows": row["rows"], "idle_bytes": idle["b"],
-            "video_bytes": media["video"],
+            "video_bytes": media["video"], "image_bytes": images["b"],
             "audio_rows": audio["n"], "audio_bytes": audio["b"]}
 
 
@@ -489,7 +555,11 @@ def add_ack(incident_id: str, action: str) -> None:
         conn.execute("INSERT INTO acks (incident_id, action, created_at) VALUES (?,?,?)",
                      (incident_id, action, now()))
         status = "resolved" if action in ("im_checking", "false_alarm", "send_help") else "acknowledged"
-        conn.execute("UPDATE incidents SET status=? WHERE id=?", (status, incident_id))
+        conn.execute(
+            "UPDATE incidents SET status=?"
+            " WHERE id=? AND status NOT IN ('resolved','cancelled')",
+            (status, incident_id),
+        )
         conn.commit()
 
 
@@ -738,12 +808,41 @@ def failed_notifications(limit: int = 20) -> list[dict]:
 
 
 def mark_phase(incident_id: str, phase: int, escalation_due_at: float | None = None) -> None:
+    """Record a phase without ever moving backwards (3 -> 1 is not a thing)."""
     with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT status, notify_phase FROM incidents WHERE id=?", (incident_id,)
+        ).fetchone()
+        if row is None or row["status"] in ("resolved", "cancelled"):
+            return
+        if phase < int(row["notify_phase"] or 0):
+            return
         conn.execute(
-            "UPDATE incidents SET notify_phase=?, escalation_due_at=? WHERE id=?",
+            "UPDATE incidents SET notify_phase=?, escalation_due_at=?"
+            " WHERE id=? AND status NOT IN ('resolved','cancelled')",
             (phase, escalation_due_at, incident_id),
         )
         conn.commit()
+
+
+def claim_notify_phase(incident_id: str, phase: int,
+                       escalation_due_at: float | None = None) -> bool:
+    """Atomically claim one phase before its network call.
+
+    Two workers racing phase 1 (or a late phase 1 after phase 3) must not both
+    page, and a higher phase must never be overwritten by a lower one.
+    """
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        cur = conn.execute(
+            "UPDATE incidents SET notify_phase=?, escalation_due_at=?"
+            " WHERE id=? AND status NOT IN ('resolved','cancelled')"
+            " AND COALESCE(notify_phase,0) < ?",
+            (phase, escalation_due_at, incident_id, phase),
+        )
+        conn.commit()
+    return bool(cur.rowcount)
 
 
 def mark_acked(incident_id: str) -> None:
@@ -753,6 +852,19 @@ def mark_acked(incident_id: str) -> None:
             (now(), incident_id),
         )
         conn.commit()
+
+
+def reopen_checkin(incident_id: str, due_at: float) -> bool:
+    """A failed transcription is not a silent answer; restore the deadline."""
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE incidents SET checkin_status='asking', checkin_due_at=?"
+            " WHERE id=? AND checkin_status='answered'"
+            " AND status NOT IN ('resolved','cancelled')",
+            (due_at, incident_id),
+        )
+        conn.commit()
+    return bool(cur.rowcount)
 
 
 def due_escalations(now_epoch: float, limit: int = 10) -> list[dict]:
@@ -766,7 +878,7 @@ def due_escalations(now_epoch: float, limit: int = 10) -> list[dict]:
             " ORDER BY d.phase DESC LIMIT 1) AS severity"
             " FROM incidents i WHERE i.escalation_due_at IS NOT NULL"
             " AND i.escalation_due_at <= ? AND i.acked_at IS NULL"
-            " AND i.status IN ('notified','acknowledged')"
+            " AND i.status IN ('detected','enriching','notified','acknowledged')"
             " ORDER BY i.escalation_due_at LIMIT ?",
             (now_epoch, limit),
         ).fetchall()
@@ -798,6 +910,28 @@ def recent_history(exclude_id: str | None = None, limit: int = 8) -> list[dict]:
     return [{"type": r["type"], "zone": r["zone_id"], "at": r["ts"],
              "kept_home": bool(r["suppressed"]), "outcome": r["outcome"]}
             for r in rows]
+
+
+def media_private(incident_id: str) -> bool:
+    """True unless SAM proved the clip holds exactly one person.
+
+    Fail closed on a missing or failed SAM pass: without a person count the
+    system cannot promise that a visitor is absent, so raw media is not served.
+    """
+    with connect() as conn:
+        row = conn.execute("SELECT sam_json FROM incidents WHERE id=?",
+                           (incident_id,)).fetchone()
+    if not row or not row["sam_json"]:
+        return True
+    try:
+        sam = json.loads(row["sam_json"])
+    except (json.JSONDecodeError, TypeError):
+        return True
+    if not sam or sam.get("track_unavailable"):
+        return True
+    if int(sam.get("person_count") or 0) != 1:
+        return True
+    return int(((sam.get("overlay") or {}).get("people_redacted")) or 0) > 0
 
 
 def person_inside(incident_id: str) -> bool:
@@ -887,7 +1021,8 @@ def start_checkin(incident_id: str, prompt: str, due_at: float,
             "UPDATE incidents SET checkin_status='asking', checkin_prompt=?,"
             " checkin_due_at=?, checkin_started_at=?, checkin_answered_at=NULL,"
             " checkin_timeout_s=?"
-            " WHERE id=? AND (checkin_status IS NULL OR checkin_status IN ('failed','cancelled'))",
+            " WHERE id=? AND status NOT IN ('resolved','cancelled','acknowledged')"
+            " AND (checkin_status IS NULL OR checkin_status IN ('failed','cancelled'))",
             (prompt, due_at, time.time(), timeout_s, incident_id),
         )
         conn.commit()

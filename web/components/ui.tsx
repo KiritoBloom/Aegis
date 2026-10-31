@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { HouseholdLabel } from "@/components/household-label";
 import type { Zone } from "@/lib/api";
 import { Icon, type IconName } from "./icons";
 
@@ -225,7 +226,7 @@ export function NavRail() {
           className="mono"
           style={{ display: "block", fontSize: 10.5, color: "var(--color-ink-3)", letterSpacing: "0.08em" }}
         >
-          MARGARET&apos;S HOME
+          <HouseholdLabel />
         </span>
       </Link>
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>

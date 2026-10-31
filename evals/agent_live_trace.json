@@ -1,0 +1,111 @@
+{
+  "clip": "data\\footage\\external\\gmdcsa24-fall-01.mp4",
+  "at_s": 6.0,
+  "model": "muse-spark-1.3",
+  "trace": [
+    {
+      "step": "observe",
+      "tool": "sam_track_clip",
+      "summary": "1 person \u00b7 20 frames"
+    },
+    {
+      "step": "plan",
+      "tools": [
+        "household_memory",
+        "recent_events",
+        "inspect_frame"
+      ],
+      "calls": [
+        {
+          "tool": "household_memory",
+          "question": ""
+        },
+        {
+          "tool": "recent_events",
+          "question": ""
+        },
+        {
+          "tool": "inspect_frame",
+          "question": "Is the lying person on the floor or on furniture?"
+        }
+      ],
+      "summary": "Possible fall with unknown surface needs routine context, repeat history, and visual floor-vs-furniture check.",
+      "latency_ms": 2377
+    },
+    {
+      "step": "tool",
+      "tool": "household_memory",
+      "ok": true,
+      "question": "",
+      "summary": "facts=2"
+    },
+    {
+      "step": "tool",
+      "tool": "recent_events",
+      "ok": true,
+      "question": "",
+      "summary": "items=1"
+    },
+    {
+      "step": "tool",
+      "tool": "inspect_frame",
+      "ok": true,
+      "question": "Is the lying person on the floor or on furniture?",
+      "summary": "person_count=1 \u00b7 observation=Partial lower body of a person lying on tiled floor in foreground near blue door. \u00b7 posture=lying \u00b7 support_surface=floor \u00b7 person_visible=True"
+    },
+    {
+      "step": "plan",
+      "follow_up": true,
+      "tools": [],
+      "calls": [],
+      "summary": "Support surface is floor at 0.9 confidence, single person lying, lives alone; repeat fall. No unresolved count or surface needs another still.",
+      "latency_ms": 3524
+    },
+    {
+      "step": "decision",
+      "verdict": "escalate",
+      "severity": "urgent",
+      "summary": "SAM saw person in 20 frames with track available. Local lying with no couch or bed support. Still shows lying on floor. No contradictory evidence, so escalate per floor urgent.",
+      "latency_ms": 4868
+    }
+  ],
+  "observation": {
+    "available": true,
+    "confidence": 0.9,
+    "observation": "Partial lower body of a person lying on tiled floor in foreground near blue door.",
+    "others_visible": false,
+    "person_count": 1,
+    "person_visible": true,
+    "posture": "lying",
+    "support_surface": "floor"
+  },
+  "decision": {
+    "verdict": "escalate",
+    "severity": "urgent",
+    "notify_now": true,
+    "title": "Possible fall in the living room",
+    "body": "Someone may have fallen in the living room and is lying on the floor. They live alone, so please check in now or ask a neighbor to visit.",
+    "evidence": [
+      "lying",
+      "floor",
+      "Living room",
+      "fall_suspected",
+      "tiled floor",
+      "blue door",
+      "Lives alone",
+      "person_visible"
+    ],
+    "confidence": 0.88,
+    "rationale": "SAM saw person in 20 frames with track available. Local lying with no couch or bed support. Still shows lying on floor. No contradictory evidence, so escalate per floor urgent."
+  },
+  "latency_ms": 13405,
+  "ledger": [
+    {
+      "purpose": "agent_frame",
+      "bytes": 83781,
+      "latency_ms": 2626,
+      "input_tokens": 1238,
+      "output_tokens": 471
+    }
+  ]
+}

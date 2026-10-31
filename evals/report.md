@@ -87,10 +87,69 @@ benchmark. They exercise the tool-using Spark agent and the wall’s pre-escalat
 | Verification before any family alert | 0 pre-verification notifications |
 | Audio path | 4.0 s loud WAV accepted; Muse Transcribe + agent audio_context; floor urgent; check-in asking |
 | False two-person frames | 0 on `home-bed-sit` after raising the pose floor to 0.40 |
-| Automated tests | 104 passed |
+| Automated tests | 110 passed (29 Oct); 162 passed after the multimodal, privacy, edge, PIN, race, geometry and full-corpus batch (31 Oct) |
 
 The earlier 30-fixture decision suite above remains the measured language/policy benchmark. This
 section measures the new agent and media paths end to end; it is not a fall-recall study.
+
+## Multimodal evidence tool — 2026-10-31
+
+One live run against `muse-spark-1.3` and the external GMDCSA24 fall-01 clip, using the same
+`EvidenceAgent` code path and a still from that clip.
+
+| Check | Observed |
+|---|---|
+| Plan call | requested `household_memory`, `recent_events`, and `inspect_frame` in one bounded plan |
+| Model-written visual question | “Is the person lying on the floor or on furniture in this still?” |
+| Muse observation | person 1, posture lying, support floor, no others, confidence 0.90 |
+| Final decision | escalate / urgent; rationale cites SAM plus the still |
+| End-to-end latency | 13.7 s (plan 4.3 s, vision 4.5 s, decision 5.5 s) |
+| Outbound ledger | still bytes recorded as `agent_frame` with 1-hour retention |
+
+A second live run (same clip, `support_surface` reported as couch) used two planning calls:
+the first requested memory, recent events and a floor-versus-furniture question; after the
+observation returned floor/0.90, the follow-up planner requested no further call and the
+decision was escalate/urgent in 13.3 s. A separate vision probe on the same frame returned
+lying/floor at 0.95 confidence in 4.5 s. The visual tool is model-requested, not automatic;
+quiet feeds never send a still, and a private clip only offers the redacted still.
+
+Saved agent traces: `evals/agent_live_trace.json` (escalate) and
+`evals/agent_live_reject.json` (bed false candidate rejected). The **full gate** artifacts
+`evals/gate_escalate_fall01.json` and `evals/gate_reject_adl03.json` include real SAM frames,
+the Muse tool trace and dispatch calls (one phase-2 page for the fall; zero for the reject).
+Reproduce with `python scripts/probe_wall_gate.py …` and `python scripts/run_fall_pilot.py --fps 2`.
+
+## External corpus pilot — 2026-10-31
+
+The local gate in `scripts/run_fall_pilot.py` was run over the 110 external GMDCSA24
+clips (Subjects 1–3: 62 fall files and 48 ADL files), sampled at 2 fps through the same
+stateful wall tracker the console uses. Labels come from the dataset CSV descriptions:
+57 are falls to the floor (including one from a bed to the floor), 5 are falls onto a
+bed, and 48 are ADL. The full candidate list is in `evals/fall_pilot.json`; the source
+labels are in `evals/corpus_manifest.json`.
+
+| Metric | Measured |
+|---|---|
+| Floor-fall clips with a possible-fall candidate | **45 / 57** at 2 fps; 3 of the 12 misses triggered at 8 fps |
+| Floor-fall clips with a family alert after the full SAM + Muse gate | **45 / 57 (79%)** |
+| ADL clips with a family alert | **0 / 48**; 5 candidates, all rejected by the gate |
+| Bed-fall clips with a family alert | **0 / 5**; 2 candidates, both rejected because the bed is support |
+| Multi-person redaction | real entrance clip: SAM found multiple tracks, the raw clip was refused and the family still/clip were redacted |
+| Gate artifacts | `evals/gate_pilot.json` (all 52 candidates), `evals/gate_escalate_fall01.json`, `evals/gate_reject_adl03.json` |
+
+The 12 misses were not gate rejections. Most were frames where the person was lost
+or occluded after the fall (several clips end at the moment of floor contact), or where
+a large bed box made a floor fall look supported. Three of the twelve were caught when
+sampled at 8 fps, so sampling rate is part of the ceiling. Dispatch and check-in calls
+were instrumented rather than sent to a phone. This is a 110-clip, three-actor/room
+test, not the 25-fall/60-negative target study or a multi-night field trial.
+
+Reproduce with:
+
+```bash
+python scripts/run_fall_pilot.py --fps 2 --json evals/fall_pilot.json
+python scripts/run_gate_pilot.py --pilot evals/fall_pilot.json --out evals/gate_pilot.json
+```
 
 The restlessness rule has unit coverage for pacing versus a straight walk and for the prayer
 exclusion; the sim scenarios exercise the same policy floor and Evidence Agent. It remains a

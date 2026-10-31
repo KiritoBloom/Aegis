@@ -142,7 +142,9 @@ export default function LogsPage() {
               </span>
             </div>
             {group.entries.length ? (
-              group.entries.map((entry) => <LogLine key={`${group.id}-${entry.id}`} entry={entry} />)
+              group.entries.map((entry) => (
+                <LogLine key={`${group.id}-${entry.at}-${entry.id}`} entry={entry} />
+              ))
             ) : (
               <p className={shared.logEmpty}>No local activity on this view yet.</p>
             )}

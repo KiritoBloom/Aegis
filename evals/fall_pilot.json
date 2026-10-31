@@ -1,0 +1,1548 @@
+{
+  "fps": 2.0,
+  "clips": 110,
+  "falls": 62,
+  "falls_with_candidate": 47,
+  "adls": 48,
+  "adls_with_candidate": 5,
+  "results": [
+    {
+      "clip": "gmd-sub2-adl-01.mp4",
+      "frames": 340,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-02.mp4",
+      "frames": 352,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-03.mp4",
+      "frames": 356,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-04.mp4",
+      "frames": 234,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-05.mp4",
+      "frames": 323,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-06.mp4",
+      "frames": 321,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-07.mp4",
+      "frames": 388,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-08.mp4",
+      "frames": 408,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-09.mp4",
+      "frames": 327,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-10.mp4",
+      "frames": 226,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-11.mp4",
+      "frames": 298,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-12.mp4",
+      "frames": 227,
+      "triggers": [
+        {
+          "at_native_s": 5.02,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 1.02,
+          "track_id": 1,
+          "box": [
+            0.371,
+            0.407,
+            0.647,
+            0.679
+          ],
+          "distance": "mid",
+          "lying_for_s": 1.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-adl-13.mp4",
+      "frames": 145,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-14.mp4",
+      "frames": 166,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-15.mp4",
+      "frames": 179,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-adl-16.mp4",
+      "frames": 173,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-fall-01.mp4",
+      "frames": 190,
+      "triggers": [
+        {
+          "at_native_s": 3.02,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.52,
+          "track_id": 1,
+          "box": [
+            0.207,
+            0.679,
+            0.695,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-02.mp4",
+      "frames": 252,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-fall-03.mp4",
+      "frames": 210,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-fall-04.mp4",
+      "frames": 305,
+      "triggers": [
+        {
+          "at_native_s": 7.03,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.95,
+          "track_id": 1,
+          "box": [
+            0.178,
+            0.748,
+            0.67,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-05.mp4",
+      "frames": 135,
+      "triggers": [
+        {
+          "at_native_s": 3.02,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.73,
+          "track_id": 1,
+          "box": [
+            0.234,
+            0.703,
+            0.746,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.5
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-06.mp4",
+      "frames": 194,
+      "triggers": [
+        {
+          "at_native_s": 4.02,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 2.12,
+          "track_id": 1,
+          "box": [
+            0.163,
+            0.714,
+            0.771,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-07.mp4",
+      "frames": 135,
+      "triggers": [
+        {
+          "at_native_s": 3.02,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.65,
+          "track_id": 1,
+          "box": [
+            0.164,
+            0.668,
+            0.547,
+            0.901
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.5
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-08.mp4",
+      "frames": 181,
+      "triggers": [
+        {
+          "at_native_s": 3.52,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 1.0,
+          "track_id": 1,
+          "box": [
+            0.309,
+            0.645,
+            0.665,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-09.mp4",
+      "frames": 167,
+      "triggers": [
+        {
+          "at_native_s": 2.52,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.64,
+          "track_id": 1,
+          "box": [
+            0.424,
+            0.61,
+            0.672,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-10.mp4",
+      "frames": 167,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-fall-11.mp4",
+      "frames": 159,
+      "triggers": [
+        {
+          "at_native_s": 8.53,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 1.72,
+          "track_id": 2,
+          "box": [
+            0.253,
+            0.688,
+            0.788,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 1.1
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-12.mp4",
+      "frames": 184,
+      "triggers": [
+        {
+          "at_native_s": 8.53,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.6,
+          "track_id": 1,
+          "box": [
+            0.028,
+            0.625,
+            0.623,
+            0.997
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-13.mp4",
+      "frames": 133,
+      "triggers": [
+        {
+          "at_native_s": 4.21,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.51,
+          "track_id": 1,
+          "box": [
+            0.254,
+            0.608,
+            0.792,
+            0.965
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-14.mp4",
+      "frames": 168,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-fall-15.mp4",
+      "frames": 348,
+      "triggers": [
+        {
+          "at_native_s": 9.05,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.86,
+          "track_id": 1,
+          "box": [
+            0.231,
+            0.605,
+            0.536,
+            0.959
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-16.mp4",
+      "frames": 120,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-fall-17.mp4",
+      "frames": 194,
+      "triggers": [
+        {
+          "at_native_s": 3.52,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.33,
+          "track_id": 2,
+          "box": [
+            0.357,
+            0.641,
+            0.836,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-18.mp4",
+      "frames": 345,
+      "triggers": [
+        {
+          "at_native_s": 11.05,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.86,
+          "track_id": 2,
+          "box": [
+            0.0,
+            0.69,
+            0.577,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-19.mp4",
+      "frames": 463,
+      "triggers": [
+        {
+          "at_native_s": 9.05,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.32,
+          "track_id": 1,
+          "box": [
+            0.111,
+            0.541,
+            0.582,
+            0.898
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-20.mp4",
+      "frames": 342,
+      "triggers": [
+        {
+          "at_native_s": 9.05,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": "bed",
+          "geometry_fall": true,
+          "box_aspect": 1.92,
+          "track_id": 1,
+          "box": [
+            0.225,
+            0.576,
+            0.758,
+            0.854
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-21.mp4",
+      "frames": 283,
+      "triggers": [
+        {
+          "at_native_s": 7.54,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.29,
+          "track_id": 1,
+          "box": [
+            0.0,
+            0.564,
+            0.496,
+            0.947
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-22.mp4",
+      "frames": 155,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-fall-23.mp4",
+      "frames": 225,
+      "triggers": [
+        {
+          "at_native_s": 5.03,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": "bed",
+          "geometry_fall": true,
+          "box_aspect": 1.39,
+          "track_id": 2,
+          "box": [
+            0.071,
+            0.607,
+            0.481,
+            0.902
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-24.mp4",
+      "frames": 213,
+      "triggers": [
+        {
+          "at_native_s": 4.52,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.76,
+          "track_id": 2,
+          "box": [
+            0.242,
+            0.505,
+            0.596,
+            0.971
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-25.mp4",
+      "frames": 218,
+      "triggers": [
+        {
+          "at_native_s": 4.52,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.28,
+          "track_id": 1,
+          "box": [
+            0.049,
+            0.546,
+            0.62,
+            0.994
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-adl-01.mp4",
+      "frames": 261,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-02.mp4",
+      "frames": 273,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-03.mp4",
+      "frames": 296,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-04.mp4",
+      "frames": 300,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-05.mp4",
+      "frames": 154,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-06.mp4",
+      "frames": 267,
+      "triggers": [
+        {
+          "at_native_s": 1.01,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.57,
+          "track_id": 1,
+          "box": [
+            0.306,
+            0.454,
+            0.582,
+            0.94
+          ],
+          "distance": "mid",
+          "lying_for_s": 1.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-adl-07.mp4",
+      "frames": 100,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-08.mp4",
+      "frames": 146,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-09.mp4",
+      "frames": 232,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-10.mp4",
+      "frames": 371,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-11.mp4",
+      "frames": 361,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-12.mp4",
+      "frames": 160,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-13.mp4",
+      "frames": 130,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-14.mp4",
+      "frames": 133,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-15.mp4",
+      "frames": 115,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-adl-16.mp4",
+      "frames": 306,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-01.mp4",
+      "frames": 114,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-02.mp4",
+      "frames": 196,
+      "triggers": [
+        {
+          "at_native_s": 4.52,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.96,
+          "track_id": 1,
+          "box": [
+            0.422,
+            0.442,
+            0.68,
+            0.711
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.5
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-03.mp4",
+      "frames": 167,
+      "triggers": [
+        {
+          "at_native_s": 3.02,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.4,
+          "track_id": 1,
+          "box": [
+            0.281,
+            0.649,
+            0.69,
+            0.942
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-04.mp4",
+      "frames": 163,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-05.mp4",
+      "frames": 300,
+      "triggers": [
+        {
+          "at_native_s": 5.02,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.93,
+          "track_id": 1,
+          "box": [
+            0.395,
+            0.64,
+            0.711,
+            0.981
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.5
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-06.mp4",
+      "frames": 166,
+      "triggers": [
+        {
+          "at_native_s": 2.01,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.6,
+          "track_id": 1,
+          "box": [
+            0.249,
+            0.688,
+            0.658,
+            0.944
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-07.mp4",
+      "frames": 269,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-08.mp4",
+      "frames": 186,
+      "triggers": [
+        {
+          "at_native_s": 0.51,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.74,
+          "track_id": 1,
+          "box": [
+            0.219,
+            0.564,
+            0.514,
+            0.965
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-09.mp4",
+      "frames": 186,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-10.mp4",
+      "frames": 131,
+      "triggers": [
+        {
+          "at_native_s": 1.51,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.58,
+          "track_id": 1,
+          "box": [
+            0.293,
+            0.319,
+            0.553,
+            0.767
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-11.mp4",
+      "frames": 267,
+      "triggers": [
+        {
+          "at_native_s": 6.03,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.79,
+          "track_id": 1,
+          "box": [
+            0.234,
+            0.545,
+            0.684,
+            0.796
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-12.mp4",
+      "frames": 127,
+      "triggers": [
+        {
+          "at_native_s": 3.52,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.27,
+          "track_id": 1,
+          "box": [
+            0.14,
+            0.568,
+            0.623,
+            0.948
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-13.mp4",
+      "frames": 121,
+      "triggers": [
+        {
+          "at_native_s": 2.51,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 1.41,
+          "track_id": 1,
+          "box": [
+            0.061,
+            0.639,
+            0.569,
+            0.999
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.5
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-14.mp4",
+      "frames": 367,
+      "triggers": [
+        {
+          "at_native_s": 10.56,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 2.36,
+          "track_id": 1,
+          "box": [
+            0.012,
+            0.727,
+            0.656,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-15.mp4",
+      "frames": 85,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-16.mp4",
+      "frames": 91,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-17.mp4",
+      "frames": 128,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-18.mp4",
+      "frames": 178,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-19.mp4",
+      "frames": 86,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-20.mp4",
+      "frames": 94,
+      "triggers": [
+        {
+          "at_native_s": 3.72,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.93,
+          "track_id": 1,
+          "box": [
+            0.309,
+            0.683,
+            0.913,
+            0.996
+          ],
+          "distance": "mid",
+          "lying_for_s": 1.1
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-21.mp4",
+      "frames": 274,
+      "triggers": [
+        {
+          "at_native_s": 7.03,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": "bed",
+          "geometry_fall": true,
+          "box_aspect": 1.96,
+          "track_id": 1,
+          "box": [
+            0.075,
+            0.627,
+            0.572,
+            0.881
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-adl-01.mp4",
+      "frames": 245,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-02.mp4",
+      "frames": 198,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-03.mp4",
+      "frames": 199,
+      "triggers": [
+        {
+          "at_native_s": 1.51,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.82,
+          "track_id": 1,
+          "box": [
+            0.227,
+            0.306,
+            0.784,
+            0.612
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-adl-04.mp4",
+      "frames": 170,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-05.mp4",
+      "frames": 314,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-06.mp4",
+      "frames": 364,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-07.mp4",
+      "frames": 224,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-08.mp4",
+      "frames": 187,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-09.mp4",
+      "frames": 147,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-10.mp4",
+      "frames": 115,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-11.mp4",
+      "frames": 277,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-12.mp4",
+      "frames": 218,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-13.mp4",
+      "frames": 187,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-14.mp4",
+      "frames": 173,
+      "triggers": []
+    },
+    {
+      "clip": "gmdcsa24-adl-15.mp4",
+      "frames": 212,
+      "triggers": [
+        {
+          "at_native_s": 2.03,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.43,
+          "track_id": 1,
+          "box": [
+            0.392,
+            0.353,
+            0.67,
+            1.0
+          ],
+          "distance": "near",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-adl-16.mp4",
+      "frames": 104,
+      "triggers": [
+        {
+          "at_native_s": 1.02,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.55,
+          "track_id": 1,
+          "box": [
+            0.277,
+            0.501,
+            0.528,
+            0.956
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-01.mp4",
+      "frames": 203,
+      "triggers": [
+        {
+          "at_native_s": 3.55,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.61,
+          "track_id": 1,
+          "box": [
+            0.274,
+            0.47,
+            0.598,
+            1.0
+          ],
+          "distance": "near",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-02.mp4",
+      "frames": 189,
+      "triggers": [
+        {
+          "at_native_s": 2.53,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.44,
+          "track_id": 1,
+          "box": [
+            0.311,
+            0.7,
+            0.742,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-03.mp4",
+      "frames": 176,
+      "triggers": [
+        {
+          "at_native_s": 3.53,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.64,
+          "track_id": 2,
+          "box": [
+            0.237,
+            0.615,
+            0.718,
+            0.909
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-04.mp4",
+      "frames": 146,
+      "triggers": [
+        {
+          "at_native_s": 3.57,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.53,
+          "track_id": 1,
+          "box": [
+            0.059,
+            0.634,
+            0.586,
+            0.978
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-05.mp4",
+      "frames": 174,
+      "triggers": [
+        {
+          "at_native_s": 2.52,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 1.07,
+          "track_id": 1,
+          "box": [
+            0.274,
+            0.572,
+            0.656,
+            0.928
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-06.mp4",
+      "frames": 169,
+      "triggers": [
+        {
+          "at_native_s": 3.03,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.83,
+          "track_id": 1,
+          "box": [
+            0.281,
+            0.558,
+            0.56,
+            0.895
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-07.mp4",
+      "frames": 153,
+      "triggers": [
+        {
+          "at_native_s": 2.02,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 1.07,
+          "track_id": 1,
+          "box": [
+            0.195,
+            0.634,
+            0.513,
+            0.93
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-08.mp4",
+      "frames": 129,
+      "triggers": [
+        {
+          "at_native_s": 1.52,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 1.05,
+          "track_id": 1,
+          "box": [
+            0.363,
+            0.546,
+            0.724,
+            0.89
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-09.mp4",
+      "frames": 131,
+      "triggers": [
+        {
+          "at_native_s": 1.54,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.59,
+          "track_id": 1,
+          "box": [
+            0.45,
+            0.585,
+            0.694,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-10.mp4",
+      "frames": 133,
+      "triggers": [
+        {
+          "at_native_s": 1.52,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.6,
+          "track_id": 2,
+          "box": [
+            0.491,
+            0.574,
+            0.747,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-11.mp4",
+      "frames": 181,
+      "triggers": [
+        {
+          "at_native_s": 2.53,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.95,
+          "track_id": 1,
+          "box": [
+            0.382,
+            0.667,
+            0.697,
+            0.999
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-12.mp4",
+      "frames": 200,
+      "triggers": [
+        {
+          "at_native_s": 3.08,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.47,
+          "track_id": 1,
+          "box": [
+            0.292,
+            0.68,
+            0.764,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-13.mp4",
+      "frames": 128,
+      "triggers": [
+        {
+          "at_native_s": 2.03,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.22,
+          "track_id": 1,
+          "box": [
+            0.308,
+            0.671,
+            0.703,
+            0.997
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-14.mp4",
+      "frames": 169,
+      "triggers": [
+        {
+          "at_native_s": 3.03,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.15,
+          "track_id": 1,
+          "box": [
+            0.381,
+            0.732,
+            0.689,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-15.mp4",
+      "frames": 178,
+      "triggers": [
+        {
+          "at_native_s": 2.53,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 1.11,
+          "track_id": 1,
+          "box": [
+            0.117,
+            0.617,
+            0.477,
+            0.939
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    },
+    {
+      "clip": "gmdcsa24-fall-16.mp4",
+      "frames": 181,
+      "triggers": [
+        {
+          "at_native_s": 3.54,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.93,
+          "track_id": 1,
+          "box": [
+            0.418,
+            0.611,
+            0.74,
+            0.956
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ]
+    }
+  ]
+}

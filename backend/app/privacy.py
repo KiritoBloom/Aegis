@@ -132,7 +132,7 @@ def clear_buffer() -> int:
 # ---------------------------------------------------------------------------
 TABLES = ("incidents", "decisions", "outbound_requests", "events", "notifications",
           "acks", "device_heartbeats", "household_memory", "household_state",
-          "checkins")
+          "checkins", "push_subscriptions", "consent")
 
 
 def delete_everything(confirm: str) -> dict:

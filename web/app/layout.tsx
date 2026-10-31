@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Newsreader } from "next/font/google";
+import { SessionGate } from "@/components/session-gate";
 import "./globals.css";
 
 /** Three typefaces: Newsreader for editorial numbers, Geist Sans for UI, Geist Mono for machine facts. */
@@ -14,7 +15,7 @@ const newsreader = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "Aegis — Margaret's home",
+  title: "Aegis — private care console",
   description:
     "A privacy-first care console that watches the rooms a family chooses and only interrupts when something actually needs them.",
   applicationName: "Aegis",
@@ -45,7 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${GeistSans.variable} ${GeistMono.variable} ${newsreader.variable}`}
     >
       <body>
-        {children}
+        <SessionGate>{children}</SessionGate>
         {/*
           Registered from the root layout rather than the profile page so the
           worker is alive before anyone opens settings — a push that arrives

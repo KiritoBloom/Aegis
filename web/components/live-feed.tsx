@@ -115,6 +115,7 @@ export function LiveFeed({
                 }}
               >
                 <span className={styles.personTag}>
+                  {person.primary ? "PRIMARY · " : ""}
                   {person.track_id ? `TRK ${person.track_id}` : `PERSON ${index + 1}`}
                   {" · "}
                   {person.posture}

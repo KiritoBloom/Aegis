@@ -105,10 +105,13 @@ class TrackHistory:
     def entries(self, polygon: tuple[Point, ...]) -> int:
         """Number of outside->inside transitions. Two or more means wandering."""
         count = 0
-        prev_inside = False
+        prev_inside: bool | None = None
         for s in self.samples:
             inside = point_in_polygon((s.x, s.y), polygon)
-            if inside and not prev_inside:
+            # First observing someone already inside is not a crossing. Counting
+            # it fired a false night-door alert for a resident standing in the
+            # doorway when the track began.
+            if prev_inside is False and inside:
                 count += 1
             prev_inside = inside
         return count
@@ -213,13 +216,15 @@ def posture_from_keypoints(kp: list[tuple[float, float, float]] | None) -> str:
         return "unknown"
     # COCO indices: 5/6 shoulders, 11/12 hips, 13/14 knees, 15/16 ankles, 0 nose
     ls, rs, lh, rh = kp[5], kp[6], kp[11], kp[12]
-    lk, rk = kp[13], kp[14]
-    visible = [p for p in (ls, rs, lh, rh) if p[2] >= 0.3]
-    if len(visible) < 3:
+    shoulders = [point for point in (ls, rs) if point[2] >= 0.3]
+    hips = [point for point in (lh, rh) if point[2] >= 0.3]
+    if len(shoulders) + len(hips) < 3 or not shoulders or not hips:
         return "unknown"
 
-    sh = ((ls[0] + rs[0]) / 2, (ls[1] + rs[1]) / 2)
-    hp = ((lh[0] + rh[0]) / 2, (lh[1] + rh[1]) / 2)
+    sh = (sum(p[0] for p in shoulders) / len(shoulders),
+          sum(p[1] for p in shoulders) / len(shoulders))
+    hp = (sum(p[0] for p in hips) / len(hips),
+          sum(p[1] for p in hips) / len(hips))
     dx, dy = hp[0] - sh[0], hp[1] - sh[1]
     if abs(dx) < 1e-6 and abs(dy) < 1e-6:
         return "unknown"
@@ -227,8 +232,8 @@ def posture_from_keypoints(kp: list[tuple[float, float, float]] | None) -> str:
     # (atan2(dx, -dy) is the same mistake in sign and reports 180 for upright.)
     torso_angle = abs(math.degrees(math.atan2(dx, dy)))  # 0 = upright, 90 = horizontal
 
-    knees_visible = lk[2] >= 0.3 or rk[2] >= 0.3
-    knee_y = (lk[1] + rk[1]) / 2 if knees_visible else None
+    knees = [point for point in (kp[13], kp[14]) if point[2] >= 0.3]
+    knee_y = sum(p[1] for p in knees) / len(knees) if knees else None
 
     if torso_angle > 70:
         return "lying"

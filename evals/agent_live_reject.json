@@ -1,0 +1,108 @@
+{
+  "clip": "data\\footage\\external\\gmdcsa24-adl-03.mp4",
+  "at_s": 1.5,
+  "model": "muse-spark-1.3",
+  "trace": [
+    {
+      "step": "observe",
+      "tool": "sam_track_clip",
+      "summary": "1 person \u00b7 20 frames"
+    },
+    {
+      "step": "plan",
+      "tools": [
+        "household_memory",
+        "recent_events",
+        "inspect_frame"
+      ],
+      "calls": [
+        {
+          "tool": "household_memory",
+          "question": ""
+        },
+        {
+          "tool": "recent_events",
+          "question": ""
+        },
+        {
+          "tool": "inspect_frame",
+          "question": "Is the person lying on the floor or on furniture such as a bed?"
+        }
+      ],
+      "summary": "Possible fall with unknown support surface; need routine, repeat history, and floor-vs-furniture visual check.",
+      "latency_ms": 3714
+    },
+    {
+      "step": "tool",
+      "tool": "household_memory",
+      "ok": true,
+      "question": "",
+      "summary": "facts=2"
+    },
+    {
+      "step": "tool",
+      "tool": "recent_events",
+      "ok": true,
+      "question": "",
+      "summary": "items=1"
+    },
+    {
+      "step": "tool",
+      "tool": "inspect_frame",
+      "ok": true,
+      "question": "Is the person lying on the floor or on furniture such as a bed?",
+      "summary": "person_count=1 \u00b7 observation=One person reclining on a bed with patterned cover in a room \u00b7 posture=lying \u00b7 support_surface=bed \u00b7 person_visible=True"
+    },
+    {
+      "step": "plan",
+      "follow_up": true,
+      "tools": [],
+      "calls": [],
+      "summary": "Frame confirms person on bed not floor at 0.98 confidence; surface, posture, count resolved, evidence sufficient.",
+      "latency_ms": 2740
+    },
+    {
+      "step": "decision",
+      "verdict": "reject",
+      "severity": "watch",
+      "summary": "Still shows one person lying reclining on bed with patterned cover, contradicting floor fall. Support is bed, so reject per rule.",
+      "latency_ms": 5375
+    }
+  ],
+  "observation": {
+    "available": true,
+    "confidence": 0.98,
+    "observation": "One person reclining on a bed with patterned cover in a room",
+    "others_visible": false,
+    "person_count": 1,
+    "person_visible": true,
+    "posture": "lying",
+    "support_surface": "bed"
+  },
+  "decision": {
+    "verdict": "reject",
+    "severity": "watch",
+    "notify_now": false,
+    "title": "No fall: resting on bed in bedroom",
+    "body": "Checked the recent bedroom check. The person was reclining on a bed, not on the floor. No further action needed.",
+    "evidence": [
+      "lying",
+      "bed",
+      "Bedroom",
+      "reclining",
+      "person_count"
+    ],
+    "confidence": 0.98,
+    "rationale": "Still shows one person lying reclining on bed with patterned cover, contradicting floor fall. Support is bed, so reject per rule."
+  },
+  "latency_ms": 13882,
+  "ledger": [
+    {
+      "purpose": "agent_frame",
+      "bytes": 115015,
+      "latency_ms": 2041,
+      "input_tokens": 1242,
+      "output_tokens": 365
+    }
+  ]
+}

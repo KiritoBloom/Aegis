@@ -1,6 +1,7 @@
 import Link from "next/link";
 import "../legacy.css";
 import { HousePulse } from "@/components/house-pulse";
+import { HouseholdLabel } from "@/components/household-label";
 import { NavRail, TabBar } from "@/components/ui";
 
 /** Legacy shell for secondary pages. The camera console at `/` is the primary surface. */
@@ -12,7 +13,7 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
         <div className="masthead-inner">
           <Link href="/" className="masthead-brand masthead-brand--mobile">
             <span className="serif">Aegis</span>
-            <span className="mono">MARGARET&apos;S HOME</span>
+            <HouseholdLabel />
           </Link>
           <span className="masthead-note">Local cameras. Silence by default.</span>
           <HousePulse />

@@ -643,8 +643,10 @@ def dedupe_action(previous: dict | None, incident: dict) -> str:
         return "update"
     if same_key and age <= SAME_ZONE_WINDOW_S:
         return "update"
-    if previous.get("outcome") == "false_alarm" and age <= FALSE_ALARM_COOLDOWN_S:
-        # Never applied to falls: a real fall after a false alarm is still a fall.
+    if (same_key and previous.get("outcome") == "false_alarm"
+            and age <= FALSE_ALARM_COOLDOWN_S):
+        # Only the same event in the same place, never a different safety class:
+        # a door false alarm must not silence an unattended stove or a fall.
         if not str(incident.get("type", "")).startswith("fall"):
             return "suppress"
     return "notify"

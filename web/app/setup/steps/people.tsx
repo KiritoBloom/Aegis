@@ -38,6 +38,7 @@ export function PeopleStep({ c }: { c: SetupController }) {
                   className={styles.input}
                   value={person.name}
                   onChange={(event) => setOccupant(person.id, { name: event.target.value })}
+                  onBlur={(event) => setOccupant(person.id, { name: event.currentTarget.value })}
                   placeholder={i === 0 ? "Margaret" : "Sam"}
                   autoComplete="off"
                 />
@@ -53,7 +54,11 @@ export function PeopleStep({ c }: { c: SetupController }) {
                   onChange={(event) => setOccupant(person.id, {
                     age: event.target.value ? Number(event.target.value) : null,
                   })}
+                  onBlur={(event) => setOccupant(person.id, {
+                    age: event.currentTarget.value ? Number(event.currentTarget.value) : null,
+                  })}
                   placeholder="81"
+                  autoComplete="off"
                 />
               </label>
               <label className={styles.field}>
@@ -62,6 +67,7 @@ export function PeopleStep({ c }: { c: SetupController }) {
                   className={styles.input}
                   value={person.relationship}
                   onChange={(event) => setOccupant(person.id, { relationship: event.target.value })}
+                  onBlur={(event) => setOccupant(person.id, { relationship: event.currentTarget.value })}
                   list={`relationships-${person.id}`}
                   autoComplete="off"
                 />

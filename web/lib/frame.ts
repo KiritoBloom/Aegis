@@ -1,6 +1,6 @@
 export function captureFrame(video: HTMLVideoElement): Promise<Blob | null> {
   if (!video.videoWidth || !video.videoHeight) return Promise.resolve(null);
-  const scale = Math.min(1, 960 / video.videoWidth);
+  const scale = Math.min(1, 768 / video.videoWidth);
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
   canvas.height = Math.max(1, Math.round(video.videoHeight * scale));

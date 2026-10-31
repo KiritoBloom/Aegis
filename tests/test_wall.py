@@ -1,7 +1,7 @@
 """The wall watches continuously, per feed, and escalates through the real path.
 
-These tests pin the things the old one-shot wall got wrong: a single frame can
-never alert, beds count as support, one feed's alert never touches another
+These tests pin the things the old one-shot wall got wrong: an ambiguous single
+frame cannot alert, a high-confidence fall transition is only a candidate, beds count as support, one feed's alert never touches another
 feed's samples, recovery is observed, and a sustained fall creates the same
 incident and check-in an edge would create.
 """
@@ -65,6 +65,110 @@ def test_sustained_unsupported_lying_triggers_once_and_then_recovers(monkeypatch
     assert recovered["resolved"] is not None
     assert recovered["resolved"]["recovered"] is True
     assert recovered["alert"] is None
+
+
+def test_a_second_fall_after_recovery_is_not_suppressed_by_the_cooldown(monkeypatch):
+    state = wall.FeedState({"id": "f-twice", "name": "Hall", "kind": "file"})
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("upright"))
+    state.process(None, 5000.0)
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))
+    first = state.process(None, 5000.4)
+    assert first["trigger"] is not None
+    first_id = first["trigger"]["id"]
+
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("upright"))
+    state.process(None, 5001.0)
+    state.process(None, 5002.5)
+    resolved = state.process(None, 5004.0)
+    assert resolved["resolved"] is not None
+
+    state.process(None, 5004.4)  # upright again, then a new fall
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))
+    second = state.process(None, 5005.0)
+    assert second["trigger"] is not None
+    assert second["trigger"]["id"] != first_id
+
+
+def test_absence_alone_does_not_resolve_a_fall(monkeypatch):
+    state = wall.FeedState({"id": "f-gone", "name": "Hall", "kind": "file"})
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))
+    state.process(None, 6000.0)
+    state.process(None, 6000.6)
+    triggered = state.process(None, 6001.2)
+    assert triggered["trigger"] is not None
+
+    empty = {"width": 640, "height": 480, "person_count": 0, "persons": [],
+             "objects": [], "flags": [], "status": "empty"}
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: empty)
+    for ts in (6001.6, 6003.0, 6005.0, 6008.0):
+        result = state.process(None, ts)
+        assert result["resolved"] is None
+        assert result["alert"] is not None
+
+
+def test_a_fast_transition_to_floor_is_a_candidate(monkeypatch):
+    state = wall.FeedState({"id": "f-fast", "name": "Hall", "kind": "file"})
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("upright"))
+    state.process(None, 3000.0)
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))
+    first = state.process(None, 3000.4)
+    assert first["trigger"] is not None
+    assert first["trigger"]["kind"] == "possible_fall"
+
+
+def test_two_people_keep_their_track_ids_while_walking(monkeypatch):
+    state = wall.FeedState({"id": "f-two", "name": "Living room", "kind": "file"})
+
+    def two(a, b):
+        return {
+            "width": 640, "height": 480, "person_count": 2,
+            "persons": [
+                {"box": a, "conf": 0.9, "posture": "upright", "support_surface": None,
+                 "seen_by": "pose+yolo"},
+                {"box": b, "conf": 0.85, "posture": "upright", "support_surface": None,
+                 "seen_by": "pose+yolo"},
+            ],
+            "objects": [], "flags": [], "status": "multiple_people",
+        }
+
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: two(
+        [0.10, 0.20, 0.25, 0.90], [0.70, 0.20, 0.85, 0.90]))
+    first = state.process(None, 4000.0)
+    ids = {p["box"][0]: p["track_id"] for p in first["persons"]}
+    assert len(set(ids.values())) == 2
+    assert sum(1 for p in first["persons"] if p["primary"]) == 1
+
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: two(
+        [0.14, 0.20, 0.29, 0.90], [0.66, 0.20, 0.81, 0.90]))
+    second = state.process(None, 4000.5)
+    moved = {p["box"][0]: p["track_id"] for p in second["persons"]}
+    assert moved[0.14] == ids[0.10]
+    assert moved[0.66] == ids[0.70]
+
+
+def test_appearance_keeps_ids_when_boxes_overlap():
+    state = wall.FeedState({"id": "f-cross", "name": "Hall", "kind": "file"})
+    first = [{"box": [0.10, 0.20, 0.30, 0.90]},
+             {"box": [0.70, 0.20, 0.90, 0.90]}]
+    state._assign_tracks(first, 7000.0)
+    left_id, right_id = first[0]["track_id"], first[1]["track_id"]
+    state.tracks[left_id].desc = np.array([1.0, 0.0], dtype=np.float32)
+    state.tracks[right_id].desc = np.array([0.0, 1.0], dtype=np.float32)
+    # Both people walk toward the middle and meet at the same point.
+    state.tracks[left_id].vx = 0.75
+    state.tracks[right_id].vx = -0.75
+
+    # Both boxes occupy the same space on the crossing frame. Only clothing
+    # appearance can keep the identities apart.
+    crossed = [{"box": [0.40, 0.20, 0.60, 0.90]},
+               {"box": [0.40, 0.20, 0.60, 0.90]}]
+    state._assign_tracks(crossed, 7000.4, [
+        np.array([1.0, 0.0], dtype=np.float32),
+        np.array([0.0, 1.0], dtype=np.float32),
+    ])
+    assert crossed[0]["track_id"] == left_id
+    assert crossed[1]["track_id"] == right_id
+    assert len(state.tracks) == 2
 
 
 def test_lying_on_a_bed_never_alerts(monkeypatch):
@@ -288,6 +392,9 @@ def test_a_verified_agent_decision_is_the_single_family_alert(monkeypatch, tmp_p
 
     async def run():
         incident_id = await api._create_wall_incident(packet, None)
+        # The person can get back up while SAM/Muse are still checking. That
+        # recovery must not rewrite the floor of an already-admitted fall.
+        db.update_incident_sensors(incident_id, {"recovered": True, "posture": "upright"})
         await api._release_wall_incident(
             incident_id, "sam_muse_verified", decision=decision,
             trace=[{"step": "tool", "tool": "household_memory", "summary": "2 facts"}],
@@ -303,4 +410,109 @@ def test_a_verified_agent_decision_is_the_single_family_alert(monkeypatch, tmp_p
     inc = db.get_incident(incident_id)
     assert inc["status"] == "notified"
     assert inc["decision"]["title"] == "Margaret may have fallen"
+    assert inc["decision"]["policy_floor"] == "urgent"
     assert inc["agent"][0]["tool"] == "household_memory"
+
+
+def test_a_bystander_standing_up_does_not_close_the_resident_fall(monkeypatch):
+    state = wall.FeedState({"id": "f-bystander", "name": "Hall", "kind": "file"})
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))
+    state.process(None, 8000.0)
+    state.process(None, 8000.6)
+    triggered = state.process(None, 8001.2)
+    assert triggered["trigger"] is not None
+
+    visitor = {
+        "width": 640, "height": 480, "person_count": 1,
+        "persons": [{"box": [0.72, 0.20, 0.86, 0.90], "conf": 0.9,
+                     "posture": "upright", "support_surface": None,
+                     "seen_by": "pose"}],
+        "objects": [], "flags": [], "status": "person",
+    }
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: visitor)
+    for ts in (8001.8, 8003.4, 8005.0, 8007.0):
+        result = state.process(None, ts)
+        assert result["resolved"] is None
+        assert result["alert"] is not None
+
+
+def _person(box, posture="upright", support=None):
+    return {"box": box, "conf": 0.9, "posture": posture,
+            "support_surface": support, "seen_by": "pose+yolo"}
+
+
+def test_box_geometry_catches_a_fall_that_pose_calls_upright(monkeypatch):
+    state = wall.FeedState({"id": "f-geom", "name": "Hall", "kind": "file"})
+    upright = {"width": 640, "height": 480, "person_count": 1,
+               "persons": [_person([0.40, 0.10, 0.52, 0.95])],
+               "objects": [], "flags": [], "status": "person"}
+    wide = {"width": 640, "height": 480, "person_count": 1,
+            "persons": [_person([0.15, 0.70, 0.90, 0.98], posture="upright")],
+            "objects": [], "flags": [], "status": "person"}
+    monkeypatch.setattr(wall.scene, "analyze_frame_array",
+                        lambda frame, **_: upright)
+    state.process(None, 9000.0)
+    monkeypatch.setattr(wall.scene, "analyze_frame_array",
+                        lambda frame, **_: wide)
+    result = state.process(None, 9000.5)
+    assert result["trigger"] is not None
+    assert result["trigger"]["evidence"]["geometry_fall"] is True
+    assert "body changed" in result["trigger"]["summary"]
+
+
+def test_box_geometry_does_not_trigger_without_an_upright_transition(monkeypatch):
+    state = wall.FeedState({"id": "f-geom2", "name": "Hall", "kind": "file"})
+    wide = {"width": 640, "height": 480, "person_count": 1,
+            "persons": [_person([0.15, 0.70, 0.90, 0.98])],
+            "objects": [], "flags": [], "status": "person"}
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: wide)
+    for t in (9100.0, 9101.0, 9102.0):
+        result = state.process(None, t)
+        assert result["trigger"] is None
+
+
+def test_a_body_already_resting_on_a_bed_does_not_trigger(monkeypatch):
+    state = wall.FeedState({"id": "f-geom3", "name": "Bedroom", "kind": "file"})
+    on_bed = {"width": 640, "height": 480, "person_count": 1,
+              "persons": [_person([0.15, 0.70, 0.90, 0.98], posture="lying",
+                                  support="bed")],
+              "objects": [], "flags": ["lying"], "status": "person"}
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: on_bed)
+    for t in (9200.0, 9201.0, 9202.0):
+        result = state.process(None, t)
+        assert result["trigger"] is None
+
+
+def test_a_fast_collapse_onto_a_bed_is_a_candidate_not_a_silent_support(monkeypatch):
+    state = wall.FeedState({"id": "f-geom-bed", "name": "Bedroom", "kind": "file"})
+    upright = {"width": 640, "height": 480, "person_count": 1,
+               "persons": [_person([0.40, 0.10, 0.52, 0.95])],
+               "objects": [], "flags": [], "status": "person"}
+    wide = {"width": 640, "height": 480, "person_count": 1,
+            "persons": [_person([0.15, 0.70, 0.90, 0.98], posture="lying",
+                                support="bed")],
+            "objects": [], "flags": ["lying"], "status": "person"}
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: upright)
+    state.process(None, 9300.0)
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: wide)
+    result = state.process(None, 9300.4)
+    assert result["trigger"] is not None
+    assert result["trigger"]["evidence"]["support_surface"] == "bed"
+    assert result["trigger"]["evidence"]["geometry_fall"] is True
+
+
+def test_a_supported_lie_down_after_sitting_is_not_a_candidate(monkeypatch):
+    state = wall.FeedState({"id": "f-bed-sit", "name": "Bedroom", "kind": "file"})
+    sitting = {"width": 640, "height": 480, "person_count": 1,
+               "persons": [_person([0.42, 0.45, 0.58, 0.95], posture="sitting",
+                                   support="bed")],
+               "objects": [], "flags": [], "status": "person"}
+    lying = {"width": 640, "height": 480, "person_count": 1,
+             "persons": [_person([0.15, 0.70, 0.90, 0.98], posture="lying",
+                                 support="bed")],
+             "objects": [], "flags": ["lying"], "status": "person"}
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: sitting)
+    state.process(None, 9400.0)
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: lying)
+    result = state.process(None, 9401.0)
+    assert result["trigger"] is None

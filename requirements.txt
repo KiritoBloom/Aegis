@@ -1,0 +1,14 @@
+# Backend + edge runtime
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+pydantic>=2.7
+httpx>=0.27
+numpy>=1.26
+opencv-python>=4.9
+ultralytics>=8.2
+pywebpush>=2.0
+cryptography>=42
+sounddevice>=0.4.7
+PyYAML>=6.0
+Pillow>=10
