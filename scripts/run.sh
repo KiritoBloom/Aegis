@@ -26,6 +26,7 @@ cmd="${1:-help}"
 
 case "$cmd" in
   api)
+    shift
     exec python -m uvicorn app.api:app --host 127.0.0.1 --port 8000 "$@"
     ;;
   edge)

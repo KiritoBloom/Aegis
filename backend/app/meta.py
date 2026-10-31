@@ -283,27 +283,41 @@ class SamObject:
 
 
 def _mask_raster(data: str) -> tuple[int, int, bytes] | None:
-    """`data` is `<w>,<h>,<payload>`; returns a per-pixel 0/1 raster."""
-    if not data:
+    """Decode `data` (`<h>,<w>,<payload>`) to a per-pixel 0/1 raster.
+
+    The official parser reads the first field as the mask height, so a live
+    prefix like `513,208,` means width=208, height=513. Treating it as
+    `<w>,<h>` makes the codec reject every live mask. Try both orientations
+    anyway (older emitters wrote `<w>,<h>`) and accept only a raster that is
+    exactly `width * height` bytes. Malformed input must never raise.
+    """
+    if not isinstance(data, str) or not data:
         return None
     parts = data.split(",", 2)
     if len(parts) != 3:
         return None
     try:
-        width, height = int(parts[0]), int(parts[1])
-    except ValueError:
+        first, second = int(parts[0]), int(parts[1])
+    except (TypeError, ValueError):
         return None
-    if width <= 0 or height <= 0:
+    if first <= 0 or second <= 0:
         return None
     payload = parts[2]
     encoding = "one_bit" if payload.startswith("!") else "lossless"
     try:
         from meta_sam_parser import SegmentationMask, decode_mask_to_raster
-        mask = SegmentationMask(encoding=encoding, payload=payload,
-                                width=width, height=height)
-        return width, height, decode_mask_to_raster(mask)
-    except Exception:  # noqa: BLE001 - a bad mask must never break an alert
+    except Exception:  # noqa: BLE001 - a missing parser must not break an alert
         return None
+    for width, height in ((second, first), (first, second)):
+        try:
+            mask = SegmentationMask(encoding=encoding, payload=payload,
+                                    width=width, height=height)
+            bits = decode_mask_to_raster(mask)
+        except Exception:  # noqa: BLE001 - try the other orientation
+            continue
+        if isinstance(bits, (bytes, bytearray)) and len(bits) == width * height:
+            return width, height, bytes(bits)
+    return None
 
 
 def parse_sam(text: str) -> list[SamObject]:

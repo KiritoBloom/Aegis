@@ -54,19 +54,28 @@ class Uploader:
 
     def post_clip(self, incident_id: str, clip: Path, still: Path | None,
                   thumb: Path | None) -> bool:
-        files = {"clip": (Path(clip).name, Path(clip).read_bytes(), "video/mp4")}
-        if still and Path(still).exists():
-            files["still"] = (Path(still).name, Path(still).read_bytes(), "image/jpeg")
-        if thumb and Path(thumb).exists():
-            files["thumb"] = (Path(thumb).name, Path(thumb).read_bytes(), "image/jpeg")
+        clip_bytes = Path(clip).read_bytes()
+        still_bytes = Path(still).read_bytes() if still and Path(still).exists() else b""
+        thumb_bytes = Path(thumb).read_bytes() if thumb and Path(thumb).exists() else b""
+        files = {"clip": (Path(clip).name, clip_bytes, "video/mp4")}
+        if still_bytes:
+            files["still"] = (Path(still).name, still_bytes, "image/jpeg")
+        if thumb_bytes:
+            files["thumb"] = (Path(thumb).name, thumb_bytes, "image/jpeg")
+        # The signature binds every evidence byte, not just the incident id.
+        digest = hashlib.sha256(
+            b"clip\0" + clip_bytes + b"still\0" + still_bytes
+            + b"thumb\0" + thumb_bytes
+        ).hexdigest()
         ts = str(int(time.time()))
-        sig = self._sign(ts, incident_id.encode())
+        sig = self._sign(ts, incident_id.encode() + b"." + digest.encode())
         try:
             r = self.client.post(
                 f"{self.base}/api/ingest/clip",
                 data={"incident_id": incident_id},
                 files=files,
-                headers={"X-Edge-Timestamp": ts, "X-Edge-Signature": sig},
+                headers={"X-Edge-Timestamp": ts, "X-Edge-Signature": sig,
+                         "X-Edge-Content-Sha256": digest},
             )
             if r.status_code in (200, 201, 202):
                 return True
@@ -77,9 +86,11 @@ class Uploader:
 
     def post_audio(self, incident_id: str, wav: Path, sensors: dict,
                    track: dict, hint: str = "", zone_id: str = "") -> bool:
-        """Send one gated WAV. The signature covers the incident id, as ingest expects."""
+        """Send one gated WAV. The signature covers the incident id and bytes."""
+        audio_bytes = Path(wav).read_bytes()
+        digest = hashlib.sha256(b"audio\0" + audio_bytes).hexdigest()
         ts = str(int(time.time()))
-        sig = self._sign(ts, incident_id.encode())
+        sig = self._sign(ts, incident_id.encode() + b"." + digest.encode())
         try:
             r = self.client.post(
                 f"{self.base}/api/ingest/audio",
@@ -94,8 +105,9 @@ class Uploader:
                     "event_type": "help_call",
                     "source": "live",
                 },
-                files={"audio": (Path(wav).name, Path(wav).read_bytes(), "audio/wav")},
-                headers={"X-Edge-Timestamp": ts, "X-Edge-Signature": sig},
+                files={"audio": (Path(wav).name, audio_bytes, "audio/wav")},
+                headers={"X-Edge-Timestamp": ts, "X-Edge-Signature": sig,
+                         "X-Edge-Content-Sha256": digest},
             )
             if r.status_code in (200, 201, 202):
                 return True

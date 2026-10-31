@@ -55,6 +55,13 @@ function statusText(incident: Incident): string {
   return incident.status.replace(/_/g, " ");
 }
 
+function isRejectedWallCandidate(incident: Incident): boolean {
+  const sensors = incident.sensors as { verification?: string } | null | undefined;
+  return incident.source === "wall"
+    && incident.status === "resolved"
+    && sensors?.verification === "rejected";
+}
+
 export default function EventsPage() {
   const incidents = useApi<{ items: Incident[] }>("/api/incidents?limit=60", 15000);
   const [scope, setScope] = useState<Scope>("today");
@@ -67,7 +74,10 @@ export default function EventsPage() {
     }
   });
 
-  const allItems = incidents.data?.items ?? [];
+  const allItems = useMemo(
+    () => (incidents.data?.items ?? []).filter((item) => !isRejectedWallCandidate(item)),
+    [incidents.data],
+  );
   const scoped = useMemo(
     () => (scope === "today"
       ? allItems.filter((item) => isToday(item.local_time || item.created_at))

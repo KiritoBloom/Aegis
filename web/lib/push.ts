@@ -103,7 +103,15 @@ export async function disablePush(): Promise<void> {
   const reg = await navigator.serviceWorker.getRegistration("/");
   const sub = await reg?.pushManager.getSubscription();
   if (!sub) return;
+  const endpoint = sub.endpoint;
   // Unsubscribe locally first: a server that is down must not leave the phone
   // subscribed to alerts the family has just turned off.
   await sub.unsubscribe();
+  // Then remove the row so the house stops trying to wake the dead endpoint.
+  // A failed request is harmless; the next push service 410 will prune it.
+  await fetch("/api/push/subscribe", {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ endpoint }),
+  }).catch(() => {});
 }

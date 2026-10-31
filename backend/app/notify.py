@@ -7,9 +7,11 @@ import hmac
 import json
 import logging
 import os
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Protocol
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -34,6 +36,15 @@ TWILIO_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_FROM = os.environ.get("TWILIO_FROM", "")
 SMS_TO = [n.strip() for n in os.environ.get("FAMILY_SMS_TO", "").split(",") if n.strip()]
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+
+
+def _endpoint_label(url: str) -> str:
+    """Host only. A webhook URL can carry credentials or a capability token."""
+    try:
+        host = urlsplit(url).hostname or "endpoint"
+    except ValueError:
+        host = "endpoint"
+    return host[:40]
 
 
 @dataclass
@@ -113,9 +124,11 @@ class WebPushProvider:
                     db.drop_subscription(sub["id"])
                     errors.append(f"gone:{sub['id'][:8]}")
                 else:
-                    errors.append(f"{status}:{str(exc)[:80]}")
+                    # The exception text can contain the subscription endpoint,
+                    # which is itself a capability. Record the class, not it.
+                    errors.append(f"{status or 'error'}:{type(exc).__name__}")
             except Exception as exc:  # noqa: BLE001
-                errors.append(str(exc)[:80])
+                errors.append(type(exc).__name__)
 
         if sent:
             return Delivery(True, self.name, external_id=f"{sent} device(s)",
@@ -150,18 +163,27 @@ class WebhookProvider:
         }, separators=(",", ":")).encode()
         headers = {"Content-Type": "application/json"}
         if WEBHOOK_SECRET:
+            stamp = str(int(time.time()))
+            headers["X-Aegis-Timestamp"] = stamp
             signature = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
             headers["X-Aegis-Signature"] = f"sha256={signature}"
+            # V1 keeps the documented body-only contract. V2 binds the timestamp
+            # to the body, so a receiver can reject a replay outside a short
+            # window; it is additive, and existing bridges keep working.
+            signed = hmac.new(WEBHOOK_SECRET.encode(), f"{stamp}.".encode() + body,
+                              hashlib.sha256).hexdigest()
+            headers["X-Aegis-Signature-V2"] = f"sha256={signed}"
         sent, errors = 0, []
         for url in self.urls:
+            label = _endpoint_label(url)
             try:
                 response = httpx.post(url, content=body, headers=headers, timeout=8.0)
                 if 200 <= response.status_code < 300:
                     sent += 1
                 else:
-                    errors.append(f"{response.status_code}@{url.split('//')[-1][:40]}")
+                    errors.append(f"{response.status_code}@{label}")
             except Exception as exc:  # noqa: BLE001
-                errors.append(f"{type(exc).__name__}@{url.split('//')[-1][:40]}")
+                errors.append(f"{type(exc).__name__}@{label}")
         if sent:
             # A partial call tree is still a successful page, but the failed
             # backup endpoint must stay visible in the notification row.
@@ -280,7 +302,9 @@ async def dispatch(alert: dict, phase: int, broadcast=None) -> list[dict]:
         try:
             delivery = await asyncio.to_thread(provider.send, alert, phase)
         except Exception as exc:  # noqa: BLE001
-            delivery = Delivery(False, provider.name, error=f"{type(exc).__name__}: {exc}")
+            # Provider exceptions can embed endpoints or credentials; persist
+            # the class name, which is enough to tell a family which channel broke.
+            delivery = Delivery(False, provider.name, error=type(exc).__name__)
         # A channel with no device enrolled has not failed; it has nothing to do.
         # Recording that as "failed" would put a red banner on a working system.
         unconfigured = delivery.error in ("no_subscription", "vapid_not_configured",

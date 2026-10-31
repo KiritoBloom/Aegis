@@ -87,7 +87,7 @@ benchmark. They exercise the tool-using Spark agent and the wall’s pre-escalat
 | Verification before any family alert | 0 pre-verification notifications |
 | Audio path | 4.0 s loud WAV accepted; Muse Transcribe + agent audio_context; floor urgent; check-in asking |
 | False two-person frames | 0 on `home-bed-sit` after raising the pose floor to 0.40 |
-| Automated tests | 110 passed (29 Oct); 162 passed after the multimodal, privacy, edge, PIN, race, geometry and full-corpus batch (31 Oct) |
+| Automated tests | 110 passed (29 Oct); 220 passed after the multimodal, privacy, edge, PIN, race, geometry, security and full-corpus batch (31 Oct) |
 
 The earlier 30-fixture decision suite above remains the measured language/policy benchmark. This
 section measures the new agent and media paths end to end; it is not a fall-recall study.
@@ -150,6 +150,16 @@ Reproduce with:
 python scripts/run_fall_pilot.py --fps 2 --json evals/fall_pilot.json
 python scripts/run_gate_pilot.py --pilot evals/fall_pilot.json --out evals/gate_pilot.json
 ```
+
+## Hardening verification — 2026-10-31
+
+- Live SAM video masks now decode in both wire orientations: 203/203 objects returned a raster on a real fall clip, with the first mask 208×513 and 106704 decoded bytes.
+- Edge clip and WAV signatures bind a SHA-256 of the evidence bytes; a token-protected edge→backend fall run uploaded the incident and 47-frame clip successfully.
+- A verification-deadline sweep releases `verifying` incidents after 180 s; tests cover stale release, fresh-row immunity and a late verifier no longer double-paging.
+- Consent revocation cannot be resumed without a new consent record; delete-all clears server rows, consent, the paused state and the browser copy; metadata is purged after 90 days.
+- Resident kiosk link tested under a real PIN: family console locked, signed check-in opened without a family session, answer recorded and incident resolved.
+- Push opt-out removes the server subscription; loopback-only web binding verified.
+- Full suite: 220 tests. TypeScript and production build clean.
 
 The restlessness rule has unit coverage for pacing versus a straight walk and for the prayer
 exclusion; the sim scenarios exercise the same policy floor and Evidence Agent. It remains a

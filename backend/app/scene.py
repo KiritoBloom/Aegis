@@ -6,6 +6,7 @@ import threading
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -33,6 +34,19 @@ def _models():
 
             _POSE = YOLO(str(ROOT / "yolov8n-pose.pt"))
     return _YOLO, _POSE
+
+
+def warmup() -> None:
+    """Load both models and run one real prediction through each.
+
+    Torch registers CPU ops and oneDNN primitives lazily on the first
+    inference; on this machine that costs seconds, far more than the weights.
+    """
+    yolo, pose = _models()
+    frame = np.zeros((64, 64, 3), dtype=np.uint8)
+    with _INFER:
+        yolo.predict(frame, imgsz=416, verbose=False)
+        pose.predict(frame, imgsz=448, verbose=False)
 
 
 def posture_from_keypoints(kp: list[tuple[float, float, float]] | None) -> str:

@@ -419,3 +419,12 @@ def test_a_door_false_alarm_never_suppresses_a_different_safety_event():
     assert policy.dedupe_action(previous, {
         "type": "door_open", "zone_id": "front_door", "age_s": 700,
     }) == "suppress"
+
+
+def test_a_camera_offline_is_a_notifying_safety_floor():
+    from app import policy
+    floor = policy.evaluate({"type": "camera_offline", "sensors": {}},
+                            policy.ResidentProfile(), local_hour=12)
+    assert floor.severity == "urgent"
+    assert floor.notifies is True
+    assert "camera_offline" in floor.reasons

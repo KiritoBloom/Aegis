@@ -43,6 +43,7 @@ export type Incident = {
   checkin_status?: "asking" | "answered" | "no_answer" | "cancelled" | null;
   checkin_prompt?: string | null;
   checkin_audio_url?: string;
+  resident_checkin_url?: string;
   checkin_due_at?: number | null;
   checkin_timeout_s?: number | null;
   checkin?: CheckinRecord | null;

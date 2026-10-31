@@ -1,6 +1,7 @@
 """In-memory tracker and alert state for continuous multi-feed monitoring."""
 from __future__ import annotations
 
+import copy
 import threading
 import time
 import uuid
@@ -23,6 +24,10 @@ COOLDOWN_S = 600.0
 TRACK_TTL_S = 3.0
 IOU_MATCH = 0.25
 OBJECT_EVERY_S = 5.0
+# A repeated decoded frame is provably the same input. Reusing the previous
+# analysis is exact, not an approximation, and keeps a paused or looping feed
+# from burning both models on every upload.
+REUSE_IDENTICAL_FRAMES = True
 SESSION_TTL_S = 30 * 60
 MAX_FEEDS = 6
 
@@ -32,9 +37,14 @@ _LAST_PRUNE = 0.0
 
 
 def warmup() -> None:
-    """Load the local models before the first feed, not inside its first frame."""
+    """Load and warm the local models before the first feed.
+
+    Loading weights is not enough: torch registers its CPU kernels and oneDNN
+    primitives on the first inference, which costs several seconds. Doing one
+    real prediction per model here keeps that off the wall's first sample.
+    """
     try:
-        scene._models()
+        scene.warmup()
     except Exception:  # noqa: BLE001
         return
 
@@ -134,6 +144,8 @@ class FeedState:
         self._last_objects: list[dict] = []
         self._object_cache: list[dict] = []
         self._objects_at = 0.0
+        self._last_frame: np.ndarray | None = None
+        self._last_det: dict | None = None
         # Alert evidence only: a short rolling buffer in memory, written to a
         # clip only if this feed escalates. Quiet hours write nothing.
         self._raw_frames: deque[tuple[float, bytes]] = deque(maxlen=24)
@@ -348,19 +360,51 @@ class FeedState:
             return [item for item in self._raw_frames if item[0] >= cutoff]
 
     # -- one sampled frame ----------------------------------------------
+    def _same_frame(self, frame) -> bool:
+        """True only for a pixel-identical frame; never a perceptual guess.
+
+        A slow slide down a wall can move very few pixels per sample, so a
+        similarity threshold could skip exactly the fall this feed exists to
+        catch. Exact equality has no such failure mode.
+        """
+        if not REUSE_IDENTICAL_FRAMES or self._last_det is None:
+            return False
+        if not isinstance(frame, np.ndarray) or self._last_frame is None:
+            return False
+        if (frame.shape != self._last_frame.shape
+                or frame.dtype != self._last_frame.dtype):
+            return False
+        return bool(np.array_equal(frame, self._last_frame))
+
+    def _remember_frame(self, frame, det: dict) -> None:
+        if not isinstance(frame, np.ndarray):
+            self._last_frame, self._last_det = None, None
+            return
+        self._last_frame = frame.copy()
+        # Stored before the tracker annotates persons, so a reused frame starts
+        # from the same pristine analysis a fresh inference would return.
+        self._last_det = copy.deepcopy(det)
+
     def process(self, frame, now: float, raw: bytes | None = None) -> dict:
         with self.lock:
             if raw:
                 self._raw_frames.append((now, raw))
-            detect_objects = now - self._objects_at >= OBJECT_EVERY_S or not self._object_cache
-            det = scene.analyze_frame_array(
-                frame,
-                objects=self._object_cache if not detect_objects else None,
-                detect_objects=detect_objects,
-            )
-            if detect_objects:
-                self._object_cache = det.get("objects") or []
-                self._objects_at = now
+            if self._same_frame(frame):
+                det = copy.deepcopy(self._last_det)
+            else:
+                # An empty object list is still an unsampled scene: a bed or
+                # chair may enter later. The extra all-class pass on object-free
+                # feeds is the price of not missing furniture under a body.
+                detect_objects = not self._object_cache                     or now - self._objects_at >= OBJECT_EVERY_S
+                det = scene.analyze_frame_array(
+                    frame,
+                    objects=self._object_cache if not detect_objects else None,
+                    detect_objects=detect_objects,
+                )
+                if detect_objects:
+                    self._object_cache = det.get("objects") or []
+                    self._objects_at = now
+                self._remember_frame(frame, det)
             self._last_objects = self._object_cache
             self.samples += 1
             self.seen = now

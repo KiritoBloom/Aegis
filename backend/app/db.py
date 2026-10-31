@@ -139,6 +139,10 @@ MIGRATIONS = [
     ("incidents", "checkin_timeout_s", "REAL"),
     ("checkins", "read_json", "TEXT"),
     ("incidents", "context_json", "TEXT"),
+    # The wall holds a candidate as `verifying` while SAM and Muse work. That
+    # status is not in the worker queue, so the deadline has to be a row fact:
+    # a verifier that dies with the process must be recoverable at boot.
+    ("incidents", "verification_due_at", "REAL"),
     ("device_heartbeats", "scene_json", "TEXT"),
     ("device_heartbeats", "scene_at", "TEXT"),
 ]
@@ -173,8 +177,8 @@ def upsert_incident(payload: dict[str, Any]) -> None:
             """INSERT INTO incidents
                (id, household_id, camera_id, type, status, severity, started_at, local_time,
                 zone_id, features_json, sensors_json, privacy_json, evidence_json, source,
-                severity_hint, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                severity_hint, created_at, verification_due_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(id) DO NOTHING""",
             (
                 payload["incident_id"], payload.get("household_id"), payload.get("camera_id"),
@@ -187,6 +191,7 @@ def upsert_incident(payload: dict[str, Any]) -> None:
                 json.dumps(payload.get("evidence") or []),
                 payload.get("source", "live"),
                 payload.get("severity_hint"), now(),
+                payload.get("verification_due_at"),
             ),
         )
         conn.commit()
@@ -275,6 +280,77 @@ def recover_wall_incident(incident_id: str) -> dict:
         conn.commit()
     return {"changed": bool(cur.rowcount), "status": row["status"],
             "checkin": row["checkin_status"]}
+
+
+def claim_verification_release(incident_id: str) -> bool:
+    """Take a held wall incident out of `verifying` exactly once.
+
+    The sweeper and the original verification task can both decide to release
+    the same row. The status predicate is the lock: only one UPDATE can match,
+    and only the winner is allowed to page the family.
+    """
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE incidents SET status='releasing', verification_due_at=NULL"
+            " WHERE id=? AND status='verifying'",
+            (incident_id,),
+        )
+        conn.commit()
+    return bool(cur.rowcount)
+
+
+def reject_verifying_incident(incident_id: str, reason: str = "") -> bool:
+    """Close a held candidate only if verification still owns it.
+
+    The `rejected` marker is written in the same transaction as the status, so
+    the family list can never observe a resolved row without knowing that it
+    was checked and deliberately not raised.
+    """
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT sensors_json FROM incidents WHERE id=? AND status='verifying'",
+            (incident_id,),
+        ).fetchone()
+        if row is None:
+            return False
+        try:
+            sensors = json.loads(row["sensors_json"] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            sensors = {}
+        if not isinstance(sensors, dict):
+            sensors = {}
+        sensors.update({"verification": "rejected",
+                        "verification_reason": reason[:160]})
+        cur = conn.execute(
+            "UPDATE incidents SET status='resolved', escalation_due_at=NULL,"
+            " verification_due_at=NULL, sensors_json=?"
+            " WHERE id=? AND status='verifying'",
+            (json.dumps(sensors), incident_id),
+        )
+        conn.commit()
+    return bool(cur.rowcount)
+
+
+def due_verifications(now_epoch: float, legacy_age_s: float = 300.0,
+                      limit: int = 10) -> list[dict]:
+    """Held wall incidents whose verifier is past its deadline.
+
+    Rows written before the deadline column existed have NULL; for those the
+    creation age is the backstop, so upgrading does not strand an old row.
+    """
+    cutoff = time.strftime(
+        "%Y-%m-%dT%H:%M:%S", time.gmtime(now_epoch - max(0.0, legacy_age_s))
+    ) + "Z"
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM incidents WHERE status='verifying' AND ("
+            " (verification_due_at IS NOT NULL AND verification_due_at <= ?)"
+            " OR (verification_due_at IS NULL AND created_at <= ?))"
+            " ORDER BY COALESCE(verification_due_at, 0), created_at LIMIT ?",
+            (now_epoch, cutoff, limit),
+        ).fetchall()
+    return [_decode_incident(dict(r)) for r in rows]
 
 
 def set_status(incident_id: str, status: str, severity: str | None = None) -> None:
@@ -379,6 +455,15 @@ def get_incident(incident_id: str) -> dict | None:
         return inc
 
 
+def _is_rejected_wall_candidate(incident: dict) -> bool:
+    """A rejected wall candidate is an audit row, not a family incident."""
+    sensors = incident.get("sensors")
+    return (incident.get("source") == "wall"
+            and incident.get("status") == "resolved"
+            and isinstance(sensors, dict)
+            and sensors.get("verification") == "rejected")
+
+
 def list_incidents(limit: int = 50, status: str | None = None) -> list[dict]:
     q = "SELECT * FROM incidents"
     args: list[Any] = []
@@ -386,7 +471,9 @@ def list_incidents(limit: int = 50, status: str | None = None) -> list[dict]:
         q += " WHERE status=?"
         args.append(status)
     q += " ORDER BY created_at DESC LIMIT ?"
-    args.append(limit)
+    # Rejected wall candidates are filtered after decoding. Fetch a little
+    # extra so a run of rejections cannot starve the family list of real rows.
+    args.append(limit + 20 if limit else limit)
     with connect() as conn:
         rows = conn.execute(q, args).fetchall()
         out = []
@@ -421,7 +508,11 @@ def list_incidents(limit: int = 50, status: str | None = None) -> list[dict]:
             inc.pop("features_json", None)
             inc.pop("privacy_json", None)
             inc.pop("sam_json", None)
+            if _is_rejected_wall_candidate(inc):
+                continue
             out.append(inc)
+            if limit and len(out) >= limit:
+                break
     return out
 
 
@@ -480,6 +571,54 @@ def add_outbound(incident_id: str | None, destination: str, purpose: str, nbytes
              now(), latency_ms, model),
         )
         conn.commit()
+
+
+def purge_metadata(days: int = 90) -> dict:
+    """Delete local history past its promised retention window.
+
+    The privacy page promises 90 days of alert history. Media is removed much
+    sooner by the media sweep; this removes the structured rows that would
+    otherwise keep growing forever.
+    """
+    cutoff = f"-{max(1, int(days))} days"
+    counts: dict[str, int] = {}
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        ids = [r["id"] for r in conn.execute(
+            "SELECT id FROM incidents WHERE datetime(created_at) < datetime('now', ?)",
+            (cutoff,),
+        )]
+        for table in ("decisions", "acks", "notifications", "checkins", "events",
+                      "outbound_requests"):
+            if not ids:
+                counts[table] = 0
+                continue
+            marks = ",".join("?" * len(ids))
+            cur = conn.execute(
+                f"DELETE FROM {table} WHERE incident_id IN ({marks})",
+                ids,
+            )
+            counts[table] = cur.rowcount
+        if ids:
+            marks = ",".join("?" * len(ids))
+            counts["incidents"] = conn.execute(
+                f"DELETE FROM incidents WHERE id IN ({marks})", ids
+            ).rowcount
+        else:
+            counts["incidents"] = 0
+        counts["events_old"] = conn.execute(
+            "DELETE FROM events WHERE datetime(ts) < datetime('now', ?)", (cutoff,)
+        ).rowcount
+        counts["checkins_old"] = conn.execute(
+            "DELETE FROM checkins WHERE datetime(created_at) < datetime('now', ?)",
+            (cutoff,),
+        ).rowcount
+        counts["notifications_old"] = conn.execute(
+            "DELETE FROM notifications WHERE datetime(created_at) < datetime('now', ?)",
+            (cutoff,),
+        ).rowcount
+        conn.commit()
+    return counts
 
 
 def ledger(limit: int = 200) -> list[dict]:
@@ -582,6 +721,15 @@ def drop_subscription(sub_id: str) -> None:
     with connect() as conn:
         conn.execute("DELETE FROM push_subscriptions WHERE id=?", (sub_id,))
         conn.commit()
+
+
+def drop_subscription_by_endpoint(endpoint: str) -> int:
+    """Remove a device by its push endpoint; used when the phone opts out."""
+    with connect() as conn:
+        cur = conn.execute("DELETE FROM push_subscriptions WHERE endpoint=?",
+                           (endpoint,))
+        conn.commit()
+    return int(cur.rowcount)
 
 
 def record_failure(incident_id: str, reason: str) -> None:
@@ -838,6 +986,7 @@ def claim_notify_phase(incident_id: str, phase: int,
         cur = conn.execute(
             "UPDATE incidents SET notify_phase=?, escalation_due_at=?"
             " WHERE id=? AND status NOT IN ('resolved','cancelled')"
+            " AND acked_at IS NULL"
             " AND COALESCE(notify_phase,0) < ?",
             (phase, escalation_due_at, incident_id, phase),
         )

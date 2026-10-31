@@ -227,7 +227,9 @@ def evaluate(
         return Floor("urgent", ["unattended_heat"])
 
     if itype == "camera_offline":
-        return Floor("watch", ["camera_offline"])
+        # A camera that stopped is a safety event, not a quiet note: the house
+        # is blind and nobody can know whether a fall just happened in view.
+        return Floor("urgent", ["camera_offline"])
     if itype == "device_offline":
         return Floor("urgent", ["device_offline"])
     if itype == "checkin_no_response":

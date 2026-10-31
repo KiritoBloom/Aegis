@@ -13,6 +13,13 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let alive = true;
+    // A resident kiosk arrives with a short-lived signed check-in link. The
+    // page's API validates that token; it must not be blocked by the family PIN.
+    if (window.location.pathname.startsWith("/checkin/")
+        && new URLSearchParams(window.location.search).has("t")) {
+      setState("open");
+      return () => { alive = false; };
+    }
     fetch("/api/session", { cache: "no-store" })
       .then((res) => res.json())
       .then((data: { auth_required?: boolean; signed_in?: boolean }) => {

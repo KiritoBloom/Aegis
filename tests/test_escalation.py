@@ -311,3 +311,27 @@ def test_a_suppressed_repeat_is_persisted_as_closed(monkeypatch, tmp_path):
     assert sent == []
     assert db.get_incident("inc_suppressed")["status"] == "resolved"
     assert any(e["reason"] == "false_alarm_cooldown" for e in db.recent_events(5))
+
+
+def test_metadata_retention_purges_old_rows_but_keeps_new_ones(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "retention.db"))
+    db.init()
+    for iid, old in (("inc_old", "2020-01-01T00:00:00Z"),
+                     ("inc_new", "2099-01-01T00:00:00Z")):
+        db.upsert_incident({
+            "incident_id": iid, "household_id": "hh_demo", "camera_id": "cam",
+            "type": "fall_suspected", "status": "detected", "severity_hint": "urgent",
+            "started_at": old, "local_time": old, "zone_id": None,
+            "track": {}, "sensors": {}, "privacy": {}, "evidence": [], "source": "wall",
+        })
+        with db.connect() as conn:
+            conn.execute("UPDATE incidents SET created_at=? WHERE id=?", (old, iid))
+            conn.execute("INSERT INTO events (incident_id,camera_id,type,ts,severity,"
+                         "suppressed,reason,source) VALUES (?,?,?,?,?,?,?,?)",
+                         (iid, "cam", "fall_suspected", old, "urgent", 0, "test", "wall"))
+            conn.commit()
+    db.purge_metadata(90)
+    ids = {r["id"] for r in db.list_incidents(50)}
+    assert "inc_old" not in ids
+    assert "inc_new" in ids
+    assert not any(e["incident_id"] == "inc_old" for e in db.recent_events(20))

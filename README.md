@@ -97,7 +97,7 @@ The fourth row is the product. A care system that is right most of the time and 
 │ gate → person check → tracking →   │   ──────────────────►  SAM 3.1
 │ zones + posture → ring buffer      │                         (track + masks)
 │                                    │   ◄──────────────────  annotated clip
-│ 12s buffer lives in RAM.           │
+│ 9s buffer lives in RAM.           │
 │ Never written to disk.             │   ──────────────────►  Muse Spark
 │ 0 bytes uploaded while idle.       │                         (decision + words)
 └────────────────────────────────────┘   ◄──────────────────  severity, message
@@ -174,11 +174,17 @@ Read-only tools, a fixed action set, and a 20s timeout. If the model fails, time
 - **The spoken question is local.** The prompt is rendered on the machine that holds the media, so it works offline and adds no third party to the room at 3 AM.
 - **Third-party redaction:** if more than one person is tracked, everyone except the resident is blurred in the clip the family receives. They did not consent to being filmed.
 - **No face recognition.** No identity claims, no biometric templates.
-- **Resident kiosk pairing is not implemented.** With a PIN set, the resident check-in screen needs the household session (or no PIN on a trusted local device); there is no separate short-lived kiosk link yet.
+- **A resident kiosk link is real and short-lived.** With a PIN set, the family alert page includes a 30-minute signed check-in link. The kiosk screen exposes only the prompt, timer and two answers, never the family history. Possession of that link is the resident credential.
+- **Turning alerts off removes the device from the house.** The browser unsubscribes and the server deletes the matching push subscription, so the next incident does not target a dead endpoint.
+- **The web app binds to loopback by default.** `npm run dev` / `npm run start` listen on `127.0.0.1:3000`. Exposing it to a phone on the LAN requires an explicit hostname change and a `HOUSEHOLD_PIN`; the backend already binds locally.
 - **Household access is optional but real.** Set `HOUSEHOLD_PIN` and every `/api` route except the login, signed edge ingest and signed media links requires a seven-day session cookie; the web app shows a PIN screen. The default demo on localhost is open and says so.
 - **No cameras in bathrooms or bedrooms** — enforced by placement and policy, not just settings.
 - **Pause is absolute while it is on.** New frames, audio and clips are refused, check-ins are cancelled and every notification path is suppressed. A provider call already on the wire cannot be recalled; the next provider and every later path are stopped. Resume is an explicit action with no covert mode. Roles are not separated: a family member with console access can resume, so this is a household control, not a resident-authenticated one.
 - **Every outbound request is logged**: destination, purpose, bytes, retention. The dashboard calls it *What left your home*.
+- **Edge uploads are bound to their bytes.** Clip and WAV signatures cover a SHA-256 of the evidence, so a captured five-minute request cannot swap the video or audio. Webhook V2 also binds a timestamp.
+- **Consent is a precondition for resume.** Revoking consent pauses monitoring; the console cannot silently switch it back on. Resume is refused until a new consent record exists.
+- **A held wall verification has a deadline.** If the verifier dies or the API restarts while SAM/Muse are working, a sweep releases the incident on the local safety floor instead of stranding a real fall.
+- **Local deletion includes the browser copy.** Delete-all pauses monitoring, clears server rows and consent, and removes the browser setup and IndexedDB recordings. Alert metadata follows the promised 90-day purge.
 
 **The claim we make:** raw video never leaves the home on its own, and only escalation clips and at most one still are sent for analysis. **The claim we do not make:** "nothing ever leaves your home." Clips and stills do. The ledger shows them, and raw household media is refused once a clip is private.
 
@@ -188,7 +194,7 @@ Every figure below is produced by a run and linked to `evals/report.md`. A row w
 
 | Metric | Target | Measured |
 |---|---|---|
-| Automated regression suite | all pass | **162 / 162** |
+| Automated regression suite | all pass | **220 / 220** |
 | Wall evidence clip before a family alert | 5–7 s | **6.0–7.0 s; SAM 48–50 frames** |
 | Family alerts sent before verification | 0 | **0** |
 | Duplicate-person frames on the bed-sit clip | 0 | **0 after the 40% pose floor** |
@@ -200,6 +206,7 @@ Every figure below is produced by a run and linked to `evals/report.md`. A row w
 | ADL family alerts (external, 48 clips) | 60-negative target | **0 / 48**; 5 local candidates, all rejected by the full gate |
 | Bed-fall family alerts (external, 5 clips) | — | **0 / 5**; 2 local candidates, both rejected because the bed is support |
 | Fall recall / precision (25 falls, 60 negatives) | ≥ 0.90 / ≥ 0.80 | — (pilot is n=110, three subjects/rooms, not the target study) |
+| Wall frame cost (external benchmark, 4 feeds) | — | **107 ms/frame dynamic; 12 ms repeated frame; 0.2 s first frame after warmup** (`evals/performance.md`) |
 | Alert latency, phase 1 p50 / p95 | ≤ 8s / ≤ 20s | — |
 | Enrichment latency p95 | ≤ 30s | — |
 | Idle upload, 60s | **0 B** | — |

@@ -12,3 +12,4 @@ cryptography>=42
 sounddevice>=0.4.7
 PyYAML>=6.0
 Pillow>=10
+meta-sam-parser>=0.1.0

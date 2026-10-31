@@ -242,3 +242,10 @@ export async function deleteFeedMedia(id: string): Promise<void> {
   });
   db.close();
 }
+
+/** Remove the browser copy after the server wipe; the next visit starts at setup. */
+export function clearLocalConsoleData(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(STORAGE_KEY);
+  indexedDB.deleteDatabase(MEDIA_DB);
+}

@@ -12,6 +12,7 @@ import {
   type ConsentState,
   type PauseState,
 } from "@/lib/api";
+import { clearLocalConsoleData } from "@/lib/console";
 import { useApi } from "@/lib/useApi";
 
 /** Privacy ledger: consent, pause, retention, and what left the house. */
@@ -56,11 +57,15 @@ export default function PrivacyPage() {
     setBusy(true);
     setMessage(null);
     try {
-      await fetch(`/api/privacy/${on ? "pause" : "resume"}`, {
+      const res = await fetch(`/api/privacy/${on ? "pause" : "resume"}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ by: "family", reason: "from the privacy page" }),
       });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(body.detail || `Could not change that (${res.status})`);
+      }
       privacy.reload();
       setMessage(on ? "Monitoring paused. The camera stopped." : "Monitoring resumed.");
     } catch {
@@ -90,6 +95,7 @@ export default function PrivacyPage() {
       setMessage(
         `Deleted. ${body.media?.dirs_removed ?? 0} folders of footage (${bytes(body.media?.bytes ?? 0)}) and ${rowCount} rows of history are gone. ${body.upstream ?? ""}`,
       );
+      clearLocalConsoleData();
       setConfirm("");
       ledger.reload();
       privacy.reload();

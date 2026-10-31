@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useApi } from "@/lib/useApi";
 import { clock, type Incident } from "@/lib/api";
 import styles from "./checkin.module.css";
@@ -21,10 +21,23 @@ type Answer = {
 };
 
 /** Resident-facing check-in. Large controls only; never the family alert history. */
-export default function ResidentCheckinPage() {
+export default function CheckinRoute() {
+  return (
+    <Suspense fallback={null}>
+      <ResidentCheckinPage />
+    </Suspense>
+  );
+}
+
+function ResidentCheckinPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const id = params?.id ?? "";
-  const { data: inc, error, loading, reload } = useApi<Incident>(`/api/incidents/${id}`, 5000);
+  const token = searchParams.get("t") || "";
+  const apiPath = token
+    ? `/api/resident/checkin/${id}?t=${encodeURIComponent(token)}`
+    : `/api/incidents/${id}`;
+  const { data: inc, error, loading, reload } = useApi<Incident>(apiPath, 5000);
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [busy, setBusy] = useState<"ok" | "help" | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -59,11 +72,16 @@ export default function ResidentCheckinPage() {
     setBusy(kind);
     setSendError(null);
     try {
-      const res = await fetch(`/api/incidents/${id}/checkin`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ answer: kind === "ok" ? "I'm okay" : "I need help" }),
-      });
+      const res = await fetch(
+        token
+          ? `/api/resident/checkin/${id}?t=${encodeURIComponent(token)}`
+          : `/api/incidents/${id}/checkin`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ answer: kind === "ok" ? "I'm okay" : "I need help" }),
+        },
+      );
       const text = await res.text();
       if (!res.ok) {
         let detail = `Could not send the answer (${res.status})`;

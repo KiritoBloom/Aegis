@@ -604,7 +604,7 @@ function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void 
           )}
           {pending ? (
             <Link
-              href={`/checkin/${incident.id}`}
+              href={incident.resident_checkin_url || `/checkin/${incident.id}`}
               target="_blank"
               rel="noreferrer"
               className="mono micro"

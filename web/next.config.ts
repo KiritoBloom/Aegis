@@ -10,15 +10,42 @@ import type { NextConfig } from "next";
  */
 const backend = process.env.AEGIS_API ?? "http://127.0.0.1:8000";
 
+/**
+ * Conservative headers only.
+ *
+ * The CSP deliberately carries no script/style/connect directives: Next injects
+ * inline bootstrap scripts, and a restrictive default-src would break them.
+ * `frame-ancestors` gives the same clickjacking protection as X-Frame-Options
+ * without touching how the app loads. Camera and microphone stay enabled for
+ * this origin because the setup and live pages use them.
+ */
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "X-Frame-Options", value: "DENY" },
+  {
+    key: "Content-Security-Policy",
+    value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  },
+  {
+    key: "Permissions-Policy",
+    value: "camera=(self), microphone=(self), geolocation=(), payment=(), usb=()",
+  },
+];
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
+  poweredByHeader: false,
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${backend}/api/:path*` },
       { source: "/media/:path*", destination: `${backend}/media/:path*` },
       { source: "/health", destination: `${backend}/health` },
     ];
+  },
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
   },
 };
 

@@ -430,13 +430,21 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
         setBlockedReason(readiness.reason);
         return;
       }
+      try {
+        // Consent is a precondition for watch mode, not a detail we can ignore.
+        await send("/api/privacy/resume", {});
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : "Monitoring cannot resume.";
+        setBlockedReason(reason);
+        addLogForAll("System", "warn", "Watching blocked", reason);
+        return;
+      }
       if (!sessionRef.current) sessionRef.current = sessionId();
       setActiveState(true);
       setLive(Object.fromEntries(current.feeds.map((feed) => [
         feed.id, { status: "idle" as const, receivedAt: Date.now() },
       ])));
       addLogForAll("System", "good", "Watching started", "Local tracking is active.");
-      try { await send("/api/privacy/resume", {}); } catch { /* local demo may not need it */ }
       await startCameras();
     } else {
       setActiveState(false);

@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -54,7 +55,29 @@ HOUSEHOLD = "hh_demo"
 # answer, short enough that silence still reaches a phone before phase 2.
 CHECKIN_TIMEOUT_S = float(os.environ.get("CHECKIN_TIMEOUT_S", "15"))
 CHECKIN_TTS = os.environ.get("CHECKIN_TTS", "on").lower() != "off"
+# A wall candidate is held as `verifying`, which the enrichment worker does not
+# see. SAM and Muse get this long to answer; after that the local floor wins so
+# a verifier that died cannot leave a real fall with no family contact at all.
+WALL_VERIFICATION_DEADLINE_S = float(os.environ.get("WALL_VERIFICATION_DEADLINE_S", "180"))
+WALL_VERIFICATION_SWEEP_S = float(os.environ.get("WALL_VERIFICATION_SWEEP_S", "5"))
+# Rows created before the deadline column existed are judged on age instead.
+WALL_VERIFICATION_LEGACY_AGE_S = float(
+    os.environ.get("WALL_VERIFICATION_LEGACY_AGE_S", "300"))
 VISITOR_STATE_KEY = "expected_visitor"
+# Incident ids become directory names and signed form fields. Keep them to a
+# conservative ASCII shape so a caller cannot traverse out of MEDIA_ROOT.
+_INCIDENT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
+MAX_CHECKIN_BYTES = 10 * 1024 * 1024
+MAX_AUDIO_BYTES = 5 * 1024 * 1024
+MAX_CLIP_BYTES = 25 * 1024 * 1024
+MAX_STILL_BYTES = 4 * 1024 * 1024
+
+
+def valid_incident_id(value: str) -> str:
+    value = str(value or "").strip()
+    if not _INCIDENT_ID_RE.fullmatch(value):
+        raise HTTPException(422, "invalid incident id")
+    return value
 # The edge sends a heartbeat every 10s. Three missed intervals is the point at
 # which "online" stops being a fact and starts being a hope.
 HEARTBEAT_GRACE_S = 30
@@ -83,7 +106,7 @@ app.include_router(session_router)
 
 
 PUBLIC_PATHS = {"/api/health", "/api/push/public-key"}
-PUBLIC_PREFIXES = ("/api/session", "/api/ingest/", "/media/", "/health")
+PUBLIC_PREFIXES = ("/api/session", "/api/ingest/", "/api/resident/", "/media/", "/health")
 
 
 def session_gate_open(path: str, cookie: str | None = None) -> bool:
@@ -567,6 +590,15 @@ def verify_edge(timestamp: str | None, signature: str | None, body: bytes) -> No
         raise HTTPException(401, "bad signature")
 
 
+def verify_upload(timestamp: str | None, signature: str | None,
+                  incident_id: str, digest: str,
+                  supplied_digest: str | None) -> None:
+    """A clip or WAV signature covers the bytes, not just the incident id."""
+    if EDGE_TOKEN and supplied_digest != digest:
+        raise HTTPException(401, "upload digest missing or wrong")
+    verify_edge(timestamp, signature, incident_id.encode() + b"." + digest.encode())
+
+
 # --------------------------------------------------------------------------
 # ingest
 # --------------------------------------------------------------------------
@@ -596,6 +628,7 @@ async def ingest_incident(request: Request,
     body = await request.body()
     verify_edge(x_edge_timestamp, x_edge_signature, body)
     payload = IncidentIn(**json.loads(body))
+    payload.incident_id = valid_incident_id(payload.incident_id)
     if payload.type == "unexpected_presence" and visitor_expected_now():
         payload.sensors = {**(payload.sensors or {}), "expected_visitor": True}
 
@@ -649,9 +682,9 @@ async def ingest_audio(
     source: str = Form("live"),
     x_edge_timestamp: str | None = Header(None),
     x_edge_signature: str | None = Header(None),
+    x_edge_content_sha256: str | None = Header(None),
 ):
     """Accept an event-gated WAV, transcribe it, and delete the audio."""
-    verify_edge(x_edge_timestamp, x_edge_signature, incident_id.encode())
     if privacy.paused_state().get("paused"):
         # Pause wins before the bytes are read; nothing is transcribed.
         return {"ok": True, "paused": True, "id": incident_id}
@@ -659,6 +692,13 @@ async def ingest_audio(
         raise HTTPException(422, "only help_call is accepted on this endpoint")
     if not incident_id:
         incident_id = f"aud_{uuid.uuid4().hex[:16]}"
+    incident_id = valid_incident_id(incident_id)
+    body = await audio.read(MAX_AUDIO_BYTES + 1)
+    if len(body) > MAX_AUDIO_BYTES:
+        raise HTTPException(413, "audio is too large")
+    digest = hashlib.sha256(b"audio\0" + body).hexdigest()
+    verify_upload(x_edge_timestamp, x_edge_signature, incident_id, digest,
+                  x_edge_content_sha256)
     try:
         sensors_obj = json.loads(sensors or "{}")
         track_obj = json.loads(track or "{}")
@@ -670,7 +710,6 @@ async def ingest_audio(
     work = MEDIA_ROOT / incident_id
     work.mkdir(parents=True, exist_ok=True)
     raw = work / "event_audio"
-    body = await audio.read()
     raw.write_bytes(body)
     try:
         report, wav = await asyncio.to_thread(audio_util.analyse, raw, work, hint)
@@ -751,25 +790,39 @@ async def ingest_audio(
 async def ingest_clip(incident_id: str = Form(""), clip: UploadFile | None = File(None),
                       still: UploadFile | None = File(None), thumb: UploadFile | None = File(None),
                       x_edge_timestamp: str | None = Header(None),
-                      x_edge_signature: str | None = Header(None)):
-    verify_edge(x_edge_timestamp, x_edge_signature, incident_id.encode())
+                      x_edge_signature: str | None = Header(None),
+                      x_edge_content_sha256: str | None = Header(None)):
     if privacy.paused_state().get("paused"):
         # A clip that arrives after a pause is not written to disk.
         return {"ok": True, "paused": True}
     if not incident_id or clip is None:
         raise HTTPException(422, "incident_id and clip are required")
+    incident_id = valid_incident_id(incident_id)
+    clip_bytes = await clip.read(MAX_CLIP_BYTES + 1)
+    if len(clip_bytes) > MAX_CLIP_BYTES:
+        raise HTTPException(413, "clip.mp4 is too large")
+    still_bytes = await still.read(MAX_STILL_BYTES + 1) if still else b""
+    if len(still_bytes) > MAX_STILL_BYTES:
+        raise HTTPException(413, "still.jpg is too large")
+    thumb_bytes = await thumb.read(MAX_STILL_BYTES + 1) if thumb else b""
+    if len(thumb_bytes) > MAX_STILL_BYTES:
+        raise HTTPException(413, "thumb.jpg is too large")
+    digest = hashlib.sha256(
+        b"clip\0" + clip_bytes + b"still\0" + still_bytes
+        + b"thumb\0" + thumb_bytes
+    ).hexdigest()
+    verify_upload(x_edge_timestamp, x_edge_signature, incident_id, digest,
+                  x_edge_content_sha256)
     out = MEDIA_ROOT / incident_id
     out.mkdir(parents=True, exist_ok=True)
-    size = 0
     paths: dict[str, str] = {}
-    for name, upload in (("clip.mp4", clip), ("still.jpg", still), ("thumb.jpg", thumb)):
-        if upload is None:
+    for name, data in (("clip.mp4", clip_bytes), ("still.jpg", still_bytes),
+                       ("thumb.jpg", thumb_bytes)):
+        if not data:
             continue
-        data = await upload.read()
         (out / name).write_bytes(data)
         paths[name] = str(out / name)
-        if name == "clip.mp4":
-            size = len(data)
+    size = len(clip_bytes)
     db.attach_clip(incident_id, paths.get("clip.mp4", ""), paths.get("still.jpg"),
                    paths.get("thumb.jpg"), size)
     await broadcast({"type": "incident.clip", "id": incident_id})
@@ -835,6 +888,8 @@ def with_media(inc: dict) -> dict:
         inc["annotated_url"] = auth.media_url(inc["id"], "annotated.mp4")
     if (inc_dir / "redacted.mp4").exists():
         inc["redacted_url"] = auth.media_url(inc["id"], "redacted.mp4")
+    if inc.get("checkin_status") == "asking":
+        inc["resident_checkin_url"] = auth.checkin_url(inc["id"])
     # The UI asks "is there a clip to play?", not "where is it on disk".
     inc["has_clip"] = bool(inc.get("clip_url") or inc.get("annotated_url")
                            or inc.get("redacted_url"))
@@ -1268,6 +1323,8 @@ async def privacy_pause(body: dict | None = None):
 
 @app.post("/api/privacy/resume")
 async def privacy_resume():
+    if not privacy.consent_state().get("consented"):
+        raise HTTPException(403, "resident consent is required before monitoring can resume")
     out = privacy.resume()
     await broadcast({"type": "privacy.resumed", **out})
     return out
@@ -1294,17 +1351,68 @@ def maintenance_sweep():
     return privacy.sweep_retention()
 
 
+def _resident_checkin_payload(incident: dict) -> dict:
+    """The kiosk sees only the question, its deadline and its answer."""
+    folder = MEDIA_ROOT / incident["id"]
+    audio = None
+    if (folder / "checkin_prompt.wav").exists():
+        audio = auth.media_url(incident["id"], "checkin_prompt.wav")
+    return {
+        "id": incident["id"],
+        "type": incident.get("type"),
+        "status": incident.get("status"),
+        "checkin_status": incident.get("checkin_status"),
+        "checkin_prompt": incident.get("checkin_prompt"),
+        "checkin_due_at": incident.get("checkin_due_at"),
+        "checkin_timeout_s": incident.get("checkin_timeout_s"),
+        "checkin_audio_url": audio,
+        "local_time": incident.get("local_time"),
+        "created_at": incident.get("created_at"),
+        "checkin": db.latest_checkin(incident["id"]),
+    }
+
+
+@app.get("/api/resident/checkin/{incident_id}")
+def resident_checkin(incident_id: str, t: str = ""):
+    incident_id = valid_incident_id(incident_id)
+    if not auth.checkin_ok(incident_id, t):
+        raise HTTPException(403, "this resident link is invalid or expired")
+    incident = db.get_incident(incident_id)
+    if not incident:
+        raise HTTPException(404, "unknown incident")
+    return _resident_checkin_payload(incident)
+
+
+@app.post("/api/resident/checkin/{incident_id}")
+async def resident_checkin_answer(incident_id: str, request: Request, t: str = ""):
+    incident_id = valid_incident_id(incident_id)
+    if not auth.checkin_ok(incident_id, t):
+        raise HTTPException(403, "this resident link is invalid or expired")
+    return await checkin(incident_id, request)
+
+
 @app.post("/api/incidents/{incident_id}/checkin")
 async def checkin(incident_id: str, request: Request):
     """Resident-facing spoken check-in endpoint. The transcript is untrusted input."""
+    incident_id = valid_incident_id(incident_id)
     inc = db.get_incident(incident_id)
     if not inc:
         raise HTTPException(404, "unknown incident")
+    if privacy.paused_state().get("paused"):
+        raise HTTPException(423, "monitoring is paused")
+    if inc.get("status") in ("resolved", "cancelled"):
+        raise HTTPException(409, "this incident is closed")
     was_pending = inc.get("checkin_status") == "asking"
+    if inc.get("checkin_status") in ("answered", "no_answer", "cancelled", "failed"):
+        raise HTTPException(409, "this check-in is closed")
     if not db.notifications_for(incident_id) and not was_pending:
         raise HTTPException(409, "no alert has been sent for this incident")
-
+    length = request.headers.get("content-length")
+    if length and int(length) > MAX_CHECKIN_BYTES:
+        raise HTTPException(413, "check-in answer is too large")
     raw = await request.body()
+    if len(raw) > MAX_CHECKIN_BYTES:
+        raise HTTPException(413, "check-in answer is too large")
     content_type = request.headers.get("content-type", "")
     is_text = "application/json" in content_type
     audio_bytes = 0
@@ -1745,6 +1853,7 @@ def checkins():
 
 @app.get("/media/{incident_id}/{name}")
 def media(incident_id: str, name: str, request: Request):
+    incident_id = valid_incident_id(incident_id)
     if name not in ("clip.mp4", "still.jpg", "thumb.jpg", "redacted.jpg",
                     "sam_input.mp4", "annotated.mp4", "redacted.mp4",
                     "checkin_prompt.wav"):
@@ -1895,8 +2004,13 @@ async def _create_wall_incident(
     Status `verifying` is deliberately not in the worker's queue. The row exists
     so the evidence clip, SAM features and ledger have a stable id; phase 1 and
     the check-in are released only after SAM and Muse corroborate the finding.
+    The deadline is stored with the row so the sweep can recover it after a
+    restart, when no verification task is left to finish the job.
     """
-    packet = {**packet, "status": "verifying"}
+    due_at = packet.get("verification_due_at")
+    if due_at is None:
+        due_at = time.time() + WALL_VERIFICATION_DEADLINE_S
+    packet = {**packet, "status": "verifying", "verification_due_at": float(due_at)}
     db.upsert_incident(packet)
     if clip is not None:
         clip_path, still_path, thumb_path = clip
@@ -1918,31 +2032,50 @@ async def _release_wall_incident(incident_id: str, verification: str,
                                 decision: policy.Decision | None = None,
                                 trace: list[dict] | None = None,
                                 violations: list[str] | None = None,
-                                latency: int = 0) -> None:
+                                latency: int = 0) -> bool:
     """Verification passed (or failed open): this is the first family contact.
 
     When the evidence agent produced a decision, that verified decision is the
     family alert. There is no template phase 1 followed by a second model pass:
     the agent already did the investigation before this point.
+
+    Returns whether this call won the release. The sweep and the original
+    verification task can race; the atomic `verifying` -> `releasing` transition
+    ensures only one of them can page.
     """
     incident = db.get_incident(incident_id)
     if not incident:
-        return
+        return False
     if decision is not None:
         decision = policy.ensure_fall_copy(decision, incident.get("type", ""), PROFILE)
-    db.update_incident_sensors(incident_id, {"verification": verification})
     if incident.get("status") in ("resolved", "cancelled"):
         # The resident was already back up while SAM/Muse were still working.
         # Keep the verification record, but a stale page must not reach a phone.
+        sensors = incident.get("sensors") or {}
+        if not (isinstance(sensors, dict)
+                and sensors.get("verification") == "rejected"):
+            db.update_incident_sensors(incident_id, {"verification": verification})
         log.info("wall incident %s resolved during verification; not released", incident_id)
-        return
+        return False
+    if not db.claim_verification_release(incident_id):
+        # The sweeper (or a previous attempt) already owns this release. A late
+        # agent decision must not become a second family page.
+        log.info("wall incident %s already released or closed; release skipped", incident_id)
+        return False
+    incident = db.get_incident(incident_id) or incident
+    db.update_incident_sensors(incident_id, {"verification": verification})
+    if incident.get("status") in ("resolved", "cancelled"):
+        # A recovery or a late rejection closed the row between the claim and
+        # the re-read. Keep it closed.
+        log.info("wall incident %s closed during release; not released", incident_id)
+        return False
     if privacy.paused_state().get("paused"):
         db.set_status(incident_id, "resolved")
         db.record_event(incident_id, incident.get("camera_id"), "verification_suppressed",
                         incident.get("zone_id"), db.now(), "info", suppressed=True,
                         reason="monitoring_paused", source="wall")
         log.info("wall incident %s held: monitoring was paused before release", incident_id)
-        return
+        return False
     if trace:
         db.attach_agent(incident_id, trace)
     await broadcast({"type": "incident.created", "id": incident_id,
@@ -1973,7 +2106,7 @@ async def _release_wall_incident(incident_id: str, verification: str,
                          "wall": True, "verified": True})
         asyncio.create_task(start_checkin(incident_id))
         log.info("wall incident %s released with verified decision (%s)", incident_id, verification)
-        return
+        return True
     # Verification unavailable: fall back to the deterministic floor/template.
     try:
         await phase_one(incident_id)
@@ -1987,6 +2120,7 @@ async def _release_wall_incident(incident_id: str, verification: str,
         db.set_status(incident_id, "detected")
         asyncio.create_task(start_checkin(incident_id))
     log.info("wall incident %s released without verification (%s)", incident_id, verification)
+    return True
 
 
 async def _reject_wall_incident(incident_id: str, reason: str) -> None:
@@ -1994,11 +2128,57 @@ async def _reject_wall_incident(incident_id: str, reason: str) -> None:
     incident = db.get_incident(incident_id)
     if not incident:
         return
-    db.set_status(incident_id, "resolved")
+    if not db.reject_verifying_incident(incident_id, reason):
+        # The sweep already released this candidate (or recovery closed it).
+        # Keep the rejection in the event log, but do not rewrite the outcome.
+        db.record_event(incident_id, incident.get("camera_id"), incident.get("type"),
+                        incident.get("zone_id"), db.now(), "info", suppressed=True,
+                        reason=f"verification_rejected_late:{reason}"[:120], source="wall")
+        log.info("wall incident %s already released; rejection kept for audit: %s",
+                 incident_id, reason[:120])
+        return
     db.record_event(incident_id, incident.get("camera_id"), incident.get("type"),
                     incident.get("zone_id"), db.now(), "info", suppressed=True,
                     reason=f"verification_rejected:{reason}"[:120], source="wall")
     log.info("wall incident %s rejected before escalation: %s", incident_id, reason[:120])
+
+
+async def sweep_stale_verifications(now_epoch: float | None = None,
+                                    limit: int = 10) -> list[str]:
+    """Fail open on held wall candidates whose verifier is gone.
+
+    `verifying` is not in the worker queue, so without this sweep an API
+    restart between "a fall was seen" and "SAM and Muse answered" would strand
+    the row forever: no family alert, no check-in, no escalation. The release
+    goes through the normal wall path, and its atomic claim makes a later
+    completion of the original verification task a no-op.
+    """
+    now_epoch = time.time() if now_epoch is None else now_epoch
+    released: list[str] = []
+    for incident in db.due_verifications(
+            now_epoch, WALL_VERIFICATION_LEGACY_AGE_S, limit):
+        if await _release_wall_incident(
+                incident["id"], "verification_timeout_local_floor"):
+            released.append(incident["id"])
+            db.record_event(incident["id"], incident.get("camera_id"),
+                            incident.get("type") or "fall_suspected",
+                            incident.get("zone_id"), db.now(),
+                            incident.get("severity") or "urgent",
+                            suppressed=False, reason="verification_deadline",
+                            source="wall")
+            log.warning("wall incident %s verification deadline passed; "
+                        "released on the local floor", incident["id"])
+    return released
+
+
+async def verification_sweep_loop() -> None:
+    """The deadline belongs to the row, not to the task that happened to hold it."""
+    while True:
+        try:
+            await sweep_stale_verifications()
+        except Exception as exc:  # noqa: BLE001
+            log.exception("verification sweep error: %s", exc)
+        await asyncio.sleep(WALL_VERIFICATION_SWEEP_S)
 
 
 async def _collect_wall_evidence(session: str, feed_id: str,
@@ -2283,6 +2463,7 @@ async def ingest_recovery(request: Request,
     body = await request.body()
     verify_edge(x_edge_timestamp, x_edge_signature, body)
     payload = RecoveryIn(**json.loads(body))
+    payload.incident_id = valid_incident_id(payload.incident_id)
     out = apply_resident_recovery(payload.incident_id, "edge")
     if out.get("changed"):
         await broadcast({"type": "incident.recovered", "id": payload.incident_id,
@@ -2916,6 +3097,9 @@ async def startup() -> None:
     # notification rows and the check-in are one ordering problem, and splitting
     # them across processes would make "no answer" fight the worker loop.
     asyncio.create_task(checkin_loop())
+    # A held wall candidate is invisible to the worker. Sweeping here (and
+    # every few seconds after) is what makes its deadline survive a restart.
+    asyncio.create_task(verification_sweep_loop())
     asyncio.create_task(memory_loop())
     _load_profile()
     # The wall's first frame should not be the request that loads YOLO and pose.

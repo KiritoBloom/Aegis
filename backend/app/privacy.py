@@ -179,6 +179,10 @@ def delete_everything(confirm: str) -> dict:
     except Exception:  # noqa: BLE001
         pass
 
+    # A delete is also a stop: re-inserting a paused marker after clearing the
+    # tables prevents the browser from silently recreating history on the next
+    # tick. Resuming then requires fresh consent.
+    pause("everything deleted", "resident")
     log.warning("deleted everything: %s rows, %s media dirs", sum(rows.values()), media["dirs_removed"])
     return {
         "deleted": True,
@@ -227,16 +231,17 @@ def sweep_retention() -> dict:
             if (datetime.now(timezone.utc) - created).total_seconds() > seconds:
                 conn.execute("UPDATE outbound_requests SET bytes=0 WHERE id=?", (r["id"],))
                 expired += 1
-    if removed_dirs or expired:
-        log.info("retention sweep: %d media dirs, %d ledger rows expired",
-                 removed_dirs, expired)
+    metadata = db.purge_metadata(90)
+    if removed_dirs or expired or any(metadata.values()):
+        log.info("retention sweep: %d media dirs, %d ledger rows, metadata %s",
+                 removed_dirs, expired, metadata)
     return {"media_dirs_removed": removed_dirs, "ledger_rows_expired": expired,
-            "local_days": LOCAL_RETENTION_DAYS}
+            "local_days": LOCAL_RETENTION_DAYS, "metadata": metadata}
 
 
 def what_was_recorded_today() -> dict:
     """The resident's own view: what happened, never the footage."""
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now().astimezone().date().isoformat()
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT type, zone_id, ts, suppressed FROM events WHERE ts LIKE ?"
