@@ -89,6 +89,7 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   const feedStateRef = useRef<Record<string, { started: boolean; persons: number; posture: string; objects: string; alertId: string | null; lastPosture: number; lastHeartbeat: number }>>({});
   const verificationRef = useRef<Record<string, boolean>>({});
   const seenIncidentsRef = useRef<Record<string, boolean>>({});
+  const endedRef = useRef<Record<string, boolean>>({});
   const activeRef = useRef(false);
 
   const resident = setup ? primaryOccupant(setup) : null;
@@ -246,12 +247,17 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   const noteVerification = useCallback((feed: ConsoleFeed, alert: WallAlert) => {
     const status = alert.verification?.status;
     if (!status) return;
-    const key = `${alert.id}:${status}`;
+    const stage = alert.verification?.stage || "";
+    const reason = alert.verification?.reason || "";
+    const key = `${alert.id}:${status}:${stage}:${reason}`;
     if (verificationRef.current[key]) return;
     verificationRef.current[key] = true;
-    const reason = alert.verification?.reason || "";
-    if (status === "verifying") {
-      addLog(feed.id, "Model", "info", "SAM + Muse are checking the alert", reason || "No family alert has been sent yet.");
+    if (status === "verifying" || status === "pending") {
+      const message = stage === "sam" ? "Evidence clip collected · SAM is tracking"
+        : stage === "muse" ? "SAM finished · Muse is deciding"
+          : "Collecting the evidence clip";
+      addLog(feed.id, "Model", "info", message,
+        reason || "No family alert has been sent yet.");
     } else if (status === "verified") {
       addLog(feed.id, "Alert", "alert", "Verified alert released", reason || "The family alert was released after corroboration.");
     } else if (status === "rejected") {
@@ -260,6 +266,8 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
     } else if (status === "unavailable") {
       addLog(feed.id, "System", "alert", "Verification unavailable", reason || "Escalated on the local floor.");
       toast("alert", "Verification unavailable", `${feed.label} · local alert escalated.`);
+    } else if (status === "recovered") {
+      addLog(feed.id, "Alert", "good", "Verification cleared", reason || "The resident stood up.");
     }
   }, [addLog, toast]);
 
@@ -337,6 +345,31 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
         await sleep(280, signal);
         continue;
       }
+      if (video.ended) {
+        if (!video.loop) {
+          if (!endedRef.current[feed.id]) {
+            endedRef.current[feed.id] = true;
+            setLive((prev) => ({
+              ...prev,
+              [feed.id]: {
+                ...(prev[feed.id] ?? { status: "ended" }),
+                status: "ended", error: undefined, receivedAt: Date.now(),
+              },
+            }));
+            addLog(feed.id, "System", "info", "Recording finished",
+              "Loop is off for this feed. Enable Loop in setup to replay it.");
+          }
+          await sleep(400, signal);
+          continue;
+        }
+        // Loop was switched on while the recording was already at its end.
+        endedRef.current[feed.id] = false;
+        video.currentTime = 0;
+        await video.play().catch(() => {});
+        await sleep(200, signal);
+        continue;
+      }
+      endedRef.current[feed.id] = false;
       if (video.paused) {
         // Activation is a user gesture; muted playback should be allowed. If
         // the browser suspended an offscreen element, nudge it back to life.

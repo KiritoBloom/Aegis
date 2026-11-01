@@ -37,7 +37,7 @@ export default function LogsPage() {
       label: string;
       location: string;
       entries: LogEntry[];
-      status: "idle" | "watching" | "error" | null;
+      status: "idle" | "watching" | "ended" | "error" | null;
     }[] = feeds.map((feed) => ({
       id: feed.id,
       label: feed.name || feed.label,

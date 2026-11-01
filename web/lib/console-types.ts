@@ -33,14 +33,25 @@ export type WallAlert = {
   severity?: "alert" | "warn";
   active: boolean;
   evidence?: { lying_for_s?: number; support_surface?: string | null; person_count?: number };
-  verification?: { status?: string; reason?: string; escalated?: boolean };
+  verification?: {
+    status?: string;
+    stage?: string;
+    reason?: string;
+    escalated?: boolean;
+    started_at?: number;
+    updated_at?: string;
+    clip_seconds?: number;
+    sam_person_count?: number;
+    sam_seen?: boolean;
+    confidence?: number;
+  };
   recovered?: boolean;
 };
 
 export type FeedSource = { url?: string; stream?: MediaStream; error?: string };
 export type LiveFeed = {
   frame?: WallFrame;
-  status: "idle" | "watching" | "error";
+  status: "idle" | "watching" | "ended" | "error";
   error?: string;
   receivedAt?: number;
 };

@@ -18,13 +18,16 @@ function timeOf(iso: string | null | undefined): string {
   return d.toLocaleTimeString("en-GB", { hour12: false });
 }
 
-function feedState(active: boolean, error: string | undefined, frame: WallFrame | null | undefined) {
+function feedState(active: boolean, error: string | undefined, frame: WallFrame | null | undefined,
+                   liveStatus?: "idle" | "watching" | "ended" | "error") {
   if (!active) return { tone: "", label: "Standby", urgent: false, alert: false };
+  if (liveStatus === "ended") return { tone: "", label: "Recording ended", urgent: false, alert: false };
   if (error) return { tone: "error", label: "Link lost", urgent: false, alert: false };
   const status = frame?.alert?.verification?.status;
   if (status === "verified") return { tone: "urgent", label: "Family alerted", urgent: true, alert: true };
   if (status === "unavailable") return { tone: "urgent", label: "Local alert sent", urgent: true, alert: true };
   if (status === "rejected") return { tone: "", label: "Not corroborated", urgent: false, alert: false };
+  if (status === "recovered") return { tone: "", label: "Recovered", urgent: false, alert: false };
   if (status === "verifying" || status === "pending") return { tone: "alert", label: "Verifying", urgent: false, alert: true };
   if (frame?.alert?.active) return { tone: "alert", label: "Local alert", urgent: false, alert: true };
   if (frame) return { tone: "live", label: "Tracking", urgent: false, alert: false };
@@ -34,7 +37,7 @@ function feedState(active: boolean, error: string | undefined, frame: WallFrame 
 export default function ConsoleHome() {
   const { setup, resident, active, setActive, feeds, sources, live, logs } = useConsole();
   const [focusId, setFocusId] = useState<string | null>(null);
-  const now = useNow(3000);
+  const now = useNow(1000);
 
   const residentName = resident?.name?.trim() || "Resident";
   const focused = feeds.find((feed) => feed.id === focusId) ?? null;
@@ -100,12 +103,12 @@ export default function ConsoleHome() {
             const error = feedSource?.error || state?.error;
             const receivedAt = state?.receivedAt;
             const stalled = active && receivedAt != null
-              && now - receivedAt > 12000 && !error;
+              && state?.status !== "ended" && now - receivedAt > 12000 && !error;
             const status = active && !mapped
               ? { tone: "", label: "Mapping required", urgent: false, alert: false }
               : stalled
                 ? { tone: "alert", label: "Analysis stalled", urgent: false, alert: true }
-                : feedState(active, error, data);
+                : feedState(active, error, data, state?.status);
             const person = data?.persons?.find((item) => item.primary) ?? data?.persons?.[0];
             return (
               <button
@@ -198,6 +201,8 @@ export default function ConsoleHome() {
           frame={frame}
           source={source}
           logs={focusedLogs}
+          liveStatus={live[focused.id]?.status}
+          now={now}
           onClose={() => setFocusId(null)}
         />
       ) : null}
@@ -210,16 +215,28 @@ function FocusView({
   frame,
   source,
   logs,
+  liveStatus,
+  now,
   onClose,
 }: {
   feed: ConsoleFeed;
   frame: WallFrame | null;
   source: FeedSource | undefined;
   logs: LogEntry[];
+  liveStatus?: "idle" | "watching" | "ended" | "error";
+  now: number;
   onClose: () => void;
 }) {
-  const state = feedState(true, source?.error, frame);
+  const state = feedState(true, source?.error, frame, liveStatus);
   const person = frame?.persons?.find((item) => item.primary) ?? frame?.persons?.[0];
+  const verification = frame?.alert?.verification;
+  const verifying = verification?.status === "verifying" || verification?.status === "pending";
+  const startedAt = typeof verification?.started_at === "number" ? verification.started_at : null;
+  const elapsed = startedAt != null ? Math.max(0, Math.floor(now / 1000 - startedAt)) : null;
+  const stage = verification?.stage === "sam" ? "SAM tracking"
+    : verification?.stage === "muse" ? "Muse deciding"
+      : verification?.stage === "clip" ? "Collecting clip"
+        : "Checking";
   return (
     <div className={styles.focus} role="dialog" aria-modal="true" aria-labelledby="focus-title">
       <div className={styles.focusStage}>
@@ -249,6 +266,12 @@ function FocusView({
           <div className={shared.focusFact}><span>Frame rate</span><strong>{frame?.tracking?.fps ?? "—"} fps</strong></div>
           <div className={shared.focusFact}><span>Last frame</span><strong>{timeOf(frame?.at)}</strong></div>
           <div className={shared.focusFact}><span>Down for</span><strong>{frame?.tracking?.lying_for_s ? `${Math.round(frame.tracking.lying_for_s)}s` : "—"}</strong></div>
+          {verifying ? (
+            <div className={shared.focusFact}>
+              <span>Verification</span>
+              <strong>{stage}{elapsed != null ? ` · ${elapsed}s` : ""}</strong>
+            </div>
+          ) : null}
         </div>
         <div className={styles.focusLogs}>
           <div className={styles.focusLogsHead}>

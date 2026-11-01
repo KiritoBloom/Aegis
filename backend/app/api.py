@@ -64,6 +64,10 @@ WALL_VERIFICATION_SWEEP_S = float(os.environ.get("WALL_VERIFICATION_SWEEP_S", "5
 # claim stores a lease so a process that dies between them is retried by the
 # sweep. Long enough that a slow webhook is never raced by its own recovery.
 WALL_RELEASE_LEASE_S = float(os.environ.get("WALL_RELEASE_LEASE_S", "120"))
+# Bounded so a slow model shows a terminal state in the console instead of a
+# spinner that appears stuck. SAM is normally ~10 s; the agent is tool-bounded.
+WALL_SAM_TIMEOUT_S = float(os.environ.get("WALL_SAM_TIMEOUT_S", "20"))
+WALL_AGENT_TIMEOUT_S = float(os.environ.get("WALL_AGENT_TIMEOUT_S", "50"))
 # The edge heartbeats every 10 s. Three missed beats is a lost camera, not a
 # jittery network. The watchdog waits one interval after boot so an API restart
 # does not page for cameras that reconnect on their first beat.
@@ -2494,11 +2498,18 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
     already urgent, and dropping a real fall because a cloud model was slow is
     worse than a false alert. The wall says which path happened.
     """
+    started_at = time.time()
+
     async def publish(status: str, **data) -> None:
         # Arming the wall cooldown is only correct while the incident is live.
         # A late model verdict for a recovered resident must not silence the
         # feed for the next ten minutes.
         current = db.get_incident(incident_id) or {}
+        if (current.get("status") in ("resolved", "cancelled")
+                and status in ("verified", "rejected", "unavailable")):
+            status = "recovered"
+            data["reason"] = "The resident stood up before verification finished."
+            data["escalated"] = False
         arm = current.get("status") not in ("resolved", "cancelled", "releasing")
         alert = wall.set_verification(session, feed_id, alert_id, status=status,
                                       arm_cooldown=arm, **data)
@@ -2515,7 +2526,7 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
             await publish("rejected", escalated=False,
                           reason="Monitoring is paused; the candidate was discarded.")
             return
-        await publish("verifying",
+        await publish("verifying", stage="clip", started_at=started_at,
                       reason="Collecting a 5–7 second evidence clip, then checking it with SAM and Muse. No family alert has been sent.",
                       escalated=False)
         if clip is None:
@@ -2529,6 +2540,11 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
         if clip is None:
             raise MetaError("no evidence clip")
         clip_seconds = await asyncio.to_thread(clip_util.duration_s, clip[0])
+        if privacy.paused_state().get("paused"):
+            db.set_status(incident_id, "resolved")
+            await publish("recovered", stage="paused", escalated=False,
+                          reason="Monitoring was paused before SAM was called.")
+            return
         live = wall.latest_alert(session, feed_id) or {}
         live_evidence = live.get("evidence") or {}
         # The trigger may have opened at one second; by the time the clip is
@@ -2536,20 +2552,25 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
         # the live duration, not the trigger instant.
         observed_lying = max(float(live_evidence.get("lying_for_s") or 0),
                              float((packet.get("sensors") or {}).get("no_recovery_s") or 0))
-        await publish("verifying",
+        await publish("verifying", stage="sam",
                       reason="Evidence clip collected. SAM is tracking it; Muse is gathering household evidence before deciding.",
                       clip_seconds=round(float(clip_seconds or 0), 1),
                       escalated=False)
         features = await asyncio.wait_for(
             _sam_features_for_clip(incident_id, clip[0], packet.get("track") or {}),
-            timeout=40.0,
+            timeout=WALL_SAM_TIMEOUT_S,
         )
         sam_count = int(features.get("person_count") or 0)
         sam_seen = bool(features.get("frames_present") or sam_count)
         sensors = packet.get("sensors") or {}
         floor, _ = effective_floor(packet)
         trace: list[dict] = []
-        await publish("verifying",
+        if privacy.paused_state().get("paused"):
+            db.set_status(incident_id, "resolved")
+            await publish("recovered", stage="paused", escalated=False,
+                          reason="Monitoring was paused before Muse was called.")
+            return
+        await publish("verifying", stage="muse",
                       reason="SAM tracked the clip. Muse is gathering household evidence before deciding whether any family alert is allowed.",
                       clip_seconds=round(float(clip_seconds or 0), 1),
                       sam_person_count=sam_count, sam_seen=sam_seen,
@@ -2604,7 +2625,7 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
                 log_call=_agent_logger(incident_id),
                 effort="low",
             ),
-            timeout=75.0,
+            timeout=WALL_AGENT_TIMEOUT_S,
         )
         trace = result.trace
         db.attach_agent(incident_id, trace)
@@ -2638,7 +2659,7 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
             released = await _release_wall_incident(
                 incident_id, "sam_muse_verified", decision=decision,
                 trace=trace, violations=violations, latency=result.latency_ms)
-            await publish("verified",
+            await publish("verified", stage="verified",
                           reason=reason or "SAM and household evidence support the finding.",
                           confidence=confidence, sam_person_count=sam_count,
                           sam_seen=True, clip_seconds=round(float(clip_seconds or 0), 1),
@@ -2646,19 +2667,21 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
                           escalated=released)
         else:
             await _reject_wall_incident(incident_id, reason or "agent rejected the candidate")
-            await publish("rejected",
+            await publish("rejected", stage="rejected",
                           reason=reason or "The evidence did not support the local finding.",
                           confidence=confidence, sam_person_count=sam_count,
                           sam_seen=sam_seen, clip_seconds=round(float(clip_seconds or 0), 1),
                           trace=trace, escalated=False)
     except Exception as exc:  # noqa: BLE001
-        reason = f"Verification unavailable: {type(exc).__name__}: {str(exc)[:120]}"
+        detail = str(exc).strip() or "deadline exceeded"
+        reason = f"Verification unavailable: {type(exc).__name__}: {detail[:120]}"
         released = await _release_wall_incident(
             incident_id, "verification_unavailable_local_floor")
-        await publish("unavailable", reason=reason, escalated=released,
+        await publish("unavailable", stage="unavailable", reason=reason,
+                      escalated=released,
                       trace=trace if "trace" in locals() else [])
         log.warning("wall verification unavailable for %s; escalated on local floor: %s",
-                    incident_id, exc)
+                    incident_id, reason)
 
 
 def apply_resident_recovery(incident_id: str, source: str = "edge") -> dict:
@@ -2773,6 +2796,20 @@ async def wall_frame(session: str = Form(...), feed: str = Form(...),
         incident_id = resolved["incident_id"]
         closed = apply_resident_recovery(incident_id, "wall")
         if closed.get("changed"):
+            alert_id = str(resolved.get("id") or "")
+            if alert_id:
+                # Stop the spinner the moment recovery is observed; the
+                # verifier may still be waiting on a cloud call.
+                recovered = wall.set_verification(
+                    session, result["feed_id"], alert_id,
+                    status="recovered", stage="recovered", escalated=False,
+                    reason="The resident stood up before verification finished.",
+                )
+                if recovered is not None:
+                    await broadcast({"type": "wall.verification",
+                                     "session": session,
+                                     "feed_id": result["feed_id"],
+                                     "alert": recovered})
             await broadcast({"type": "incident.recovered", "id": incident_id,
                              "reason": "resident_back_up"})
     return result
