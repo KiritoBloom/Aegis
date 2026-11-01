@@ -115,6 +115,87 @@ def test_late_verification_for_a_recovered_alert_does_not_arm_the_cooldown(monke
     assert second["trigger"] is not None
 
 
+def test_a_person_lost_after_an_upright_sample_is_rechecked(monkeypatch):
+    """The cheap person pass can drop a prone body; the wall must not go blind.
+
+    A feed that saw an upright person and now sees none runs one higher-input
+    recheck. If that finds a wide, low body, the normal geometry/lying rules
+    take over and raise the candidate.
+    """
+    wall.close("recheck-test")
+    calls: list[dict] = []
+
+    def upright():
+        return {"width": 640, "height": 480, "person_count": 1,
+                "persons": [{"box": [0.30, 0.20, 0.50, 0.90], "conf": 0.9,
+                             "posture": "upright", "support_surface": None,
+                             "seen_by": "pose"}],
+                "objects": [], "flags": [], "status": "person"}
+
+    def empty():
+        return {"width": 640, "height": 480, "person_count": 0,
+                "persons": [], "objects": [], "flags": ["no_person"],
+                "status": "empty"}
+
+    def lying():
+        return {"width": 640, "height": 480, "person_count": 1,
+                "persons": [{"box": [0.20, 0.75, 0.70, 0.95], "conf": 0.45,
+                             "posture": "lying", "support_surface": None,
+                             "seen_by": "yolo"}],
+                "objects": [], "flags": ["lying"], "status": "person"}
+
+    def fake(frame, objects=None, detect_objects=True, person_imgsz=None):
+        calls.append({"imgsz": person_imgsz, "detect_objects": detect_objects})
+        if person_imgsz == wall.LOST_RECHECK_IMGSZ:
+            return lying()
+        if not detect_objects or len(calls) == 1:
+            return upright()
+        return empty()
+
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", fake)
+    state = wall.FeedState({"id": "f-recheck", "name": "Bedroom", "kind": "file"})
+
+    state.process(None, 5000.0)                 # person seen, upright
+    second = state.process(None, 5000.7)        # cheap pass loses them
+    third = state.process(None, 5001.4)         # still lost on the cheap pass
+
+    assert any(c["imgsz"] == wall.LOST_RECHECK_IMGSZ for c in calls)
+    assert any(r["trigger"] is not None and r["trigger"]["kind"] == "possible_fall"
+               for r in (second, third))
+    assert third["person_count"] == 1
+    assert third["trigger"] is None or third["trigger"]["evidence"]["person_count"] == 1
+
+
+def test_the_recheck_stops_once_the_room_is_really_empty(monkeypatch):
+    wall.close("recheck-empty")
+    rechecks: list[int] = []
+    non_recheck = {"n": 0}
+
+    def fake(frame, objects=None, detect_objects=True, person_imgsz=None):
+        if person_imgsz == wall.LOST_RECHECK_IMGSZ:
+            rechecks.append(person_imgsz)
+        non_recheck["n"] += 1
+        if non_recheck["n"] == 1:
+            return {"width": 640, "height": 480, "person_count": 1,
+                    "persons": [{"box": [0.30, 0.20, 0.50, 0.90], "conf": 0.9,
+                                 "posture": "upright", "support_surface": None,
+                                 "seen_by": "pose"}],
+                    "objects": [], "flags": [], "status": "person"}
+        return {"width": 640, "height": 480, "person_count": 0,
+                "persons": [], "objects": [], "flags": ["no_person"],
+                "status": "empty"}
+
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", fake)
+    state = wall.FeedState({"id": "f-recheck-empty", "name": "Hall", "kind": "file"})
+
+    state.process(None, 6000.0)                 # person seen
+    for ts in (6000.7, 6001.4, 6006.5, 6007.2):
+        state.process(None, ts)                 # room is truly empty
+
+    assert rechecks                             # rechecked while recently seen
+    assert len(rechecks) <= 3                   # ...and stopped after the window
+
+
 def test_absence_alone_does_not_resolve_a_fall(monkeypatch):
     state = wall.FeedState({"id": "f-gone", "name": "Hall", "kind": "file"})
     monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))

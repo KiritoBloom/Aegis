@@ -1,0 +1,155 @@
+{
+  "fall_clips": 4,
+  "fall_alerts": 4,
+  "adl_clips": 0,
+  "adl_alerts": 0,
+  "results": [
+    {
+      "clip": "gmd-sub2-fall-02.mp4",
+      "frames": 252,
+      "triggers": [
+        {
+          "at_native_s": 4.53,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.57,
+          "track_id": 1,
+          "box": [
+            0.529,
+            0.822,
+            0.808,
+            1.0
+          ],
+          "distance": "far",
+          "lying_for_s": 0.0
+        }
+      ],
+      "gate": "escalate",
+      "status": "notified",
+      "dispatch_calls": [
+        {
+          "phase": 2,
+          "title": "Margaret may have fallen",
+          "severity": "urgent"
+        }
+      ],
+      "checkin_calls": [
+        "inc_gate_7a7eae6a0d"
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-10.mp4",
+      "frames": 167,
+      "triggers": [
+        {
+          "at_native_s": 4.67,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.54,
+          "track_id": 1,
+          "box": [
+            0.414,
+            0.667,
+            0.927,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ],
+      "gate": "unknown",
+      "status": "notified",
+      "dispatch_calls": [
+        {
+          "phase": 1,
+          "title": "Margaret may have fallen",
+          "severity": "urgent"
+        }
+      ],
+      "checkin_calls": [
+        "inc_gate_407f1b7cbd"
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-09.mp4",
+      "frames": 186,
+      "triggers": [
+        {
+          "at_native_s": 4.52,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 1.37,
+          "track_id": 1,
+          "box": [
+            0.118,
+            0.582,
+            0.659,
+            0.976
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.5
+        }
+      ],
+      "gate": "escalate",
+      "status": "notified",
+      "dispatch_calls": [
+        {
+          "phase": 2,
+          "title": "Margaret may have fallen",
+          "severity": "urgent"
+        }
+      ],
+      "checkin_calls": [
+        "inc_gate_8abbad02e0"
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-16.mp4",
+      "frames": 91,
+      "triggers": [
+        {
+          "at_native_s": 3.27,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.79,
+          "track_id": 3,
+          "box": [
+            0.266,
+            0.685,
+            0.703,
+            0.93
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ],
+      "gate": "escalate",
+      "status": "notified",
+      "dispatch_calls": [
+        {
+          "phase": 2,
+          "title": "Margaret may have fallen",
+          "severity": "urgent"
+        }
+      ],
+      "checkin_calls": [
+        "inc_gate_bdd8fed086"
+      ]
+    }
+  ],
+  "verified": 3,
+  "fail_open": 1,
+  "note": "Four floor falls the 320px person pass dropped, rescued by the person-lost recheck and run through the full SAM + Muse gate."
+}

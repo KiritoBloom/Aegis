@@ -230,18 +230,25 @@ def analyze_image_bytes(data: bytes) -> dict:
 
 
 def analyze_frame_array(frame, objects: list[dict] | None = None,
-                        detect_objects: bool = True) -> dict:
-    """Analyze one in-memory BGR frame; optionally reuse cached object boxes."""
+                        detect_objects: bool = True,
+                        person_imgsz: int | None = None) -> dict:
+    """Analyze one in-memory BGR frame; optionally reuse cached object boxes.
+
+    `person_imgsz` forces the person-only pass to a larger input. The wall's
+    recheck uses it after a feed that just saw a person now sees none.
+    """
     yolo, pose = _models()
     h, w = frame.shape[:2]
     with _INFER:
         return _analyze(frame, yolo, pose, w, h,
-                        cached_objects=objects, detect_objects=detect_objects)
+                        cached_objects=objects, detect_objects=detect_objects,
+                        person_imgsz=person_imgsz)
 
 
 def _analyze(frame, yolo, pose, w: int, h: int,
             cached_objects: list[dict] | None = None,
-            detect_objects: bool = True) -> dict:
+            detect_objects: bool = True,
+            person_imgsz: int | None = None) -> dict:
     yolo_people: list[dict] = []
     objects: list[dict] = []
     if detect_objects or cached_objects is None:
@@ -249,7 +256,8 @@ def _analyze(frame, yolo, pose, w: int, h: int,
     else:
         # Objects are cached, people are not: a person can enter at any time.
         objects = [dict(obj) for obj in cached_objects]
-        result = yolo.predict(frame, imgsz=320, conf=0.30, classes=[0], verbose=False)
+        result = yolo.predict(frame, imgsz=person_imgsz or 320, conf=0.30,
+                              classes=[0], verbose=False)
     if result:
         r = result[0]
         if r.boxes is not None:

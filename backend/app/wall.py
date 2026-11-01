@@ -24,6 +24,11 @@ COOLDOWN_S = 600.0
 TRACK_TTL_S = 3.0
 IOU_MATCH = 0.25
 OBJECT_EVERY_S = 5.0
+# The 320px person pass trades recall for speed, and a prone body far from the
+# camera is exactly what it drops. When a feed saw a person moments ago and now
+# sees none, one higher-resolution pass decides empty room vs. missed body.
+LOST_RECHECK_S = 6.0
+LOST_RECHECK_IMGSZ = 448
 # A repeated decoded frame is provably the same input. Reusing the previous
 # analysis is exact, not an approximation, and keeps a paused or looping feed
 # from burning both models on every upload.
@@ -147,6 +152,7 @@ class FeedState:
         self._last_objects: list[dict] = []
         self._object_cache: list[dict] = []
         self._objects_at = 0.0
+        self._person_seen_at = -1e9
         self._last_frame: np.ndarray | None = None
         self._last_det: dict | None = None
         # Alert evidence only: a short rolling buffer in memory, written to a
@@ -408,10 +414,28 @@ class FeedState:
                     objects=self._object_cache if not detect_objects else None,
                     detect_objects=detect_objects,
                 )
+                if not det.get("person_count") \
+                        and now - self._person_seen_at <= LOST_RECHECK_S:
+                    # The cheap pass lost a person the feed saw moments ago.
+                    # Re-check once at a larger input before declaring the room
+                    # empty: a prone body is what the fast pass drops, and
+                    # "upright then vanished" is exactly the blind spot a real
+                    # fall falls into.
+                    rechecked = scene.analyze_frame_array(
+                        frame,
+                        objects=self._object_cache or None,
+                        detect_objects=False,
+                        person_imgsz=LOST_RECHECK_IMGSZ,
+                    )
+                    if rechecked.get("person_count"):
+                        det = rechecked
+                        det["recheck"] = True
                 if detect_objects:
                     self._object_cache = det.get("objects") or []
                     self._objects_at = now
                 self._remember_frame(frame, det)
+            if det.get("person_count"):
+                self._person_seen_at = now
             self._last_objects = self._object_cache
             self.samples += 1
             self.seen = now

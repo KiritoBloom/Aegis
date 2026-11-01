@@ -65,9 +65,10 @@ WALL_VERIFICATION_SWEEP_S = float(os.environ.get("WALL_VERIFICATION_SWEEP_S", "5
 # sweep. Long enough that a slow webhook is never raced by its own recovery.
 WALL_RELEASE_LEASE_S = float(os.environ.get("WALL_RELEASE_LEASE_S", "120"))
 # Bounded so a slow model shows a terminal state in the console instead of a
-# spinner that appears stuck. SAM is normally ~10 s; the agent is tool-bounded.
-WALL_SAM_TIMEOUT_S = float(os.environ.get("WALL_SAM_TIMEOUT_S", "20"))
-WALL_AGENT_TIMEOUT_S = float(os.environ.get("WALL_AGENT_TIMEOUT_S", "50"))
+# spinner that appears stuck. SAM is normally ~10 s; the agent is tool-bounded
+# but makes up to five model round-trips, so it needs more room than SAM.
+WALL_SAM_TIMEOUT_S = float(os.environ.get("WALL_SAM_TIMEOUT_S", "40"))
+WALL_AGENT_TIMEOUT_S = float(os.environ.get("WALL_AGENT_TIMEOUT_S", "65"))
 # The edge heartbeats every 10 s. Three missed beats is a lost camera, not a
 # jittery network. The watchdog waits one interval after boot so an API restart
 # does not page for cameras that reconnect on their first beat.
@@ -2556,10 +2557,12 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
                       reason="Evidence clip collected. SAM is tracking it; Muse is gathering household evidence before deciding.",
                       clip_seconds=round(float(clip_seconds or 0), 1),
                       escalated=False)
+        stage = "sam"
         features = await asyncio.wait_for(
             _sam_features_for_clip(incident_id, clip[0], packet.get("track") or {}),
             timeout=WALL_SAM_TIMEOUT_S,
         )
+        stage = "muse"
         sam_count = int(features.get("person_count") or 0)
         sam_seen = bool(features.get("frames_present") or sam_count)
         sensors = packet.get("sensors") or {}
@@ -2674,7 +2677,8 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
                           trace=trace, escalated=False)
     except Exception as exc:  # noqa: BLE001
         detail = str(exc).strip() or "deadline exceeded"
-        reason = f"Verification unavailable: {type(exc).__name__}: {detail[:120]}"
+        where = f" during {stage}" if "stage" in locals() and stage else ""
+        reason = f"Verification unavailable{where}: {type(exc).__name__}: {detail[:120]}"
         released = await _release_wall_incident(
             incident_id, "verification_unavailable_local_floor")
         await publish("unavailable", stage="unavailable", reason=reason,

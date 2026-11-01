@@ -17,7 +17,9 @@ new commit; the reports record the date of their run.
 | `gate_reject_adl03.json` | The full gate rejecting an ADL candidate: zero dispatches | 2026-10-31 | live |
 | `gate_pilot.json` | Outcome of the gate for every pilot candidate (52 clips), before the bed-fall prompt change | 2026-10-31 | live |
 | `gate_targeted_after_fix.json` | The two bed-fall and five ADL candidates re-run after SAM geometry and the bed-fall prompt change | 2026-11-01 | live |
-| `fall_pilot.json` | Local candidate results for all 110 external clips at 2 fps | 2026-10-31 | local |
+| `fall_pilot.json` | Local candidate results for all 110 external clips at 2 fps (pre-recheck) | 2026-10-31 | local |
+| `fall_pilot_recheck.json` | Same corpus after the person-lost recheck: 49/57 floor-fall candidates, no new ADL candidates | 2026-11-01 | local |
+| `gate_recheck_rescued.json` | The four rescued floor falls through the full gate: 3 verified escalations, 1 fail-open | 2026-11-01 | live |
 | `fall_pilot_8fps.json` | The 12 floor-fall misses re-sampled at 8 fps | 2026-10-31 | local |
 | `corpus_manifest.json` | Source labels: 57 floor falls, 5 bed falls, 48 ADL | 2026-10-31 | local |
 

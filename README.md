@@ -170,8 +170,8 @@ description: 57 floor falls, 5 bed falls, 48 ADL clips.
 | Backend regression suite | **233 / 233 passed** | `python -m pytest -q` |
 | Web typecheck + production build | **clean** | `npx tsc --noEmit`, `npm run build` |
 | Decision fixtures against Muse Spark | see `evals/report.md` (fresh run) | `python scripts/run_evals.py --runs 1` |
-| Floor falls that produced a wall candidate | **45 / 57** at 2 fps | `evals/fall_pilot.json` |
-| Floor falls that paged the family after the full SAM + Muse gate | **45 / 57 (79%)**; all 45 candidates released, 12 had no candidate. Measured before the bed-fall prompt change; those 45 were already escalate. | `evals/gate_pilot.json` |
+| Floor falls that produced a wall candidate | **49 / 57** at 2 fps (person-lost recheck; was 45/57) | `evals/fall_pilot_recheck.json` |
+| Floor falls that paged the family after the full SAM + Muse gate | **49 / 57 (86%)**; 45 verified before the recheck, 3 of the 4 rescued verified and 1 failed open on the local floor. All 45 pre-recheck candidates were already escalate. | `evals/gate_pilot.json`, `evals/gate_recheck_rescued.json` |
 | Missed floor falls that produced a candidate at 8 fps | **3 / 12** | `evals/fall_pilot_8fps.json` |
 | ADL clips that paged the family | **2 / 48** after the bed-fall fix (2 of 5 candidates escalated, 3 rejected). Before the fix: 0 / 48. | `evals/gate_targeted_after_fix.json` |
 | Bed-fall clips that paged the family | **2 / 5** after the bed-fall fix (both candidates escalated; 3 had no candidate). Before the fix: 0 / 5. | `evals/gate_targeted_after_fix.json` |
@@ -195,13 +195,14 @@ measured rate per feed instead of claiming the backend number.
 - **Not a medical device and not an emergency service.** It notifies family; it
   does not dispatch anyone, diagnose, or monitor vitals.
 - **The fall pilot is small and not the target study.** It is 110 clips across
-  three actors/rooms. Twelve floor falls produced no candidate at 2 fps; most
-  were person-loss, occlusion, or a bed box making a floor fall look supported.
-  Three of those twelve were caught at 8 fps. The bed-fall fix now catches the
-  two bed-fall candidates that the gate used to reject, but it also pages two
-  of the 48 ADL clips where someone is lying on a bed: SAM geometry alone
-  cannot always tell "fell onto the bed" from "lay down on the bed." Recall
-  and restraint will differ in a real home.
+  three actors/rooms. The person-lost recheck lifted floor-fall candidates from
+  45/57 to 49/57 with no new ADL candidates; 8 floor falls still produce no
+  candidate — most are people the camera genuinely cannot see after the fall
+  (occluded or out of frame). The bed-fall fix catches the two bed-fall
+  candidates that the gate used to reject, but it also pages two of the 48 ADL
+  clips where someone is lying on a bed: SAM geometry alone cannot always tell
+  "fell onto the bed" from "lay down on the bed." Recall and restraint will
+  differ in a real home.
 - **The check-in suite is five clean synthetic utterances.** It is a regression
   suite for the de-escalation table, not an ASR benchmark in a noisy room.
 - **Audio distress is a heuristic**, not a medical classifier. It combines a

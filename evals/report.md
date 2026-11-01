@@ -100,9 +100,9 @@ stateful wall tracker as the console. Labels are from the dataset description:
 
 | Metric | Measured | Artifact |
 |---|---|---|
-| Floor-fall clips with a possible-fall candidate | **45 / 57** | `fall_pilot.json` |
-| Floor-fall clips with a family alert after the full gate | **45 / 57 (79%)**; measured before the bed-fall prompt change; all 45 were already escalate | `gate_pilot.json` |
-| Floor-fall misses re-sampled at 8 fps | **3 / 12** produced a candidate | `fall_pilot_8fps.json` |
+| Floor-fall clips with a possible-fall candidate | **49 / 57** at 2 fps after the person-lost recheck (was 45 / 57); zero new ADL candidates | `fall_pilot_recheck.json` |
+| Floor-fall clips with a family alert after the full gate | **49 / 57 (86%)**; 45 verified before the recheck, then 3 of the 4 rescued verified and 1 failed open | `gate_pilot.json`, `gate_recheck_rescued.json` |
+| Floor-fall misses re-sampled at 8 fps | **3 / 12** produced a candidate (pre-recheck measurement) | `fall_pilot_8fps.json` |
 | ADL clips with a family alert | **2 / 48** after the bed-fall fix; 2 of 5 candidates escalated, 3 rejected. Before: 0 / 48. | `gate_targeted_after_fix.json` |
 | Bed-fall clips with a family alert | **2 / 5** after the bed-fall fix; both candidates escalated, 3 had no candidate. Before: 0 / 5. | `gate_targeted_after_fix.json` |
 
