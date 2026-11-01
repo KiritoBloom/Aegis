@@ -233,6 +233,7 @@ def test_rejected_wall_candidate_is_not_a_family_incident(monkeypatch, tmp_path)
         return None
 
     monkeypatch.setattr(api, "broadcast", fake_broadcast)
+    monkeypatch.setattr(api.auth, "media_ok", lambda *a, **k: True)
 
     async def scenario():
         incident_id = await api._create_wall_incident(_packet("wa_rejected"), None)
@@ -254,6 +255,20 @@ def test_rejected_wall_candidate_is_not_a_family_incident(monkeypatch, tmp_path)
                and str(e["reason"]).startswith("verification_rejected:")
                for e in db.recent_events(20))
 
+    # Detail and media are family routes, so a rejected candidate is hidden
+    # there too; the audit remains reachable through db/events only.
+    with pytest.raises(api.HTTPException) as detail_route:
+        api.get_incident(incident_id)
+    assert detail_route.value.status_code == 404
+
+    class _Request:
+        cookies: dict = {}
+        query_params: dict = {}
+
+    with pytest.raises(api.HTTPException) as media_route:
+        api.media(incident_id, "clip.mp4", _Request())
+    assert media_route.value.status_code == 404
+
 
 def test_held_candidate_is_invisible_to_the_family_and_its_media(monkeypatch, tmp_path):
     monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "held.db"))
@@ -268,6 +283,8 @@ def test_held_candidate_is_invisible_to_the_family_and_its_media(monkeypatch, tm
 
     assert db.incident_held(incident_id) is True
     assert incident_id not in {i["id"] for i in api.list_incidents(limit=50)["items"]}
+    assert all(e.get("reason") != "verification_pending"
+               for e in api.events(limit=100)["items"])
     with pytest.raises(api.HTTPException) as detail:
         api.get_incident(incident_id)
     assert detail.value.status_code == 404
@@ -328,6 +345,81 @@ def test_expired_release_lease_is_recovered_without_double_paging(monkeypatch, t
     assert inc["verification_due_at"] is None
     assert pages == ["phase_one"]
     assert any(e["reason"] == "release_lease_expired" for e in db.recent_events(20))
+
+
+def test_phase_one_finishes_a_claimed_but_unsent_page(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "phase1.db"))
+    db.init()
+    pages: list[str] = []
+
+    async def fake_dispatch(alert, phase, broadcast=None):
+        pages.append(alert["incident_id"])
+        db.add_notification(f"ntf_{len(pages)}", alert["incident_id"], "webpush",
+                            phase, alert.get("severity"), alert.get("title"),
+                            alert.get("body"))
+        return []
+
+    async def fake_broadcast(payload):
+        return None
+
+    monkeypatch.setattr(api.notify, "dispatch", fake_dispatch)
+    monkeypatch.setattr(api, "broadcast", fake_broadcast)
+
+    async def scenario():
+        incident_id = await api._create_wall_incident(_packet("wa_phase1"), None)
+        # Simulate a crash after phase 1 was claimed but before dispatch.
+        assert db.claim_notify_phase(incident_id, 1, time.time() + 60)
+        db.set_status(incident_id, "detected")
+        await api.phase_one(incident_id)
+        await api.phase_one(incident_id)
+        return incident_id
+
+    incident_id = asyncio.run(scenario())
+
+    assert pages == [incident_id]
+
+
+def test_a_stored_decision_is_delivered_after_a_crashed_release(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "lease3.db"))
+    db.init()
+    dispatched: list[tuple[str, int]] = []
+
+    async def fake_dispatch(alert, phase, broadcast=None):
+        dispatched.append((alert["incident_id"], phase))
+        return []
+
+    async def fake_start_checkin(incident_id):
+        return None
+
+    async def fake_broadcast(payload):
+        return None
+
+    monkeypatch.setattr(api.notify, "dispatch", fake_dispatch)
+    monkeypatch.setattr(api, "start_checkin", fake_start_checkin)
+    monkeypatch.setattr(api, "broadcast", fake_broadcast)
+
+    async def scenario():
+        incident_id = await api._create_wall_incident(_packet("wa_lease3"), None)
+        # Decision persisted and phase claimed, then the process died before
+        # the page. The retry must deliver exactly that decision.
+        assert db.claim_verification_release(incident_id, time.time(), 120.0)
+        db.add_decision(incident_id, 2, "urgent", [], _decision(),
+                        "muse-spark-1.3", "test", [], 100)
+        assert db.claim_notify_phase(incident_id, 2, None)
+        with db.connect() as conn:
+            conn.execute("UPDATE incidents SET verification_due_at=? WHERE id=?",
+                         (time.time() - 1.0, incident_id))
+            conn.commit()
+        return incident_id, await api.sweep_stale_verifications()
+
+    incident_id, recovered = asyncio.run(scenario())
+
+    assert recovered == [incident_id]
+    assert dispatched == [(incident_id, 2)]
+    inc = db.get_incident(incident_id)
+    assert inc["status"] == "notified"
+    assert inc["verification_due_at"] is None
+    assert inc["decision"]["title"] == "Possible fall"
 
 
 def test_release_crash_after_phase_two_claim_is_not_downgraded(monkeypatch, tmp_path):

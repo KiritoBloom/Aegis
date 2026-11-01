@@ -10,23 +10,26 @@ single best sample.
 
 | Mode | Run | Frames | Mean | Aggregate | Per feed ×4 |
 |---|---|---:|---:|---:|---:|
+| Dynamic external footage | this artifact | 24 | **91.2 ms/frame** | 10.97 fps | 2.74 fps |
 | Dynamic external footage | 1 | 24 | **92.4 ms/frame** | 10.82 fps | 2.70 fps |
 | Dynamic external footage | 2 | 24 | **95.0 ms/frame** | 10.52 fps | 2.63 fps |
 | Dynamic external footage | 3 | 24 | **95.8 ms/frame** | 10.43 fps | 2.61 fps |
-| Held / repeated frame | 1 | 16 | **11.4 ms/frame** | 87.7 fps | 21.9 fps (upper bound) |
-| Held / repeated frame | 2 | 16 | **11.5 ms/frame** | 86.9 fps | 21.7 fps (upper bound) |
-| Held / repeated frame | 3 | 16 | **11.2 ms/frame** | 89.1 fps | 22.3 fps (upper bound) |
+| Static, 24 repeated frames | this artifact | 24 | **4.3 ms/frame mean**; **0.3 ms median reused frame** | — | — |
+| Static, 16 repeated frames | earlier 3 runs | 16 | **11.2–11.5 ms/frame mean**; **0.2–0.5 ms median reused frame** | — | — |
+| Synthetic empty room | this artifact | 24 | **86.6 ms/frame** | 11.55 fps | 2.89 fps |
 
-The static mode includes one full inference (the first frame) and fifteen
-reused frames; its median reused frame is **0.2–0.5 ms**.
+Static means are not comparable across frame counts: every run pays one full
+inference and then reuses the identical frame. The reusable cost is the median,
+**0.2–0.5 ms**, not the mean.
 
-Earlier runs on the same machine measured **107 ms/frame** and a strict
-reviewer measured **126 ms/frame** under heavier CPU load. Use the range
-**roughly 92–126 ms/frame** for planning; do not quote a single sample as a
-constant. The browser console is slower than this benchmark because it also
-JPEG-encodes, uploads and sleeps between samples; a live four-feed session was
-observed around **1.2–1.3 fps per feed** during QA, and the console displays its
-own measured rate.
+Earlier runs on the same machine measured **107 ms/frame** and **126 ms/frame**
+under heavier CPU load, and an independent strict review run measured
+**121.4 ms/frame**. Use the range **roughly 91–126 ms/frame** for planning; do
+not quote a single sample as a constant. The browser console is slower than
+this benchmark because it also JPEG-encodes, uploads and sleeps between
+samples; a live four-feed session was observed around **1.2–1.3 fps per feed**
+during QA, and the console displays its own measured rate. Raw output for the
+current run is in `evals/performance.json`.
 
 ## Cost breakdown (dynamic runs)
 

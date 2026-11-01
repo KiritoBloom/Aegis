@@ -845,7 +845,17 @@ async def ingest_heartbeat(request: Request,
                            x_edge_signature: str | None = Header(None)):
     body = await request.body()
     verify_edge(x_edge_timestamp, x_edge_signature, body)
-    db.add_heartbeat(json.loads(body))
+    payload = json.loads(body)
+    db.add_heartbeat(payload)
+    camera_id = str(payload.get("camera_id") or "")
+    if camera_id:
+        for incident_id in db.resolve_camera_outages(camera_id):
+            db.record_event(incident_id, camera_id, "camera_online", None,
+                            db.now(), "info", suppressed=False,
+                            reason="camera_online", source="watchdog")
+            await broadcast({"type": "incident.recovered", "id": incident_id,
+                             "reason": "camera_online"})
+            log.info("camera %s is back; closed outage %s", camera_id, incident_id)
     return {"ok": True}
 
 
@@ -1096,8 +1106,9 @@ async def setup_propose(body: dict):
 @app.get("/api/incidents/{incident_id}")
 def get_incident(incident_id: str):
     inc = db.get_incident(incident_id)
-    # A held candidate is not a family incident yet: SAM/Muse still own it.
-    if not inc or inc.get("status") in ("verifying", "releasing"):
+    # Held candidates and rejected wall candidates are audit rows, not family
+    # incidents. The event log keeps the record; this route does not.
+    if not inc or db.hidden_from_family(inc):
         raise HTTPException(404, "not found")
     inc["notifications"] = db.notifications_for(incident_id)
     inc["acks"] = db.acks_for(incident_id)
@@ -1140,7 +1151,12 @@ def stats():
 
 @app.get("/api/events")
 def events(limit: int = 100):
-    return {"items": db.recent_events(limit), "suppressed": db.suppressed_sample(20)}
+    # A held or rejected candidate has no family-facing event yet. Its id and
+    # type are internal until verification releases it.
+    hidden = {"verification_pending"}
+    items = [e for e in db.recent_events(limit) if e.get("reason") not in hidden]
+    suppressed = [e for e in db.suppressed_sample(20) if e.get("reason") not in hidden]
+    return {"items": items, "suppressed": suppressed}
 
 
 @app.get("/api/night")
@@ -1652,6 +1668,13 @@ async def checkin(incident_id: str, request: Request):
         db.set_status(incident_id, "resolved", new)
         # The timer may already be due; a resolved conversation must not page.
         db.mark_phase(incident_id, 3, None)
+    elif verdict["resolution"] == "unclear":
+        # "I'm fine" with no evidence she is on her feet changes nothing and
+        # must not end the conversation silently. Restore a short deadline so
+        # the silence path still applies if nobody follows up.
+        db.reopen_checkin(incident_id, time.time() + 5.0)
+        await broadcast({"type": "checkin.reopened", "id": incident_id,
+                         "reason": verdict["reason"], "due_in_s": 5})
 
     await broadcast({"type": "checkin.answered", "id": incident_id,
                      "transcript": transcript, "class": cls,
@@ -1878,9 +1901,9 @@ def media(incident_id: str, name: str, request: Request):
     if name in ("clip.mp4", "still.jpg", "thumb.jpg", "sam_input.mp4") \
             and db.media_private(incident_id):
         raise HTTPException(404, "not found")
-    # No artifact from a held candidate is readable by the family, including a
-    # redaction that happened to finish early.
-    if db.incident_held(incident_id):
+    # No artifact from a held or rejected candidate is readable by the family,
+    # including a redaction that happened to finish early.
+    if db.incident_hidden(incident_id):
         raise HTTPException(404, "not found")
     path = MEDIA_ROOT / incident_id / name
     if not path.exists():
@@ -2042,6 +2065,32 @@ async def _create_wall_incident(
     return packet["incident_id"]
 
 
+def _decision_from_row(row: dict) -> policy.Decision | None:
+    """Rebuild the persisted family decision for a crash recovery.
+
+    The release writes the decision before dispatch, so a process that dies
+    between the claim and the page can finish from the database instead of
+    inventing a template or staying silent.
+    """
+    if not isinstance(row, dict) or int(row.get("phase") or 0) < 2:
+        return None
+    try:
+        return policy.Decision(
+            severity=str(row.get("severity") or "urgent"),
+            notify_now=bool(row.get("notify_now", True)),
+            title=str(row.get("title") or "Possible fall")[:120],
+            body=str(row.get("body") or "")[:400],
+            evidence=list(row.get("evidence") or [])[:8],
+            actions=list(row.get("actions") or []),
+            confidence=float(row.get("confidence") or 0.0),
+            follow_up_s=int(row.get("follow_up_s") or 60),
+            escalate_if_no_ack=bool(row.get("escalate_if_no_ack", True)),
+            rationale=str(row.get("rationale") or "")[:300],
+        )
+    except (TypeError, ValueError):
+        return None
+
+
 async def _release_wall_incident(incident_id: str, verification: str,
                                 decision: policy.Decision | None = None,
                                 trace: list[dict] | None = None,
@@ -2095,6 +2144,13 @@ async def _release_wall_incident(incident_id: str, verification: str,
         db.clear_verification_deadline(incident_id)
         log.info("wall incident %s closed during release; not released", incident_id)
         return False
+    recovered = False
+    if decision is None and incident.get("status") == "releasing":
+        decision = _decision_from_row(incident.get("decision") or {})
+        if decision is not None:
+            recovered = True
+            trace = trace or incident.get("agent") or []
+            log.warning("wall incident %s recovered a persisted decision", incident_id)
     if privacy.paused_state().get("paused"):
         db.set_status(incident_id, "resolved")
         db.record_event(incident_id, incident.get("camera_id"), "verification_suppressed",
@@ -2112,13 +2168,26 @@ async def _release_wall_incident(incident_id: str, verification: str,
         floor = _floor_not_below(floor, incident.get("severity"))
         due = (time.time() + decision.follow_up_s) if decision.escalate_if_no_ack else None
         can_page = (decision.notify_now or floor.notifies)
-        claimed = (not can_page) or db.claim_notify_phase(incident_id, 2, due)
-        stored = db.add_decision(incident_id, 2, floor.severity, floor.reasons,
-                                 decision, SPARK_MODEL, PROMPT_VERSION,
-                                 violations or [], latency)
-        db.set_status(incident_id, "notified", stored)
+        # The notification row is written before the network call, so "no row
+        # for phase 2" means the page was never attempted. A retry after a
+        # crash can therefore dispatch; a previous attempt is never repeated.
+        sent = any(int(n.get("phase") or 0) == 2
+                   for n in db.notifications_for(incident_id))
+        phase = int((db.get_incident(incident_id) or {}).get("notify_phase") or 0)
+        claimed = (not can_page) or sent or phase >= 2 \
+            or db.claim_notify_phase(incident_id, 2, due)
+        if recovered:
+            # The decision row is already durable; do not write a second one.
+            stored = policy.max_severity(
+                decision.severity, str(incident.get("severity") or floor.severity))
+        else:
+            # Store before the network call: a crash after this point can be
+            # finished from the database by the release sweep.
+            stored = db.add_decision(incident_id, 2, floor.severity, floor.reasons,
+                                     decision, SPARK_MODEL, PROMPT_VERSION,
+                                     violations or [], latency)
         late = db.get_incident(incident_id) or {}
-        if can_page and claimed and not (
+        if can_page and claimed and not sent and not (
                 late.get("status") in ("resolved", "cancelled")
                 or late.get("acked_at") or privacy.paused_state().get("paused")):
             await notify.dispatch({
@@ -2127,6 +2196,9 @@ async def _release_wall_incident(incident_id: str, verification: str,
                 "body": decision.body,
                 "severity": stored,
             }, 2, broadcast)
+        # Only now is delivery considered complete. Until this point the row
+        # remains `releasing`, so the lease sweep can retry the stored decision.
+        db.set_status(incident_id, "notified", stored)
         await broadcast({"type": "incident.decided", "id": incident_id,
                          "severity": stored, "title": decision.title,
                          "wall": True, "verified": True})
@@ -2232,10 +2304,13 @@ async def sweep_camera_heartbeats(now_epoch: float | None = None) -> list[str]:
     ) + "Z"
     created: list[str] = []
     for camera in db.stale_cameras(cutoff):
-        if not db.mark_camera_offline(camera["id"]):
-            continue
-        incident_id = f"inc_cam_{uuid.uuid4().hex[:12]}"
         last = str(camera.get("last_heartbeat_at") or "")
+        # The outage id is derived from the camera and its last heartbeat, so a
+        # crash between the incident insert and the camera status flip cannot
+        # create a second incident on the next sweep.
+        incident_id = "inc_cam_" + hashlib.sha256(
+            f"{camera['id']}|{last}".encode("utf-8")).hexdigest()[:12]
+        existing = db.get_incident(incident_id)
         packet = {
             "incident_id": incident_id,
             "household_id": HOUSEHOLD,
@@ -2259,19 +2334,25 @@ async def sweep_camera_heartbeats(now_epoch: float | None = None) -> list[str]:
             "source": "watchdog",
         }
         db.upsert_incident(packet)
+        db.mark_camera_offline(camera["id"])
         floor, _ = effective_floor(packet)
         db.raise_incident_severity(incident_id, floor.severity)
-        db.record_event(incident_id, camera["id"], "camera_offline",
-                        packet["zone_id"], db.now(), floor.severity,
-                        suppressed=False, reason="heartbeat_missing",
-                        source="watchdog")
-        await broadcast({"type": "incident.created", "id": incident_id,
-                         "incident_type": "camera_offline",
-                         "floor": floor.severity})
-        asyncio.create_task(phase_one(incident_id))
-        created.append(incident_id)
-        log.warning("camera %s stopped heartbeating at %s; incident %s",
-                    camera["id"], last or "?", incident_id)
+        if existing is None:
+            db.record_event(incident_id, camera["id"], "camera_offline",
+                            packet["zone_id"], db.now(), floor.severity,
+                            suppressed=False, reason="heartbeat_missing",
+                            source="watchdog")
+            await broadcast({"type": "incident.created", "id": incident_id,
+                             "incident_type": "camera_offline",
+                             "floor": floor.severity})
+            created.append(incident_id)
+            log.warning("camera %s stopped heartbeating at %s; incident %s",
+                        camera["id"], last or "?", incident_id)
+        # A row inserted just before a crash has no page yet. Phase one's own
+        # atomic claim and sent-row check make this safe to call more than once.
+        if existing is None or (existing.get("status") in ("detected", "enriching")
+                                and int(existing.get("notify_phase") or 0) < 2):
+            asyncio.create_task(phase_one(incident_id))
     return created
 
 
@@ -2418,7 +2499,7 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
         # A late model verdict for a recovered resident must not silence the
         # feed for the next ten minutes.
         current = db.get_incident(incident_id) or {}
-        arm = current.get("status") not in ("resolved", "cancelled")
+        arm = current.get("status") not in ("resolved", "cancelled", "releasing")
         alert = wall.set_verification(session, feed_id, alert_id, status=status,
                                       arm_cooldown=arm, **data)
         if alert is not None:
@@ -2490,9 +2571,20 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
             },
             "sam": {
                 "frames_present": features.get("frames_present"),
+                "frames_total": features.get("frames_total"),
                 "person_count": sam_count,
+                "track_ids": features.get("track_ids"),
                 "track_unavailable": bool(features.get("track_unavailable")),
                 "error": features.get("error"),
+                # Geometry is what distinguishes "already resting on a bed"
+                # from "fell onto the bed": the support label alone cannot.
+                "vertical_drop": features.get("vertical_drop"),
+                "height_ratio": features.get("height_ratio"),
+                "aspect_start": features.get("aspect_start"),
+                "aspect_end": features.get("aspect_end"),
+                "median_conf": features.get("median_conf"),
+                "start_box": features.get("start_box"),
+                "end_box": features.get("end_box"),
             },
             "memory": [m["fact"] for m in db.memory(HOUSEHOLD)][:5],
             "history": db.recent_events(8),
@@ -2517,6 +2609,14 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
         trace = result.trace
         db.attach_agent(incident_id, trace)
         raw = result.raw
+        # A reject is allowed only when there is positive evidence against the
+        # candidate: SAM saw no person, or the bounded visual tool saw a
+        # non-fall posture. A bare "not enough evidence" reject must fail open.
+        sight = any(step.get("step") == "tool"
+                    and step.get("tool") == "inspect_frame"
+                    and step.get("ok") for step in trace)
+        if (str(raw.get("verdict")) == "reject" and sam_seen and not sight):
+            raise MetaError("verifier rejected a visible person without sight evidence")
         reason = str(raw.get("rationale") or raw.get("title") or "")[:180]
         confidence = max(0.0, min(1.0, float(raw.get("confidence") or 0.0)))
         if raw.get("verdict") == "escalate":
@@ -2732,9 +2832,16 @@ async def phase_one(incident_id: str) -> None:
     incident = db.get_incident(incident_id)
     if not incident:
         return
+    prior = int(incident.get("notify_phase") or 0)
+    sent = any(int(n.get("phase") or 0) == 1
+               for n in db.notifications_for(incident_id))
+    if prior >= 2 or (prior == 1 and sent):
+        return
+    # A phase-1 claim with no notification row is a crash between claim and
+    # dispatch, not a finished page. Finish it; do not claim again.
+    redispatch = prior == 1
     if (incident.get("status") in ("resolved", "cancelled")
             or incident.get("acked_at")
-            or int(incident.get("notify_phase") or 0) >= 1
             or privacy.paused_state().get("paused")):
         return
     local_hour = incident_hour(incident)
@@ -2775,8 +2882,8 @@ async def phase_one(incident_id: str) -> None:
     due = time.time() + decision.follow_up_s
     # Claim before the network call: a slow webhook must not let a late phase 1
     # page after a check-in timeout has already moved the incident to phase 3.
-    if not db.claim_notify_phase(incident_id, 1,
-                                 due if decision.escalate_if_no_ack else None):
+    if not redispatch and not db.claim_notify_phase(
+            incident_id, 1, due if decision.escalate_if_no_ack else None):
         log.info("phase1 %s skipped: a later phase or closure won", incident_id)
         return
     results = await notify.dispatch(alert, 1, broadcast)

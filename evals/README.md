@@ -15,7 +15,8 @@ new commit; the reports record the date of their run.
 | `agent_live_reject.json` | One live trace where the agent rejects a candidate | 2026-10-31 | live |
 | `gate_escalate_fall01.json` | The full wall gate on a real fall: SAM features, agent trace, one phase-2 dispatch and a check-in | 2026-10-31 | live |
 | `gate_reject_adl03.json` | The full gate rejecting an ADL candidate: zero dispatches | 2026-10-31 | live |
-| `gate_pilot.json` | Outcome of the gate for every pilot candidate (52 clips) | 2026-10-31 | live |
+| `gate_pilot.json` | Outcome of the gate for every pilot candidate (52 clips), before the bed-fall prompt change | 2026-10-31 | live |
+| `gate_targeted_after_fix.json` | The two bed-fall and five ADL candidates re-run after SAM geometry and the bed-fall prompt change | 2026-11-01 | live |
 | `fall_pilot.json` | Local candidate results for all 110 external clips at 2 fps | 2026-10-31 | local |
 | `fall_pilot_8fps.json` | The 12 floor-fall misses re-sampled at 8 fps | 2026-10-31 | local |
 | `corpus_manifest.json` | Source labels: 57 floor falls, 5 bed falls, 48 ADL | 2026-10-31 | local |
@@ -31,9 +32,10 @@ The current mask evidence is in `meta/sam_redaction.json`.
 |---|---|---|---|
 | `meta/sam_redaction.json` | Live SAM on a multi-person entrance reel: 240/240 masks decoded, 7 tracks, 192 mask blurs, 503,806 pixels, 0 box fallbacks, output hashes | 2026-11-01 | live |
 | `privacy.json` | Idle egress, retention coverage, private-zone masking, delete-all, no face recognition, pause/resume | 2026-10-31 | local |
-| `performance.md` | Three-run wall benchmark: dynamic vs repeated-frame cost | 2026-10-31 | local |
+| `performance.md`, `performance.json` | Wall benchmark: dynamic, static and empty-room cost with raw output | 2026-11-01 | local |
 | `perception.md`, `perception.json` | Person detection on real CAVIAR/URFD footage | 2026-11-01 | local |
-| `checkin.md`, `checkin.json` | Five real Muse Voice Transcribe outputs through the de-escalation table | 2026-10-29 | live |
+| `checkin.md`, `checkin.json` | Five real Muse Voice Transcribe outputs through the de-escalation table | 2026-10-27 | live |
+| `checkin_read.json` | Two live Spark reads where the word list missed distress and the safety merge raised the answer to help | 2026-11-01 | live |
 
 The perception report is a person-detection check, not fall accuracy, and is
 not used to support a recall claim. The fall pilot is the recall evidence.

@@ -7,9 +7,12 @@ outage pages once, and a camera that never connected is not a false alarm.
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 import time
 from pathlib import Path
+
+from starlette.requests import Request
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / ".vendor"))
@@ -93,8 +96,9 @@ def test_a_reconnecting_camera_can_lose_coverage_again(monkeypatch, tmp_path):
         await asyncio.sleep(0)
         db.add_heartbeat({"camera_id": "cam_hallway", "camera_state": "online",
                           "detector": "yolo", "fps": 15})
+        db.resolve_camera_outages("cam_hallway")
         reconnected = await api.sweep_camera_heartbeats()
-        _set_last_heartbeat("cam_hallway", 600)
+        _set_last_heartbeat("cam_hallway", 900)
         second = await api.sweep_camera_heartbeats()
         await asyncio.sleep(0)
         return first, reconnected, second
@@ -105,6 +109,48 @@ def test_a_reconnecting_camera_can_lose_coverage_again(monkeypatch, tmp_path):
     assert reconnected == []
     assert len(second) == 1
     assert second[0] != first[0]
+
+
+def test_a_reconnecting_heartbeat_closes_the_outage_incident(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "watchdog4.db"))
+    db.init()
+    recovered: list[dict] = []
+
+    async def fake_phase_one(incident_id):
+        return None
+
+    async def fake_broadcast(payload):
+        if payload.get("type") == "incident.recovered":
+            recovered.append(payload)
+
+    monkeypatch.setattr(api, "phase_one", fake_phase_one)
+    monkeypatch.setattr(api, "broadcast", fake_broadcast)
+    monkeypatch.setattr(api, "verify_edge", lambda *a, **k: None)
+
+    async def scenario():
+        _set_last_heartbeat("cam_hallway", 600)
+        outage = await api.sweep_camera_heartbeats()
+        await asyncio.sleep(0)
+        body = json.dumps({"camera_id": "cam_hallway",
+                           "camera_state": "online", "fps": 15}).encode()
+
+        async def receive():
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        request = Request({"type": "http", "method": "POST", "headers": [],
+                           "client": ("127.0.0.1", 0)}, receive)
+        await api.ingest_heartbeat(request, None, None)
+        return outage
+
+    outage = asyncio.run(scenario())
+
+    assert len(outage) == 1
+    incident = db.get_incident(outage[0])
+    assert incident["status"] == "resolved"
+    assert incident["escalation_due_at"] is None
+    assert recovered and recovered[0]["id"] == outage[0]
+    assert any(e["incident_id"] == outage[0] and e["reason"] == "camera_online"
+               for e in db.recent_events(20))
 
 
 def test_a_camera_that_never_connected_is_not_an_outage(monkeypatch, tmp_path):

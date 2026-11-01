@@ -10,11 +10,18 @@ classifier and the de-escalation table then run on that real output.
 
 | Case | She said | Transcript | Class | Perception | Outcome | Delta |
 |---|---|---|---|---|---|---|
-| contradiction_floor | I'm fine, I dropped the remote. | I'm fine, I dropped the remote. | `affirmative` | upright | `contradiction` | +0 |
-| contradiction_still | I am okay, really. | I am okay really | `affirmative` | upright | `contradiction` | +0 |
-| negated_affirmative | I'm not okay, I can't get up. | I'm not okay, I can't get up. | `help` | upright | `escalated` | +1 |
-| help_explicit | Please help me, I need help. | please help me, I need help. | `help` | upright | `escalated` | +1 |
-| self_recovered | I'm fine, I just tripped. I'm up now. | I'm fine, I just tripped. I'm I'm up now. | `affirmative` | upright | `self_recovered` | -1 |
+| contradiction_floor | I'm fine, I dropped the remote. | I'm fine, I dropped the remote. | `affirmative` | on floor, still 14s | `contradiction` | +0 |
+| contradiction_still | I am okay, really. | I am okay really | `affirmative` | upright, still 22s | `contradiction` | +0 |
+| negated_affirmative | I'm not okay, I can't get up. | I'm not okay, I can't get up. | `help` | on floor, still 12s | `escalated` | +1 |
+| help_explicit | Please help me, I need help. | please help me, I need help. | `help` | upright and moving | `escalated` | +1 |
+| self_recovered | I'm fine, I just tripped. I'm up now. | I'm fine, I just tripped. I'm I'm up now. | `affirmative` | upright and moving | `self_recovered` | -1 |
+
+Scope: this suite exercises the **voice** path, from real Transcribe output
+through the deterministic classifier and de-escalation table. The resident
+kiosk is a separate button fallback for someone who cannot speak; its
+"I'm okay" / "I need help" buttons post literal answers and never claim to be
+ASR. At runtime Spark also reads the transcript, but this five-case artifact
+does not measure that model call.
 
 ## Why each case exists
 

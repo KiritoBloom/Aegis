@@ -1,0 +1,236 @@
+{
+  "fall_clips": 2,
+  "fall_alerts": 2,
+  "adl_clips": 5,
+  "adl_alerts": 2,
+  "results": [
+    {
+      "clip": "gmd-sub2-adl-12.mp4",
+      "frames": 227,
+      "triggers": [
+        {
+          "at_native_s": 5.02,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 1.02,
+          "track_id": 1,
+          "box": [
+            0.371,
+            0.407,
+            0.647,
+            0.679
+          ],
+          "distance": "mid",
+          "lying_for_s": 1.0
+        }
+      ],
+      "gate": "escalate",
+      "status": "notified",
+      "dispatch_calls": [
+        {
+          "phase": 2,
+          "title": "Margaret may have fallen",
+          "severity": "urgent"
+        }
+      ],
+      "checkin_calls": [
+        "inc_gate_9ec851f536"
+      ]
+    },
+    {
+      "clip": "gmd-sub3-adl-06.mp4",
+      "frames": 267,
+      "triggers": [
+        {
+          "at_native_s": 1.01,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.57,
+          "track_id": 1,
+          "box": [
+            0.306,
+            0.454,
+            0.582,
+            0.94
+          ],
+          "distance": "mid",
+          "lying_for_s": 1.0
+        }
+      ],
+      "gate": "reject",
+      "status": "resolved",
+      "dispatch_calls": [],
+      "checkin_calls": []
+    },
+    {
+      "clip": "gmd-sub3-fall-02.mp4",
+      "frames": 196,
+      "triggers": [
+        {
+          "at_native_s": 4.52,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.96,
+          "track_id": 1,
+          "box": [
+            0.422,
+            0.442,
+            0.68,
+            0.711
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.5
+        }
+      ],
+      "gate": "escalate",
+      "status": "notified",
+      "dispatch_calls": [
+        {
+          "phase": 2,
+          "title": "Margaret may have fallen",
+          "severity": "urgent"
+        }
+      ],
+      "checkin_calls": [
+        "inc_gate_451d159d96"
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-10.mp4",
+      "frames": 131,
+      "triggers": [
+        {
+          "at_native_s": 1.51,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.58,
+          "track_id": 1,
+          "box": [
+            0.293,
+            0.319,
+            0.553,
+            0.767
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ],
+      "gate": "escalate",
+      "status": "notified",
+      "dispatch_calls": [
+        {
+          "phase": 2,
+          "title": "Margaret may have fallen",
+          "severity": "urgent"
+        }
+      ],
+      "checkin_calls": [
+        "inc_gate_38c12b2827"
+      ]
+    },
+    {
+      "clip": "gmdcsa24-adl-03.mp4",
+      "frames": 199,
+      "triggers": [
+        {
+          "at_native_s": 1.51,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.82,
+          "track_id": 1,
+          "box": [
+            0.227,
+            0.306,
+            0.784,
+            0.612
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ],
+      "gate": "escalate",
+      "status": "notified",
+      "dispatch_calls": [
+        {
+          "phase": 2,
+          "title": "Margaret may have fallen",
+          "severity": "urgent"
+        }
+      ],
+      "checkin_calls": [
+        "inc_gate_03c427d441"
+      ]
+    },
+    {
+      "clip": "gmdcsa24-adl-15.mp4",
+      "frames": 212,
+      "triggers": [
+        {
+          "at_native_s": 2.03,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.43,
+          "track_id": 1,
+          "box": [
+            0.392,
+            0.353,
+            0.67,
+            1.0
+          ],
+          "distance": "near",
+          "lying_for_s": 0.0
+        }
+      ],
+      "gate": "reject",
+      "status": "resolved",
+      "dispatch_calls": [],
+      "checkin_calls": []
+    },
+    {
+      "clip": "gmdcsa24-adl-16.mp4",
+      "frames": 104,
+      "triggers": [
+        {
+          "at_native_s": 1.02,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.55,
+          "track_id": 1,
+          "box": [
+            0.277,
+            0.501,
+            0.528,
+            0.956
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.0
+        }
+      ],
+      "gate": "reject",
+      "status": "resolved",
+      "dispatch_calls": [],
+      "checkin_calls": []
+    }
+  ]
+}

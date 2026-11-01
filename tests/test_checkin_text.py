@@ -98,6 +98,32 @@ def test_live_recovery_outweighs_the_trigger_track_posture(monkeypatch, tmp_path
     assert db.get_incident("inc_recovered")["checkin_status"] == "answered"
 
 
+def test_an_unclear_answer_keeps_a_deadline(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "unclear.db"))
+    monkeypatch.setattr(api, "meta", lambda: FakeMeta())
+    db.init()
+    db.upsert_incident({
+        "incident_id": "inc_unclear", "household_id": "hh_demo",
+        "camera_id": "cam", "type": "fall_suspected", "status": "notified",
+        "severity_hint": "urgent", "started_at": "2026-10-31T20:00:00Z",
+        "local_time": "2026-10-31T22:00:00+02:00", "zone_id": "hallway",
+        "track": {"person_count": 1, "posture": "upright"},
+        "sensors": {"posture": "upright", "person_count": 1,
+                    "no_recovery_s": 2, "still_s": 0, "recovered": False},
+        "privacy": {}, "evidence": [], "source": "wall",
+    })
+    assert db.start_checkin("inc_unclear", "Margaret, are you okay?",
+                            time.time() + 15, 15)
+
+    result = asyncio.run(api.checkin("inc_unclear", FakeRequest()))
+
+    assert result["resolution"] == "unclear"
+    inc = db.get_incident("inc_unclear")
+    assert inc["status"] == "notified"
+    assert inc["checkin_status"] == "asking"
+    assert inc["checkin_due_at"] > time.time()
+
+
 def test_an_ack_during_the_answer_does_not_page_again(monkeypatch, tmp_path):
     class AckingMeta(FakeMeta):
         def decide(self, packet, system, schema, effort="low"):

@@ -55,6 +55,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pilot", type=Path, default=ROOT / "evals/fall_pilot.json")
     parser.add_argument("--out", type=Path, default=ROOT / "evals/gate_pilot.json")
+    parser.add_argument("--only", default="",
+                        help="comma-separated clip-name substrings to run")
     args = parser.parse_args()
     load_env()
     if not os.environ.get("META_API_KEY"):
@@ -90,7 +92,10 @@ def main() -> None:
     api.broadcast = fake_broadcast
 
     results = []
+    only = [part.strip() for part in args.only.split(",") if part.strip()]
     for item in pilot["results"]:
+        if only and not any(token in item["clip"] for token in only):
+            continue
         if not item["triggers"]:
             results.append({**item, "gate": "no_candidate", "dispatch_calls": []})
             continue

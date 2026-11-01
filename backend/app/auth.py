@@ -31,12 +31,19 @@ MEDIA_URL_S = 300
 RESIDENT_LINK_S = 30 * 60
 MAX_TRIES = 5
 LOCKOUT_S = 60
+# X-Forwarded-For is caller-controlled behind a loopback proxy. A per-address
+# lockout alone therefore lets an attacker rotate the header and guess forever.
+# A second, process-wide bucket bounds the total failure rate; a legitimate
+# family loses at most a minute if an attacker is active.
+MAX_GLOBAL_TRIES = 20
 # The lockout table is keyed by a caller-supplied identity. Without a bound, a
 # stream of unique addresses is an unbounded allocation in a long-lived process.
 MAX_TRACKED_CLIENTS = 4096
 
 _tries: dict[str, tuple[int, float]] = {}
 _tries_lock = threading.Lock()
+_global_failures = 0
+_global_until = 0.0
 
 
 def required() -> bool:
@@ -140,7 +147,10 @@ def check_pin(pin: str, who: str = "local") -> tuple[str, int]:
     FastAPI runs these sync routes in a thread pool.
     """
     now = time.time()
+    global _global_failures, _global_until
     with _tries_lock:
+        if _global_until > now:
+            raise HTTPException(429, "too many attempts, try again shortly")
         count, until = _tries.get(who, (0, 0.0))
         if until > now:
             raise HTTPException(429, f"too many attempts, try again in {int(until - now)}s")
@@ -150,10 +160,15 @@ def check_pin(pin: str, who: str = "local") -> tuple[str, int]:
         if len(candidate) > 256 or not hmac.compare_digest(
                 candidate.encode("utf-8", "surrogatepass"),
                 str(PIN).encode("utf-8", "surrogatepass")):
+            _global_failures += 1
+            if _global_failures >= MAX_GLOBAL_TRIES:
+                _global_until = now + LOCKOUT_S
+                _global_failures = 0
             count += 1
             until = now + LOCKOUT_S if count >= MAX_TRIES else 0.0
             _remember_failure_locked(who, 0 if count >= MAX_TRIES else count, until, now)
             raise HTTPException(401, "wrong pin")
+        _global_failures = 0
         _tries.pop(who, None)
     return make_session()
 

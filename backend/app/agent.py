@@ -85,14 +85,16 @@ One tool may return a visual observation of a single still from that same clip. 
 as sight evidence, never as identity, emotion, intent or a diagnosis.
 
 Decide:
-- "reject" only on positive contradictory evidence: SAM saw no person in the clip, the local
-  person is supported by a bed or couch, or the clip shows a clear non-fall explanation. A
-  rejected candidate never reaches the family and never starts a check-in.
-- "escalate" when SAM saw a person and the local evidence is lying with no support. A short
-  lying window, a prior fall, a repeat count, an unusual hour or a familiar room is NOT a
-  reason to reject. If the evidence is genuinely ambiguous, escalate rather than suppress a
-  possible fall. The severity must be at least the policy floor; you may raise it. Write the
-  family alert.
+- "reject" only on positive contradictory evidence: SAM saw no person in the clip, the
+  person was already lying or resting on a bed/couch AND the SAM geometry shows no fall
+  transition, or the clip shows a clear non-fall explanation (bending, kneeling,
+  exercise). A support surface alone is NOT a contradiction: a rapid vertical drop or a
+  large loss of upright height that ends on a bed or couch is still a fall candidate.
+- "escalate" when SAM saw a person and the local evidence is a fall transition, including
+  a fall onto a bed or couch. A short lying window, a prior fall, a repeat count, an
+  unusual hour or a familiar room is NOT a reason to reject. If the evidence is genuinely
+  ambiguous, escalate rather than suppress a possible fall. The severity must be at least
+  the policy floor; you may raise it. Write the family alert.
 
 Family-facing rules:
 - title <= 60 chars, body <= 240 chars. Say what happened, why it matters, and one next action.

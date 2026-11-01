@@ -1,0 +1,92 @@
+[
+  {
+    "label": "external/gmd-sub2-fall-01.mp4 + 3 more",
+    "frames": 24,
+    "person_frames": 23,
+    "mean_ms": 91.2,
+    "p50_ms": 83.9,
+    "p95_ms": 162.3,
+    "aggregate_fps": 10.97,
+    "per_feed_fps_4": 2.74,
+    "inference_share": 97.9,
+    "wall_overhead_ms": 1.9,
+    "calls": {
+      "descriptor": {
+        "n": 27,
+        "mean_ms": 0.3
+      },
+      "pose_crop": {
+        "n": 4,
+        "mean_ms": 35.4
+      },
+      "pose_full": {
+        "n": 24,
+        "mean_ms": 46.8
+      },
+      "tracker": {
+        "n": 24,
+        "mean_ms": 0.1
+      },
+      "yolo_objects": {
+        "n": 6,
+        "mean_ms": 45.9
+      },
+      "yolo_people": {
+        "n": 18,
+        "mean_ms": 33.5
+      }
+    }
+  },
+  {
+    "label": "static repeated frame",
+    "frames": 24,
+    "person_frames": 0,
+    "mean_ms": 4.3,
+    "p50_ms": 0.3,
+    "p95_ms": 67.8,
+    "aggregate_fps": 234.56,
+    "per_feed_fps_4": 58.64,
+    "inference_share": 86.3,
+    "wall_overhead_ms": 0.6,
+    "calls": {
+      "pose_full": {
+        "n": 1,
+        "mean_ms": 46.3
+      },
+      "tracker": {
+        "n": 24,
+        "mean_ms": 0.0
+      },
+      "yolo_objects": {
+        "n": 1,
+        "mean_ms": 42.1
+      }
+    }
+  },
+  {
+    "label": "synthetic empty room",
+    "frames": 24,
+    "person_frames": 0,
+    "mean_ms": 86.6,
+    "p50_ms": 85.6,
+    "p95_ms": 93.4,
+    "aggregate_fps": 11.55,
+    "per_feed_fps_4": 2.89,
+    "inference_share": 98.9,
+    "wall_overhead_ms": 1.0,
+    "calls": {
+      "pose_full": {
+        "n": 24,
+        "mean_ms": 45.1
+      },
+      "tracker": {
+        "n": 24,
+        "mean_ms": 0.0
+      },
+      "yolo_objects": {
+        "n": 24,
+        "mean_ms": 40.5
+      }
+    }
+  }
+]

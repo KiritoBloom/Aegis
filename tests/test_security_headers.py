@@ -90,6 +90,8 @@ def test_lockout_table_stays_bounded(monkeypatch):
 
     auth._tries.clear()
     monkeypatch.setattr(auth, "MAX_TRACKED_CLIENTS", 4)
+    # This test is about the per-caller table bound, not the global rate cap.
+    monkeypatch.setattr(auth, "MAX_GLOBAL_TRIES", 100)
     try:
         for index in range(25):
             with pytest.raises(HTTPException) as caught:

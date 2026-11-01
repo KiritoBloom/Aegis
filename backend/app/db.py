@@ -513,6 +513,21 @@ def _is_rejected_wall_candidate(incident: dict) -> bool:
             and sensors.get("verification") == "rejected")
 
 
+def hidden_from_family(incident: dict) -> bool:
+    """Rows the family routes must never expose.
+
+    Held states are still owned by SAM/Muse. A rejected wall candidate is an
+    audit row, not an incident; the event log keeps its history.
+    """
+    return (incident.get("status") in ("verifying", "releasing")
+            or _is_rejected_wall_candidate(incident))
+
+
+def incident_hidden(incident_id: str) -> bool:
+    incident = get_incident(incident_id)
+    return incident is None or hidden_from_family(incident)
+
+
 def list_incidents(limit: int = 50, status: str | None = None) -> list[dict]:
     # `verifying` and `releasing` are internal states: the evidence owner is
     # still deciding and no family alert exists yet. They must never appear in
@@ -767,6 +782,30 @@ def mark_camera_offline(camera_id: str) -> bool:
         )
         conn.commit()
     return bool(cur.rowcount)
+
+
+def resolve_camera_outages(camera_id: str) -> list[str]:
+    """Close any open camera_offline incidents when the camera checks in again.
+
+    A coverage alert whose cause is already gone must not keep escalating
+    "still needs help"; the record remains in the event log.
+    """
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT id FROM incidents WHERE type='camera_offline' AND camera_id=?"
+            " AND status NOT IN ('resolved','cancelled')",
+            (camera_id,),
+        ).fetchall()
+        ids = [r["id"] for r in rows]
+        if ids:
+            marks = ",".join("?" for _ in ids)
+            conn.execute(
+                f"UPDATE incidents SET status='resolved', escalation_due_at=NULL,"
+                f" verification_due_at=NULL WHERE id IN ({marks})",
+                ids,
+            )
+            conn.commit()
+    return ids
 
 
 def add_ack(incident_id: str, action: str) -> None:

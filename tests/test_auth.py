@@ -64,6 +64,29 @@ def test_five_wrong_pins_lock_the_caller_out():
         assert getattr(exc, "status_code", 0) == 429
 
 
+def test_rotating_addresses_cannot_bypass_the_global_lockout():
+    auth._tries.clear()
+    auth._global_failures = 0
+    auth._global_until = 0.0
+    try:
+        for i in range(auth.MAX_GLOBAL_TRIES):
+            try:
+                auth.check_pin("000000", f"rotating-{i}")
+                raise AssertionError("a wrong pin was accepted")
+            except Exception as exc:
+                assert getattr(exc, "status_code", 0) == 401
+        # A fresh, unthrottled address is still stopped by the process-wide cap.
+        try:
+            auth.check_pin("482913", "fresh-address")
+            raise AssertionError("the global lockout did not apply")
+        except Exception as exc:
+            assert getattr(exc, "status_code", 0) == 429
+    finally:
+        auth._tries.clear()
+        auth._global_failures = 0
+        auth._global_until = 0.0
+
+
 def test_the_right_pin_opens_a_session_and_clears_the_counter():
     auth._tries.clear()
     token, exp = auth.check_pin("482913", "tester")

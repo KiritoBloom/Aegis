@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-11-01T15:15:30.895698+00:00",
+  "commit": "218f24d",
+  "model": "muse-spark-1.3",
+  "prompt": "CHECKIN_READ_PROMPT",
+  "cases": [
+    {
+      "case": "other",
+      "transcript": "I slipped and I'm on the floor, my hip is sore.",
+      "why": "The word list has no help token; the model must surface the fall.",
+      "classifier_class": "other",
+      "model_read": {
+        "class": "help",
+        "read": "Margaret slipped and is on the floor with a sore hip.",
+        "evidence": [
+          "I slipped",
+          "on the floor",
+          "hip is sore",
+          "lying"
+        ],
+        "confidence": 0.95,
+        "latency_ms": 3615
+      },
+      "merged_class": "help",
+      "model_lift": true,
+      "ok": true
+    },
+    {
+      "case": "affirmative",
+      "transcript": "I'm okay, I just can't catch my breath.",
+      "why": "Says okay, but the second clause is distress the list does not know.",
+      "classifier_class": "affirmative",
+      "model_read": {
+        "class": "help",
+        "read": "Margaret says she can't catch her breath and remains lying on the floor.",
+        "evidence": [
+          "can't catch my breath",
+          "lying",
+          "on_floor"
+        ],
+        "confidence": 0.9,
+        "latency_ms": 6387
+      },
+      "merged_class": "help",
+      "model_lift": true,
+      "ok": true
+    }
+  ],
+  "passed": 2,
+  "total": 2
+}

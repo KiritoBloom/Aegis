@@ -81,6 +81,7 @@ drifts from the current policy.
 | ADL candidate, full gate | Muse rejected; zero dispatches | `gate_reject_adl03.json` |
 | SAM mask decode and redaction at current HEAD | 240/240 masks decoded on a multi-person entrance reel, 7 tracks, 192 mask blurs, 503,806 pixels, 0 box fallbacks, 48 frames | `meta/sam_redaction.json` |
 | Check-in de-escalation with real ASR | 5/5 cases | `checkin.md` |
+| Spark check-in reading on word-list misses | 2/2 raised to help | `checkin_read.json` |
 
 The older 203/203 mask observation is superseded by the current probe, which
 also counts how many masks were actually used to blur pixels. The gate
@@ -97,10 +98,10 @@ stateful wall tracker as the console. Labels are from the dataset description:
 | Metric | Measured | Artifact |
 |---|---|---|
 | Floor-fall clips with a possible-fall candidate | **45 / 57** | `fall_pilot.json` |
-| Floor-fall clips with a family alert after the full gate | **45 / 57 (79%)** | `gate_pilot.json` |
+| Floor-fall clips with a family alert after the full gate | **45 / 57 (79%)**; measured before the bed-fall prompt change; all 45 were already escalate | `gate_pilot.json` |
 | Floor-fall misses re-sampled at 8 fps | **3 / 12** produced a candidate | `fall_pilot_8fps.json` |
-| ADL clips with a family alert | **0 / 48**; 5 candidates, all gate-rejected | `gate_pilot.json` |
-| Bed-fall clips with a family alert | **0 / 5**; 2 candidates, both rejected because the bed is support | `gate_pilot.json` |
+| ADL clips with a family alert | **2 / 48** after the bed-fall fix; 2 of 5 candidates escalated, 3 rejected. Before: 0 / 48. | `gate_targeted_after_fix.json` |
+| Bed-fall clips with a family alert | **2 / 5** after the bed-fall fix; both candidates escalated, 3 had no candidate. Before: 0 / 5. | `gate_targeted_after_fix.json` |
 
 The 12 misses at 2 fps were not gate rejections; all 45 candidates released.
 Most misses were person loss or occlusion after the fall, or a large bed box
@@ -112,23 +113,32 @@ instrumented rather than sent to a phone.
 | Defect found by the strict review | Fix | Evidence |
 |---|---|---|
 | `verifying` candidates appeared in the family list and could have media signed before release | held states excluded from list, detail and media routes | lifecycle tests |
+| A rejected wall candidate was still readable by detail and media | `hidden_from_family` covers held and rejected rows | lifecycle tests |
 | `verifying → releasing` cleared the only deadline; a crash could strand a fall | release stores a lease; sweep includes `releasing`; completion clears it | lease tests |
-| A late SAM/Muse verdict re-armed the 600s cooldown after recovery | `arm_cooldown` is false when the incident is already closed | wall test |
-| `camera_offline` was declared urgent but had no producer | heartbeat watchdog creates one incident per outage | watchdog tests |
+| A crash after the phase-2 claim lost the verified page | the decision is stored before dispatch; the retry delivers it if no notification row exists | `test_a_stored_decision_is_delivered_after_a_crashed_release` |
+| A crash after the phase-1 claim lost the first page | a claim with no notification row is finished instead of skipped | `test_phase_one_finishes_a_claimed_but_unsent_page` |
+| A late SAM/Muse verdict re-armed the 600s cooldown after recovery | `arm_cooldown` is false when the incident is already closed or releasing | wall test |
+| The verifier could reject a visible person with no sight evidence | reject without an `inspect_frame` observation fails open | wall gate path |
+| SAM geometry never reached the Evidence Agent, so bed falls could not be distinguished from bed rest | track geometry is in the gate packet; the prompt no longer treats support alone as contradiction | `gate_targeted_after_fix.json`, full pilot |
+| `camera_offline` was declared urgent but had no producer | heartbeat watchdog creates one incident per outage; a reconnect closes it | watchdog tests |
 | A decision fixture still expected `watch` for camera offline while runtime said `urgent` | fixtures regenerated; drift test added | `test_fixtures_current.py` |
+| The PIN lockout could be bypassed by rotating X-Forwarded-For | a process-wide failure bucket bounds total attempts | `test_rotating_addresses_cannot_bypass_the_global_lockout` |
+| The check-in artifact did not include Spark's read, and the kiosk was described as ASR | live two-case read artifact; kiosk documented as a button fallback | `checkin_read.json` |
 | README and report carried stale counts and unverifiable claims | both rewritten from current artifacts; SAM evidence regenerated at current HEAD | this report |
 
 ## Full verification
 
-- Backend: **228 tests passed** (`python -m pytest -q`), 2026-11-01.
+- Backend: **233 tests passed** (`python -m pytest -q`), 2026-11-01.
 - Web: TypeScript clean and Next.js production build clean.
 - Privacy: 10/10 properties; idle egress **0 bytes / 0 rows in 3s**; 120 ledger
   rows, all with retention; private zone excluded; delete-all verified
   (`privacy.json`).
-- Performance: three dynamic runs **92.4 / 95.0 / 95.8 ms per frame**;
-  repeated-frame **11.2–11.5 ms**; 4-feed ceiling **2.61–2.70 fps/feed**
-  (`performance.md`). Earlier 107 ms and 126 ms samples are within CPU-load
-  variance, not a different build.
+- Performance: dynamic runs **91.2 / 92.4 / 95.0 / 95.8 ms per frame**;
+  reused-frame median **0.2–0.5 ms** (the first frame pays full inference);
+  **2.6–2.7 fps/feed** in the recorded runs. A strict review run measured
+  121.4 ms and earlier samples measured 107 and 126 ms on the same machine
+  under different CPU load; use **~91–126 ms** for planning
+  (`performance.md`, `performance.json`).
 
 ## Reproduce
 
@@ -150,7 +160,9 @@ python scripts/run_gate_pilot.py --pilot evals/fall_pilot.json --out evals/gate_
 - Thirty fixtures is a regression suite, not a statistically meaningful sample.
 - Latency here excludes the SAM pass and check-in speech.
 - The pilot is 110 clips from three actors/rooms, not a multi-night field trial.
-- The check-in suite is clean synthetic speech, not a noisy-room ASR benchmark.
+- The check-in suite is clean synthetic speech through the deterministic
+  classifier and de-escalation table; it does not measure Spark's check-in read,
+  and the kiosk buttons are a separate fallback.
 - The SAM redaction probe uses a real multi-person surveillance reel but one
   model call and one model build; it proves the codec and render path, not
   redaction accuracy on every camera.

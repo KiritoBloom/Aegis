@@ -52,9 +52,11 @@ It is stored as `verifying` and is absent from the family list, the incident
 detail route and the media route. The console keeps the feed live while the
 clip is cut from the in-memory buffer. SAM tracks the person and returns masks;
 Muse Spark runs a bounded, tool-using evidence pass and returns
-escalate/reject. Only a verified release can page the family. A rejection
-keeps an audit row and sends nothing. A failed verifier fails **open** on the
-local floor: a cloud outage must not drop a possible fall.
+escalate/reject. On the console wall, only a verified release can page the
+family. A rejection keeps an audit row and sends nothing. A failed verifier
+fails **open** on the local floor: a cloud outage must not drop a possible fall.
+The edge process is different by design: it pages from the local floor
+immediately and never waits for a cloud model (see "The edge is optional").
 
 **Crash-safe release.** The release claim is an atomic `verifying → releasing`
 transition that stores a 120-second lease. If the API dies after the claim, the
@@ -65,12 +67,16 @@ the next real fall.
 
 **The spoken check-in.** A fall starts a short question rendered by the local
 OS voice: *"Margaret, it's Aegis. I noticed a fall. Are you okay? Say I'm okay,
-or say help."* The answer is transcribed by Muse Voice Transcribe and read
-against the camera evidence. Affirmative words plus a seen upright, moving body
-is the only path down. "I'm fine" from the floor is a contradiction and leaves
-the alert standing. Silence at the 15-second deadline (configurable) escalates
-one step. The resident kiosk at `/checkin/{id}` exposes only the prompt, timer
-and two large answers, never family history.
+or say help."* In the voice path, the answer is transcribed by Muse Voice
+Transcribe and read by Muse Spark against the camera evidence. Affirmative
+words plus a seen upright, moving body is the only path down. "I'm fine" from
+the floor is a contradiction and leaves the alert standing. Silence at the
+15-second deadline (configurable) escalates one step. In two live word-list
+misses, Spark raised the answer to help where the deterministic classifier did
+not (`evals/checkin_read.json`). The resident kiosk at `/checkin/{id}` is a
+button fallback for someone who cannot speak: it posts "I'm okay" or "I need
+help" literally and exposes only the prompt, timer and two answers, never
+family history. It does not claim to be speech recognition.
 
 **The camera watchdog.** The edge heartbeats every ten seconds. A camera that
 has connected before and then misses 90 seconds becomes a real `camera_offline`
@@ -78,10 +84,12 @@ incident at the urgent policy floor — once per outage, not once per sweep. A
 camera that never connected is an installation fact, not an alarm. The producer
 is covered by tests; it is not only a policy rule waiting for a fixture.
 
-**The edge is optional.** The browser console and the edge agent share the same
-detection rules and safety path. The console is the demo surface; the edge
-process is the deployment surface for a real camera, ring buffer, signed clip
-uploads and recovery posts.
+**The edge is a separate deployment path.** The console wall holds a fall for
+SAM/Muse verification; the edge process does not. It applies the same local
+rules and safety floor, then pages immediately, because a real deployment must
+not make a cloud model a single point of failure for the first alert. The clip
+and Muse enrichment follow. The two paths share the policy floor, not a
+pre-alert cloud gate.
 
 ## Meta models
 
@@ -157,26 +165,28 @@ description: 57 floor falls, 5 bed falls, 48 ADL clips.
 
 | Claim | Result | Artifact / command |
 |---|---|---|
-| Backend regression suite | **228 / 228 passed** | `python -m pytest -q` |
+| Backend regression suite | **233 / 233 passed** | `python -m pytest -q` |
 | Web typecheck + production build | **clean** | `npx tsc --noEmit`, `npm run build` |
 | Decision fixtures against Muse Spark | see `evals/report.md` (fresh run) | `python scripts/run_evals.py --runs 1` |
 | Floor falls that produced a wall candidate | **45 / 57** at 2 fps | `evals/fall_pilot.json` |
-| Floor falls that paged the family after the full SAM + Muse gate | **45 / 57 (79%)**; all 45 candidates released, 12 had no candidate | `evals/gate_pilot.json` |
-| Missed floor falls recovered at 8 fps | **3 / 12** | `evals/fall_pilot_8fps.json` |
-| ADL clips that paged the family | **0 / 48**; 5 candidates, all rejected by the gate | `evals/gate_pilot.json` |
-| Bed-fall clips that paged the family | **0 / 5**; 2 candidates, both rejected because the bed is support | `evals/gate_pilot.json` |
+| Floor falls that paged the family after the full SAM + Muse gate | **45 / 57 (79%)**; all 45 candidates released, 12 had no candidate. Measured before the bed-fall prompt change; those 45 were already escalate. | `evals/gate_pilot.json` |
+| Missed floor falls that produced a candidate at 8 fps | **3 / 12** | `evals/fall_pilot_8fps.json` |
+| ADL clips that paged the family | **2 / 48** after the bed-fall fix (2 of 5 candidates escalated, 3 rejected). Before the fix: 0 / 48. | `evals/gate_targeted_after_fix.json` |
+| Bed-fall clips that paged the family | **2 / 5** after the bed-fall fix (both candidates escalated; 3 had no candidate). Before the fix: 0 / 5. | `evals/gate_targeted_after_fix.json` |
 | SAM mask decode + redaction at current HEAD | **240 / 240 masks, 7 tracks, 192 mask blurs, 503,806 pixels, 0 box fallbacks** | `evals/meta/sam_redaction.json` |
 | Check-in de-escalation suite (real ASR output) | **5 / 5 cases** | `evals/checkin.md` |
+| Spark check-in reading on word-list misses | **2 / 2 raised to help** | `evals/checkin_read.json` |
 | Privacy properties | **10 / 10**; idle egress 0 bytes in 3 s; every ledger row has retention | `evals/privacy.json` |
-| Wall cost, external footage | **92–96 ms/frame** dynamic (3 runs); **11–12 ms** repeated frame; 4-feed ceiling **2.6–2.7 fps/feed** | `evals/performance.md` |
+| Wall cost, external footage | **91–96 ms/frame** dynamic; reused frame **0.2–0.5 ms median** (first frame pays full inference); 4-feed ceiling **2.6–2.7 fps/feed** in the recorded runs | `evals/performance.md`, `evals/performance.json` |
 | Verification state machine | held rows hidden; release lease retry; late verdict does not re-arm cooldown | `tests/test_verification_lifecycle.py`, `tests/test_wall.py` |
 | Camera watchdog | one urgent incident per outage; never-connected cameras ignored | `tests/test_camera_watchdog.py` |
 
 The earlier 107 ms and 126 ms wall measurements were taken on the same machine
-under different CPU load; the benchmark is wall-clock and machine-specific.
-The browser console is slower than the benchmark because it also encodes,
-uploads and sleeps between samples; the console displays its own measured rate
-per feed instead of claiming the backend number.
+under different CPU load; a strict review run measured **121 ms/frame**. The
+benchmark is wall-clock and machine-specific; use the **~92–126 ms** range for
+planning. The browser console is slower than the benchmark because it also
+encodes, uploads and sleeps between samples; the console displays its own
+measured rate per feed instead of claiming the backend number.
 
 ## Limitations
 
@@ -185,7 +195,11 @@ per feed instead of claiming the backend number.
 - **The fall pilot is small and not the target study.** It is 110 clips across
   three actors/rooms. Twelve floor falls produced no candidate at 2 fps; most
   were person-loss, occlusion, or a bed box making a floor fall look supported.
-  Three of those twelve were caught at 8 fps. Recall will differ in a real home.
+  Three of those twelve were caught at 8 fps. The bed-fall fix now catches the
+  two bed-fall candidates that the gate used to reject, but it also pages two
+  of the 48 ADL clips where someone is lying on a bed: SAM geometry alone
+  cannot always tell "fell onto the bed" from "lay down on the bed." Recall
+  and restraint will differ in a real home.
 - **The check-in suite is five clean synthetic utterances.** It is a regression
   suite for the de-escalation table, not an ASR benchmark in a noisy room.
 - **Audio distress is a heuristic**, not a medical classifier. It combines a

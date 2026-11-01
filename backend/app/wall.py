@@ -30,6 +30,9 @@ OBJECT_EVERY_S = 5.0
 REUSE_IDENTICAL_FRAMES = True
 SESSION_TTL_S = 30 * 60
 MAX_FEEDS = 6
+# A browser tab that is closed without calling /session/close must not grow an
+# unbounded per-session frame buffer in the API process.
+MAX_SESSIONS = 12
 
 _SESSIONS: dict[str, dict[str, "FeedState"]] = {}
 _LOCK = threading.Lock()
@@ -610,6 +613,8 @@ def process(session: str, feed_meta: dict, data: bytes, now: float | None = None
         raise ValueError("feed id is required")
     with _LOCK:
         _prune(now)
+        if session not in _SESSIONS and len(_SESSIONS) >= MAX_SESSIONS:
+            raise ValueError("too many wall sessions")
         feeds = _SESSIONS.setdefault(session, {})
         state = feeds.get(feed_id)
         if state is None:
