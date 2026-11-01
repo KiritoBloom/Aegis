@@ -28,6 +28,7 @@ type ConsoleContextValue = {
   updateSetup: (mutate: (setup: ConsoleSetup) => ConsoleSetup) => void;
   sources: Record<string, FeedSource>;
   live: Record<string, LiveFeed>;
+  trackDisplay: (feedId: string, el: HTMLVideoElement) => () => void;
   logs: Record<string, LogEntry[]>;
   clearLogs: (feedId?: string) => void;
   toasts: ConsoleToast[];
@@ -81,6 +82,7 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   const objectUrlsRef = useRef<Record<string, string>>({});
   const cameraStreamsRef = useRef<Record<string, MediaStream>>({});
   const captureRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+  const displayRefs = useRef<Record<string, Set<HTMLVideoElement>>>({});
   const workersRef = useRef<Map<string, AbortController>>(new Map());
   const sessionRef = useRef<string | null>(null);
   const logSeq = useRef(0);
@@ -145,6 +147,56 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     activeRef.current = active;
   }, [active]);
+
+  // The worker analyses frames from the hidden capture element. A tile plays
+  // its own copy of the same recording, and two <video> elements do not share
+  // a clock: a remount, a paused tile or an independent loop leaves the
+  // visible copy seconds behind the frames being analysed. That made the boxes
+  // and the fall toast appear before the fall the family could see. Keep every
+  // visible copy on the capture clock so "shown" and "judged" are one moment.
+  const trackDisplay = useCallback((feedId: string, el: HTMLVideoElement) => {
+    const elements = (displayRefs.current[feedId] ??= new Set<HTMLVideoElement>());
+    elements.add(el);
+    return () => {
+      elements.delete(el);
+      if (!elements.size) delete displayRefs.current[feedId];
+    };
+  }, []);
+
+  useEffect(() => {
+    const sync = window.setInterval(() => {
+      for (const [feedId, elements] of Object.entries(displayRefs.current)) {
+        const master = captureRefs.current[feedId];
+        if (!master || master.readyState < 2 || !master.videoWidth) continue;
+        // A live MediaStream has no seekable timeline. Both elements render the
+        // same live source, so there is no recorded clock to align.
+        if (master.srcObject) continue;
+        const duration = master.duration;
+        for (const el of elements) {
+          if (el.readyState < 2 || el.seeking) continue;
+          if (master.paused) {
+            if (!el.paused) el.pause();
+            continue;
+          }
+          if (el.paused) void el.play().catch(() => {});
+          if (!Number.isFinite(duration) || duration <= 0) continue;
+          let delta = el.currentTime - master.currentTime;
+          // A loop wraps the clock; compare across the boundary instead of
+          // seeking the whole recording.
+          if (delta > duration / 2) delta -= duration;
+          else if (delta < -duration / 2) delta += duration;
+          if (Math.abs(delta) > 0.2) {
+            try {
+              el.currentTime = master.currentTime;
+            } catch {
+              // The element may not be seekable yet; the next tick retries.
+            }
+          }
+        }
+      }
+    }, 250);
+    return () => window.clearInterval(sync);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -621,13 +673,14 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
     updateSetup,
     sources,
     live,
+    trackDisplay,
     logs,
     clearLogs,
     toasts,
     dismissToast,
     blockedReason,
     clearBlocked: () => setBlockedReason(null),
-  }), [ready, setup, resident, active, setActive, updateSetup, sources, live, logs, clearLogs, toasts, dismissToast, blockedReason]);
+  }), [ready, setup, resident, active, setActive, updateSetup, sources, live, trackDisplay, logs, clearLogs, toasts, dismissToast, blockedReason]);
 
   return (
     <ConsoleContext.Provider value={value}>

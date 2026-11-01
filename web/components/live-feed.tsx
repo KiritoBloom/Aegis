@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FeedSource, WallFrame } from "@/lib/console-types";
 import type { ConsoleFeed } from "@/lib/console";
+import { useConsole } from "./console-provider";
 import styles from "./console-home.module.css";
 
 type Size = { w: number; h: number };
@@ -21,6 +22,16 @@ export function LiveFeed({
   const stage = useRef<HTMLDivElement | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
   const [size, setSize] = useState<Size>({ w: 0, h: 0 });
+  const { trackDisplay } = useConsole();
+
+  // This element is a second copy of the recording the worker analyses. Let
+  // the provider keep it on the capture clock, so an alert cannot run ahead of
+  // the picture (the old separate players drifted by seconds after a remount).
+  useEffect(() => {
+    const el = video.current;
+    if (!el) return;
+    return trackDisplay(feed.id, el);
+  }, [feed.id, trackDisplay]);
 
   useEffect(() => {
     const el = stage.current;
