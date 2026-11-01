@@ -1,5 +1,13 @@
 # Aegis — 9-Day Build Plan
 
+> **Historical planning artifact (27–29 Oct 2026).** The thresholds and
+> checklists below are the original plan, not current claims. Current behavior
+> is in `README.md` and measured evidence is in `evals/`. In particular: camera
+> offline is now produced by a heartbeat watchdog after 90 s of silence at the
+> urgent policy floor; wall candidates are held as `verifying` and are not
+> family-visible until release; and the release itself is lease-recoverable.
+> Where this file disagrees with code or `evals/`, the code and artifacts win.
+>
 > **Current implementation note (Oct 29):** Muse Wonder and the weekly letter have been removed.
 > Muse Spark now maintains expiring household memory and runs the tool-using Evidence Agent
 > (SAM evidence, memory, recent events, audio context) that verifies wall candidates and produces

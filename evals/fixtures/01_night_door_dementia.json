@@ -16,7 +16,8 @@
         "wanders": true,
         "uses_mobility_aid": false,
         "anticoagulant": false,
-        "lives_alone": true
+        "lives_alone": true,
+        "conditions": []
       },
       "consent_on_file": true
     },
@@ -50,6 +51,10 @@
     "sensors": {
       "door_contact": "open"
     },
+    "objects": [],
+    "audio": null,
+    "media": null,
+    "checkin": null,
     "history": {
       "last_24h": [],
       "events_last_7d": 0,
@@ -174,6 +179,7 @@
     "approach",
     "approach_speed",
     "at",
+    "audio",
     "be",
     "body",
     "camera",
@@ -181,9 +187,11 @@
     "care_profile",
     "changes",
     "chars",
+    "checkin",
     "cognitive",
     "cognitive_condition",
     "condition",
+    "conditions",
     "conf",
     "consent",
     "consent_on_file",
@@ -192,6 +200,7 @@
     "count",
     "crossed",
     "crossed_door_line",
+    "dark",
     "dementia",
     "direction",
     "direction_changes",
@@ -248,6 +257,7 @@
     "max",
     "max_body_chars",
     "may",
+    "media",
     "median",
     "median_conf",
     "memory",
@@ -259,7 +269,9 @@
     "name",
     "night",
     "night_hours",
+    "nighttime",
     "not",
+    "objects",
     "on",
     "open",
     "outcomes",

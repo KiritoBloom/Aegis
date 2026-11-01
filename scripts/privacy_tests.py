@@ -4,7 +4,7 @@ A privacy claim that is not a test is marketing. Each of these asserts a
 property the product makes in its own copy, and each fails loudly if the
 property stops being true.
 
-    1. idle egress      — 60s of idle, zero bytes uploaded
+    1. idle egress      — 3s of idle, zero bytes uploaded
     2. mask canary      — no pixel from inside a mask reaches a saved frame
     3. expiry           — every upstream row expires in 1 hour
     4. delete all       — media gone, rows gone, upstream delete recorded

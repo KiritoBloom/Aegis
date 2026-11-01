@@ -1,0 +1,124 @@
+{
+  "fps": 8.0,
+  "clips": 12,
+  "with_candidate": 3,
+  "results": [
+    {
+      "clip": "gmd-sub2-fall-02.mp4",
+      "frames": 252,
+      "triggers": [
+        {
+          "at_native_s": 4.16,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": true,
+          "box_aspect": 1.25,
+          "track_id": 1,
+          "box": [
+            0.531,
+            0.804,
+            0.776,
+            1.0
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.5
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub2-fall-10.mp4",
+      "frames": 167,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-fall-16.mp4",
+      "frames": 120,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub2-fall-22.mp4",
+      "frames": 155,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-01.mp4",
+      "frames": 114,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-04.mp4",
+      "frames": 163,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-07.mp4",
+      "frames": 269,
+      "triggers": [
+        {
+          "at_native_s": 2.55,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": "bed",
+          "geometry_fall": true,
+          "box_aspect": 1.41,
+          "track_id": 1,
+          "box": [
+            0.25,
+            0.606,
+            0.594,
+            0.85
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.7
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-09.mp4",
+      "frames": 186,
+      "triggers": [
+        {
+          "at_native_s": 4.68,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 1.38,
+          "track_id": 2,
+          "box": [
+            0.122,
+            0.576,
+            0.675,
+            0.978
+          ],
+          "distance": "mid",
+          "lying_for_s": 0.4
+        }
+      ]
+    },
+    {
+      "clip": "gmd-sub3-fall-15.mp4",
+      "frames": 85,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-16.mp4",
+      "frames": 91,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-18.mp4",
+      "frames": 178,
+      "triggers": []
+    },
+    {
+      "clip": "gmd-sub3-fall-19.mp4",
+      "frames": 86,
+      "triggers": []
+    }
+  ]
+}

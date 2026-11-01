@@ -16,7 +16,8 @@
         "wanders": true,
         "uses_mobility_aid": false,
         "anticoagulant": false,
-        "lives_alone": true
+        "lives_alone": true,
+        "conditions": []
       },
       "consent_on_file": true
     },
@@ -27,6 +28,10 @@
     "sensors": {
       "offline_min": 15
     },
+    "objects": [],
+    "audio": null,
+    "media": null,
+    "checkin": null,
     "history": {
       "last_24h": [],
       "events_last_7d": 0,
@@ -34,7 +39,7 @@
     },
     "memory": [],
     "policy": {
-      "floor": "watch",
+      "floor": "urgent",
       "floor_reasons": [
         "camera_offline"
       ]
@@ -53,13 +58,13 @@
       ]
     }
   },
-  "policy_floor": "watch",
+  "policy_floor": "urgent",
   "floor_reasons": [
     "camera_offline"
   ],
   "expect": {
-    "min_severity": "watch",
-    "exact_severity": "watch",
+    "min_severity": "urgent",
+    "exact_severity": "urgent",
     "body_mentions": [
       "hallway"
     ],
@@ -111,18 +116,22 @@
     "alone",
     "anticoagulant",
     "at",
+    "audio",
     "body",
     "camera",
     "camera_offline",
     "care",
     "care_profile",
     "chars",
+    "checkin",
     "cognitive",
     "cognitive_condition",
     "condition",
+    "conditions",
     "consent",
     "consent_on_file",
     "constraints",
+    "dark",
     "dementia",
     "display",
     "display_name",
@@ -157,13 +166,17 @@
     "margaret",
     "max",
     "max_body_chars",
+    "media",
     "memory",
     "mention",
     "min",
     "mobility",
     "model",
     "name",
+    "night",
+    "nighttime",
     "not",
+    "objects",
     "offline",
     "offline_min",
     "on",
@@ -185,10 +198,10 @@
     "true",
     "type",
     "unavailable",
+    "urgent",
     "uses",
     "uses_mobility_aid",
     "wanders",
-    "watch",
     "zone"
   ],
   "why": "Camera down 15 minutes. Say the camera is down, not that she is."

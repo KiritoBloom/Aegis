@@ -89,6 +89,32 @@ def test_a_second_fall_after_recovery_is_not_suppressed_by_the_cooldown(monkeypa
     assert second["trigger"]["id"] != first_id
 
 
+def test_late_verification_for_a_recovered_alert_does_not_arm_the_cooldown(monkeypatch):
+    state = wall.FeedState({"id": "f-late-verdict", "name": "Hall", "kind": "file"})
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("upright"))
+    state.process(None, 8000.0)
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))
+    triggered = state.process(None, 8000.4)
+    assert triggered["trigger"] is not None
+    alert_id = triggered["trigger"]["id"]
+
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("upright"))
+    state.process(None, 8001.0)
+    state.process(None, 8002.5)
+    assert state.process(None, 8004.0)["resolved"] is not None
+
+    # SAM/Muse finish after the resident is already back up. The API tells the
+    # wall not to arm a cooldown for a verdict that no longer pages anyone.
+    state.set_verification(alert_id, status="rejected", escalated=False,
+                           arm_cooldown=False)
+    state.set_verification(alert_id, status="verified", escalated=False,
+                           arm_cooldown=False)
+    state.process(None, 8004.4)
+    monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))
+    second = state.process(None, 8005.0)
+    assert second["trigger"] is not None
+
+
 def test_absence_alone_does_not_resolve_a_fall(monkeypatch):
     state = wall.FeedState({"id": "f-gone", "name": "Hall", "kind": "file"})
     monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))

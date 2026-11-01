@@ -334,7 +334,8 @@ class FeedState:
             if alert is not None:
                 alert.incident_id = incident_id
 
-    def set_verification(self, alert_id: str, **data) -> dict | None:
+    def set_verification(self, alert_id: str, arm_cooldown: bool = True,
+                         **data) -> dict | None:
         with self.lock:
             alert = next((a for a in self.alerts if a.id == alert_id), None)
             if alert is None:
@@ -345,9 +346,12 @@ class FeedState:
             if data.get("status") == "rejected":
                 # A rejected false positive must not silence the feed for ten
                 # minutes. A verified incident does: one situation, one incident.
-                self._cooldown_by_track[track_id] = min(
-                    self._cooldown_by_track.get(track_id, 0.0), time.time() + 30.0)
-            elif data.get("status") in ("verified", "unavailable"):
+                if arm_cooldown:
+                    self._cooldown_by_track[track_id] = min(
+                        self._cooldown_by_track.get(track_id, 0.0), time.time() + 30.0)
+            elif data.get("status") in ("verified", "unavailable") and arm_cooldown:
+                # A late completion for an incident that was already recovered
+                # must not arm a ten-minute cooldown over the next real fall.
                 self._cooldown_by_track[track_id] = max(
                     self._cooldown_by_track.get(track_id, 0.0), time.time() + COOLDOWN_S)
             return {**alert.as_dict(), "feed_id": self.id, "feed_name": self.name}

@@ -60,6 +60,15 @@ CHECKIN_TTS = os.environ.get("CHECKIN_TTS", "on").lower() != "off"
 # a verifier that died cannot leave a real fall with no family contact at all.
 WALL_VERIFICATION_DEADLINE_S = float(os.environ.get("WALL_VERIFICATION_DEADLINE_S", "180"))
 WALL_VERIFICATION_SWEEP_S = float(os.environ.get("WALL_VERIFICATION_SWEEP_S", "5"))
+# A release is two durable steps: claim, then write the decision and page. The
+# claim stores a lease so a process that dies between them is retried by the
+# sweep. Long enough that a slow webhook is never raced by its own recovery.
+WALL_RELEASE_LEASE_S = float(os.environ.get("WALL_RELEASE_LEASE_S", "120"))
+# The edge heartbeats every 10 s. Three missed beats is a lost camera, not a
+# jittery network. The watchdog waits one interval after boot so an API restart
+# does not page for cameras that reconnect on their first beat.
+CAMERA_OFFLINE_AFTER_S = float(os.environ.get("CAMERA_OFFLINE_AFTER_S", "90"))
+CAMERA_WATCHDOG_S = float(os.environ.get("CAMERA_WATCHDOG_S", "15"))
 # Rows created before the deadline column existed are judged on age instead.
 WALL_VERIFICATION_LEGACY_AGE_S = float(
     os.environ.get("WALL_VERIFICATION_LEGACY_AGE_S", "300"))
@@ -1087,7 +1096,8 @@ async def setup_propose(body: dict):
 @app.get("/api/incidents/{incident_id}")
 def get_incident(incident_id: str):
     inc = db.get_incident(incident_id)
-    if not inc:
+    # A held candidate is not a family incident yet: SAM/Muse still own it.
+    if not inc or inc.get("status") in ("verifying", "releasing"):
         raise HTTPException(404, "not found")
     inc["notifications"] = db.notifications_for(incident_id)
     inc["acks"] = db.acks_for(incident_id)
@@ -1868,6 +1878,10 @@ def media(incident_id: str, name: str, request: Request):
     if name in ("clip.mp4", "still.jpg", "thumb.jpg", "sam_input.mp4") \
             and db.media_private(incident_id):
         raise HTTPException(404, "not found")
+    # No artifact from a held candidate is readable by the family, including a
+    # redaction that happened to finish early.
+    if db.incident_held(incident_id):
+        raise HTTPException(404, "not found")
     path = MEDIA_ROOT / incident_id / name
     if not path.exists():
         raise HTTPException(404, "not found")
@@ -2057,7 +2071,18 @@ async def _release_wall_incident(incident_id: str, verification: str,
             db.update_incident_sensors(incident_id, {"verification": verification})
         log.info("wall incident %s resolved during verification; not released", incident_id)
         return False
-    if not db.claim_verification_release(incident_id):
+    now_epoch = time.time()
+    if incident.get("status") == "releasing":
+        # A previous release claimed the row and died before finishing. Its
+        # decision, notify phase and status are durable, so the retry cannot
+        # double-page: `claim_notify_phase` rejects the second claim.
+        if not db.claim_verification_retry(incident_id, now_epoch, WALL_RELEASE_LEASE_S):
+            log.info("wall incident %s release lease is live elsewhere; skipped",
+                     incident_id)
+            return False
+        log.warning("wall incident %s release lease expired; recovering it",
+                    incident_id)
+    elif not db.claim_verification_release(incident_id, now_epoch, WALL_RELEASE_LEASE_S):
         # The sweeper (or a previous attempt) already owns this release. A late
         # agent decision must not become a second family page.
         log.info("wall incident %s already released or closed; release skipped", incident_id)
@@ -2067,6 +2092,7 @@ async def _release_wall_incident(incident_id: str, verification: str,
     if incident.get("status") in ("resolved", "cancelled"):
         # A recovery or a late rejection closed the row between the claim and
         # the re-read. Keep it closed.
+        db.clear_verification_deadline(incident_id)
         log.info("wall incident %s closed during release; not released", incident_id)
         return False
     if privacy.paused_state().get("paused"):
@@ -2105,6 +2131,7 @@ async def _release_wall_incident(incident_id: str, verification: str,
                          "severity": stored, "title": decision.title,
                          "wall": True, "verified": True})
         asyncio.create_task(start_checkin(incident_id))
+        db.clear_verification_deadline(incident_id)
         log.info("wall incident %s released with verified decision (%s)", incident_id, verification)
         return True
     # Verification unavailable: fall back to the deterministic floor/template.
@@ -2117,8 +2144,12 @@ async def _release_wall_incident(incident_id: str, verification: str,
     fresh = db.get_incident(incident_id) or {}
     if (fresh.get("status") not in ("resolved", "cancelled", "acknowledged")
             and not fresh.get("acked_at")):
-        db.set_status(incident_id, "detected")
+        # A retry after a crashed release must not downgrade a row whose phase
+        # 1 page already went out (or was already claimed).
+        paged = int(fresh.get("notify_phase") or 0) >= 1
+        db.set_status(incident_id, "notified" if paged else "detected")
         asyncio.create_task(start_checkin(incident_id))
+    db.clear_verification_deadline(incident_id)
     log.info("wall incident %s released without verification (%s)", incident_id, verification)
     return True
 
@@ -2157,17 +2188,23 @@ async def sweep_stale_verifications(now_epoch: float | None = None,
     released: list[str] = []
     for incident in db.due_verifications(
             now_epoch, WALL_VERIFICATION_LEGACY_AGE_S, limit):
-        if await _release_wall_incident(
-                incident["id"], "verification_timeout_local_floor"):
+        retrying = incident.get("status") == "releasing"
+        verification = ("release_lease_expired_local_floor" if retrying
+                        else "verification_timeout_local_floor")
+        if await _release_wall_incident(incident["id"], verification):
             released.append(incident["id"])
             db.record_event(incident["id"], incident.get("camera_id"),
                             incident.get("type") or "fall_suspected",
                             incident.get("zone_id"), db.now(),
                             incident.get("severity") or "urgent",
-                            suppressed=False, reason="verification_deadline",
+                            suppressed=False,
+                            reason=("release_lease_expired" if retrying
+                                    else "verification_deadline"),
                             source="wall")
-            log.warning("wall incident %s verification deadline passed; "
-                        "released on the local floor", incident["id"])
+            log.warning("wall incident %s %s; released on the local floor",
+                        incident["id"],
+                        "release lease expired" if retrying
+                        else "verification deadline passed")
     return released
 
 
@@ -2179,6 +2216,85 @@ async def verification_sweep_loop() -> None:
         except Exception as exc:  # noqa: BLE001
             log.exception("verification sweep error: %s", exc)
         await asyncio.sleep(WALL_VERIFICATION_SWEEP_S)
+
+
+async def sweep_camera_heartbeats(now_epoch: float | None = None) -> list[str]:
+    """Turn a camera that stopped checking in into a real safety incident.
+
+    This is the producer behind the `camera_offline` policy floor. Only a
+    camera that has heartbeated before is watched, and the online -> offline
+    transition is the dedupe: a long outage pages once, not every 15 seconds.
+    """
+    now_epoch = time.time() if now_epoch is None else now_epoch
+    cutoff = time.strftime(
+        "%Y-%m-%dT%H:%M:%S",
+        time.gmtime(now_epoch - max(1.0, CAMERA_OFFLINE_AFTER_S)),
+    ) + "Z"
+    created: list[str] = []
+    for camera in db.stale_cameras(cutoff):
+        if not db.mark_camera_offline(camera["id"]):
+            continue
+        incident_id = f"inc_cam_{uuid.uuid4().hex[:12]}"
+        last = str(camera.get("last_heartbeat_at") or "")
+        packet = {
+            "incident_id": incident_id,
+            "household_id": HOUSEHOLD,
+            "camera_id": camera["id"],
+            "type": "camera_offline",
+            "status": "detected",
+            "severity_hint": "urgent",
+            "started_at": db.now(),
+            "local_time": now_local().isoformat(),
+            "zone_id": camera.get("location") or None,
+            "track": {},
+            "sensors": {
+                "camera_fps": 0,
+                "camera_state": "offline",
+                "last_heartbeat_at": last,
+                "offline_for_s": round(
+                    max(0.0, now_epoch - _parse_iso_epoch(last)), 1),
+            },
+            "privacy": {"masks_applied": [], "audio": False, "raw_video_left_home": False},
+            "evidence": ["camera_offline", "heartbeat_missing"],
+            "source": "watchdog",
+        }
+        db.upsert_incident(packet)
+        floor, _ = effective_floor(packet)
+        db.raise_incident_severity(incident_id, floor.severity)
+        db.record_event(incident_id, camera["id"], "camera_offline",
+                        packet["zone_id"], db.now(), floor.severity,
+                        suppressed=False, reason="heartbeat_missing",
+                        source="watchdog")
+        await broadcast({"type": "incident.created", "id": incident_id,
+                         "incident_type": "camera_offline",
+                         "floor": floor.severity})
+        asyncio.create_task(phase_one(incident_id))
+        created.append(incident_id)
+        log.warning("camera %s stopped heartbeating at %s; incident %s",
+                    camera["id"], last or "?", incident_id)
+    return created
+
+
+def _parse_iso_epoch(value: str) -> float:
+    if not value:
+        return 0.0
+    try:
+        return datetime.strptime(value[:19], "%Y-%m-%dT%H:%M:%S") \
+            .replace(tzinfo=timezone.utc).timestamp()
+    except ValueError:
+        return 0.0
+
+
+async def camera_watchdog_loop() -> None:
+    while True:
+        # Sleep first: a restart is not an outage, and the edge gets a full
+        # heartbeat interval to reconnect before silence is judged.
+        await asyncio.sleep(CAMERA_WATCHDOG_S)
+        try:
+            if not privacy.paused_state().get("paused"):
+                await sweep_camera_heartbeats()
+        except Exception as exc:  # noqa: BLE001
+            log.exception("camera watchdog error: %s", exc)
 
 
 async def _collect_wall_evidence(session: str, feed_id: str,
@@ -2298,7 +2414,13 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
     worse than a false alert. The wall says which path happened.
     """
     async def publish(status: str, **data) -> None:
-        alert = wall.set_verification(session, feed_id, alert_id, status=status, **data)
+        # Arming the wall cooldown is only correct while the incident is live.
+        # A late model verdict for a recovered resident must not silence the
+        # feed for the next ten minutes.
+        current = db.get_incident(incident_id) or {}
+        arm = current.get("status") not in ("resolved", "cancelled")
+        alert = wall.set_verification(session, feed_id, alert_id, status=status,
+                                      arm_cooldown=arm, **data)
         if alert is not None:
             await broadcast({"type": "wall.verification", "session": session,
                              "feed_id": feed_id, "alert": alert})
@@ -2309,6 +2431,8 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
             db.record_event(incident_id, packet.get("camera_id"), "verification_suppressed",
                             packet.get("zone_id"), db.now(), "info", suppressed=True,
                             reason="monitoring_paused", source="wall")
+            await publish("rejected", escalated=False,
+                          reason="Monitoring is paused; the candidate was discarded.")
             return
         await publish("verifying",
                       reason="Collecting a 5–7 second evidence clip, then checking it with SAM and Muse. No family alert has been sent.",
@@ -2411,7 +2535,7 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
             gate = policy.EvidenceGate(result.final_packet,
                                        extra=set(packet.get("evidence") or []))
             decision, violations = policy.validate(decision, floor, gate)
-            await _release_wall_incident(
+            released = await _release_wall_incident(
                 incident_id, "sam_muse_verified", decision=decision,
                 trace=trace, violations=violations, latency=result.latency_ms)
             await publish("verified",
@@ -2419,7 +2543,7 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
                           confidence=confidence, sam_person_count=sam_count,
                           sam_seen=True, clip_seconds=round(float(clip_seconds or 0), 1),
                           severity=decision.severity, trace=trace,
-                          escalated=True)
+                          escalated=released)
         else:
             await _reject_wall_incident(incident_id, reason or "agent rejected the candidate")
             await publish("rejected",
@@ -2429,8 +2553,9 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
                           trace=trace, escalated=False)
     except Exception as exc:  # noqa: BLE001
         reason = f"Verification unavailable: {type(exc).__name__}: {str(exc)[:120]}"
-        await _release_wall_incident(incident_id, "verification_unavailable_local_floor")
-        await publish("unavailable", reason=reason, escalated=True,
+        released = await _release_wall_incident(
+            incident_id, "verification_unavailable_local_floor")
+        await publish("unavailable", reason=reason, escalated=released,
                       trace=trace if "trace" in locals() else [])
         log.warning("wall verification unavailable for %s; escalated on local floor: %s",
                     incident_id, exc)
@@ -3100,6 +3225,10 @@ async def startup() -> None:
     # A held wall candidate is invisible to the worker. Sweeping here (and
     # every few seconds after) is what makes its deadline survive a restart.
     asyncio.create_task(verification_sweep_loop())
+    # The heartbeat watchdog is the producer for the camera_offline floor. A
+    # camera that stops checking in must become a real incident, not only a
+    # policy rule waiting for a fixture.
+    asyncio.create_task(camera_watchdog_loop())
     asyncio.create_task(memory_loop())
     _load_profile()
     # The wall's first frame should not be the request that loads YOLO and pose.

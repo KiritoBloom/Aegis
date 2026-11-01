@@ -136,7 +136,7 @@ def build() -> list[dict]:
         make("10_camera_offline", itype="camera_offline", zone="hallway", hour=22,
              track={"track_unavailable": True, "frames_present": 0},
              sensors={"offline_min": 15},
-             expect={"exact_severity": "watch",
+             expect={"exact_severity": "urgent",
                      "body_mentions": ["hallway"],
                      "body_excludes": ["fell", "fall", "hurt", "injured",
                                        "on the floor"]},

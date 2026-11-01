@@ -34,7 +34,7 @@ One channel can never lower an alert. Two agreeing channels can.
   has not stood up.
 - `help` escalates one tier even if perception looks calm. It is the
   highest-value word in the system.
-- `no_response` escalates after 20s. Silence is data.
+- `no_response` escalates after 15s by default (`CHECKIN_TIMEOUT_S`). Silence is data.
 - `confused` / `other` changes nothing and is marked for the family.
 
 ## Limits

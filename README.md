@@ -1,262 +1,286 @@
 # Aegis
 
-**It watches the moments that matter, and never the moments that don't.**
+**A privacy-first care system for an elderly parent who lives alone.** A small
+in-home process watches for a short list of dangerous transitions, keeps raw
+video on the household's own machine, and contacts the family only when an
+event survives both a deterministic safety floor and an evidence check.
 
-A privacy-first care system for an elderly parent who lives alone. A small device in the home keeps raw video inside the house, and speaks only when something actually needs you.
-
-> **Status:** Day 4 of 9 — built 27 Oct – 4 Nov 2026 for the Meta Global AI Developer Hackathon (Indie Developer track).
-> The pipeline is in progress. **Every number in this file is labelled as a target until it is produced by `evals/report.md`.** Nothing here is claimed without a run behind it.
+Built solo for the **Meta Global AI Developer Hackathon** (Indie Developer
+track), 27 Oct – 4 Nov 2026. Every number below links to an artifact in
+`evals/`; claims without a run are not made here.
 
 ---
 
-## Quickstart
+## The product
 
-**Prerequisites:** Python 3.11+, Node 20+, `ffmpeg` on `PATH`, and the two YOLO weights
-(`yolov8n.pt`, `yolov8n-pose.pt`) in the repository root. For a live edge camera/microphone
-also install the system audio/video drivers.
+The choice on the market is constant surveillance or no coverage. Aegis watches
+**transitions**, not people:
 
-```bash
-cp .env.example .env                 # set META_API_KEY; add VAPID keys for push
-python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python scripts/serve.py               # API on :8000
+- a person goes from upright to lying and does not get up;
+- the front door opens at night;
+- a hot plate is on with nobody in the kitchen;
+- a cry for help comes from a room whose television is also on;
+- a camera stops checking in and the house goes blind;
+- nothing happens — in which case it sends nothing.
 
-cd web
-npm install
-npm run dev                           # dashboard on :3000
-```
+Silence is a product feature, not a failure. The system is an event notifier:
+it does not diagnose, identify anyone, give medical advice, or dispatch help.
 
-Open `http://localhost:3000/setup`. Add a local recording, a browser camera, or a lab clip;
-map every feed; Muse proposes the watch plan; approve it and finish. Press **Activate system**
-in the console. The console stores feed choices in this browser; the API stores incidents,
-consent and watch decisions locally.
-
-For a channel that reaches the family without this browser, set `FAMILY_WEBHOOK_URL` and
-optionally `FAMILY_BACKUP_WEBHOOK_URL` to endpoints your household already trusts (a
-caregiver automation, a nurse-call bridge). Aegis POSTs signed alert **text** and an in-app
-path — never a clip — with `X-Aegis-Signature: sha256=…` over the raw body when
-`FAMILY_WEBHOOK_SECRET` is set. Built-in SMS is also available: set `TWILIO_ACCOUNT_SID`,
-`TWILIO_AUTH_TOKEN`, `TWILIO_FROM` and a comma-separated `FAMILY_SMS_TO` list (primary and
-backup). No SDK is involved. `/api/notifications/readiness` and the Profile page report
-whether any remote channel is armed.
-
-The edge process is optional for the console and runs separately:
-
-```bash
-python scripts/worker.py              # enrichment/escalation loops
-PYTHONPATH=edge python -m aegis_edge --config config/edge.yaml
-```
-
-`config/edge.yaml` defaults to the first USB camera; set `camera.source` to a file, phone
-stream or RTSP URL. Edge audio is opt-in with `AEGIS_AUDIO=on` (or `--audio`). The lab
-footage picker reads `FOOTAGE_ROOT` (default `data/new-footage`); add clips there, or use
-**Add a recording** in Settings.
-
-## The problem
-
-You install a camera to check on your mother. It is always on, the footage goes to a cloud, and within a week nobody watches it. The moments that matter — the door at 3 AM, the fall in the hallway, the hot plate left on — are a sliver of the feed.
-
-The choice on the market today is **constant surveillance or no coverage**. Both are bad, and both have been sold to millions of families.
-
-## The idea
-
-You do not need to watch a person to know they are okay. You need to watch **transitions**: leaving a safe zone, failing to get up, leaving a heat source unattended. Those are rare, discrete, and cheap to reason about. Everything else can stay on the device.
-
-> **Lying down is normal on a bed, and abnormal in a corridor.**
-
-That single sentence generalises into the whole product: posture × place × time, computed on-device, with no new model and no new API cost.
-
-## What it watches
-
-| | Scene | The system's job |
-|---|---|---|
-| **1** | **Night door** — the resident walks to the front door at 3:12 AM | Track the approach, confirm the door state, alert the family, explain why |
-| **2** | **Fall** — a slow slide down the wall, no impact, she does not get up | Alert in ~3s, then confirm with the clip and the reason |
-| **3** | **Stove** — a hot plate on, nobody in the kitchen | One alert after a window, not forty |
-| **4** | **Nothing** — she bends to tie a shoe, the dog crosses the room, she prays | **Send nothing.** This is the feature. |
-| **5** | **Night presence** — a second person is in the house after dark | Alert the family with the clip, time and door state. Aegis does not identify anyone and does not dispatch anyone. |
-| **6** | **Pacing / restlessness** — repeated back-and-forth with many turns | A quiet care signal. The Evidence Agent checks it against household memory and recent events; it reports the pattern, never a diagnosis. |
-
-The fourth row is the product. A care system that is right most of the time and annoying the rest of it gets muted — and a muted system is worse than no system.
-
-## Why this is not another fall detector
-
-| | Versions judges have already seen | Aegis |
-|---|---|---|
-| **A** | YOLO fall detector → Telegram. One model, one threshold, one channel | Edge gate + zero-shot tracking + deterministic policy floor + four-channel evidence |
-| **B** | Webcam frames → LLM → "the person appears to have fallen" | Geometry exists before the LLM. It gets structured evidence, and may request **one still from the already-collected clip** — never a live feed |
-| **C** | Health chatbot that gives advice | No advice, no diagnosis, no medical claim. An event notifier with a disclaimer |
-| **What all three lack** | A reason **not** to alert | Silence is the core output, and it is measured |
-
-## How it works
+## How an event moves through the system
 
 ```
- THE HOME (trusted)                                  THE CLOUD (exception path)
-┌────────────────────────────────────┐
-│ camera → privacy masks → motion    │   on trigger only
-│ gate → person check → tracking →   │   ──────────────────►  SAM 3.1
-│ zones + posture → ring buffer      │                         (track + masks)
-│                                    │   ◄──────────────────  annotated clip
-│ 9s buffer lives in RAM.           │
-│ Never written to disk.             │   ──────────────────►  Muse Spark
-│ 0 bytes uploaded while idle.       │                         (decision + words)
-└────────────────────────────────────┘   ◄──────────────────  severity, message
-                  │
-                  ▼  ~3 MB per escalation (1-hour expiry at the API)
-          family phone · Web Push · one alert, the clip, the "why", three buttons
+in-home feed
+   │  local YOLO + pose + tracker (no cloud call on a quiet frame)
+   ▼
+deterministic rule ──► held candidate (`verifying`, invisible to the family)
+   │                            │
+   │                            ├─ SAM 3.1: track + pixel masks for a 5–7s clip
+   │                            ├─ Muse Spark: read-only evidence tool loop
+   │                            │   (SAM, household memory, recent events, audio,
+   │                            │    at most one still from that clip)
+   │                            ▼
+   │                     release only if corroborated, or fail open on the
+   │                     local safety floor if verification is unavailable
+   ▼
+family alert (template or verified decision) ──► spoken check-in ──► escalation
+   │
+   └─ no trigger: raw frames stay in RAM; nothing is uploaded
 ```
 
-**Two-phase alerting.** Phase 1 ships a template alert in 3–7 seconds, before any enrichment. The clip and still follow and are served only after SAM has checked who is in them. Phase 2 replaces the alert (same push tag, no second buzz) with the annotated clip and the agent's reasoning in 10–25s. A slow model can never delay a safety alert.
+**The verification gate.** A wall fall is first a *candidate*, not an incident.
+It is stored as `verifying` and is absent from the family list, the incident
+detail route and the media route. The console keeps the feed live while the
+clip is cut from the in-memory buffer. SAM tracks the person and returns masks;
+Muse Spark runs a bounded, tool-using evidence pass and returns
+escalate/reject. Only a verified release can page the family. A rejection
+keeps an audit row and sends nothing. A failed verifier fails **open** on the
+local floor: a cloud outage must not drop a possible fall.
 
-**The spoken check-in.** A fall, or a possible cry for help, starts a short question in the resident's own room: *"Margaret, it's Aegis. I noticed a fall. Are you okay? Say I'm okay, or say help."* The voice is rendered locally, so it does not wait on the uplink, and it runs **alongside** phase 1 — the first alert is never delayed by the question. Her answer is transcribed by Muse Voice Transcribe, read by Muse Spark against the camera's evidence, and then put through the same deterministic floor. Silence at the deadline escalates one step and sends a phase-3 update. The check-in can never lower an alert below the floor: if she says "I'm fine" while the camera still sees her on the floor, the alert stands. A resident-facing screen at `/checkin/{id}` offers two large buttons — **I'm okay** and **I need help** — for someone who cannot or does not want to speak; the tapped answer goes through the same classifier, perception merge and notification path. The resident screen never shows the alert history or the family's controls.
+**Crash-safe release.** The release claim is an atomic `verifying → releasing`
+transition that stores a 120-second lease. If the API dies after the claim, the
+sweep retries the row; if a page was already claimed, the durable notify phase
+prevents a second page. A recovery that arrives during verification closes the
+row, and a late model verdict cannot re-arm the wall's ten-minute cooldown over
+the next real fall.
 
-**A cry for help is not a diagnosis.** A scream or a call for help is first checked against the room: a television or radio that could explain the sound, a person in frame, a posture, and whether she is on the floor. If no media source explains it, the family is notified. If the television is on and she is in frame, Muse Spark reads the ambiguous context and may raise it to urgent; the spoken check-in then breaks the tie. If nobody is in frame and the television is on, Aegis stays quiet. It never names a medical cause — no "heart attack", no stroke — because the system is an event notifier, not a clinician.
+**The spoken check-in.** A fall starts a short question rendered by the local
+OS voice: *"Margaret, it's Aegis. I noticed a fall. Are you okay? Say I'm okay,
+or say help."* The answer is transcribed by Muse Voice Transcribe and read
+against the camera evidence. Affirmative words plus a seen upright, moving body
+is the only path down. "I'm fine" from the floor is a contradiction and leaves
+the alert standing. Silence at the 15-second deadline (configurable) escalates
+one step. The resident kiosk at `/checkin/{id}` exposes only the prompt, timer
+and two large answers, never family history.
 
-**A second person after dark is a family check, not a burglar verdict.** The edge notices a second tracked body at night. If the household has not marked a visitor as expected, Aegis pages the family with the clip, the time and the door state. It does not recognise faces, guess intent, or dispatch anyone. A family can mark a caregiver expected for two hours or until morning; the second person is still written into the night record, but the rule stays quiet. The `Night watch` page is the morning view of that record: what crossed the door, what stayed quiet, and what Aegis could not see.
+**The camera watchdog.** The edge heartbeats every ten seconds. A camera that
+has connected before and then misses 90 seconds becomes a real `camera_offline`
+incident at the urgent policy floor — once per outage, not once per sweep. A
+camera that never connected is an installation fact, not an alarm. The producer
+is covered by tests; it is not only a policy rule waiting for a fixture.
 
-**Object context is sampled, not a second always-on model.** Every couple of seconds the edge names a small vocabulary of things in the room — bed, couch, chair, table, television, appliances, phone — and carries the latest scene with the heartbeat and any incident. The camera page shows the labels and their confidence; an incident records whether a bed or couch was actually under the person as a `support_surface`. The labels are room context for Muse and the family, not identity, and a bed merely present in the frame is not a bed under her.
+**The edge is optional.** The browser console and the edge agent share the same
+detection rules and safety path. The console is the demo surface; the edge
+process is the deployment surface for a real camera, ring buffer, signed clip
+uploads and recovery posts.
 
-**Installation is a first-class flow, not a settings form.** `/setup` adds up to six feeds (a local recording, a device camera, or a lab clip), describes every person in the house with flexible names, ages, relationships and self-reported conditions, and records the household's watch preferences. Once every feed is mapped, Muse Spark proposes a watch plan from **structured labels and questionnaire answers only** — no image, no audio and no face data. The user approves or disapproves that proposal in a modal; approving applies the modes, disapproving leaves the user's own choices in place. Activation is blocked until every feed has a local map and the configuration is approved. Reloading setup resumes at the first unfinished step.
+## Meta models
 
-**Mapping happens on this machine.** The setup scan posts one frame per camera to the local backend, runs the same local YOLO/pose pass used by the edge, returns labels and boxes, and keeps neither the frame nor a derivative. The browser stores a preview in memory for the duration of the page. Nothing in the mapping step calls Meta. The privacy line in the setup rail says exactly this.
+| Model | What it does that nothing else does |
+|---|---|
+| **SAM 3.1** (`sam-3.1`) | Turns `person` into per-frame tracks and pixel masks. Those masks drive the annotated clip and the blur applied to non-resident people, and the track geometry feeds the evidence gate. |
+| **Muse Spark** (`muse-spark-1.3`) | Runs the read-only Evidence Agent for wall verification and phase-2 decisions, reads ambiguous check-in answers, arbitrates audio context, writes the night note, and refreshes expiring household memory every six hours. |
+| **Muse Voice Transcribe** (`muse-voice-transcribe-1.0`) | Turns a cry or a spoken answer into text. The raw WAV is deleted after transcription; the transcript is evidence. |
 
-**The camera wall runs the same pipeline continuously, one independent loop per feed.** `/` is the household console for up to six local feeds — video files, a device camera, or the demo clips. Press **Activate system** and every mapped feed keeps posting frames to the local backend, which decodes them in memory and tracks people, posture, support surfaces and objects as fast as this machine sustains (the measured rate is shown per feed; on this laptop it is around 1–2 fps per feed under CPU load, not a pretend 30 fps). The pose pass is load-bearing: on our own fall clip the person box detector lost the man once he was on the floor, while pose still found him at 0.75. A bed or couch under a lying person is support, not a fall. Two consecutive unsupported-lying samples raise a fall candidate; a high-confidence upright/bending-to-lying transition can raise a short candidate from one sampled frame. That is deliberately only a candidate: SAM and the Muse Evidence Agent still gate any family alert, and the other feeds never pause.
+The check-in question uses the local OS voice, not a model: it must work when
+the uplink does not, and its wording is fixed so it cannot acquire a medical
+claim. Muse Image is intentionally unused — nothing shown next to a real
+incident is generated.
 
-**No frame is ever frozen.** The live tile keeps playing while a possible fall is verified; an amber state strip and the verification state appear over the live picture. Focusing a feed opens the same continuous stream with its recent local log, not a paused still. `/events` shows the family-facing incident record with the clip and the agent trace, `/logs` shows one local telemetry stream per camera, and `/settings` manages feeds, the watch plan, household context, the family contact and retention. The console replaces the old Today, camera-wall and alert-list surfaces; `/alerts/{id}` remains the full alert detail.
+## Safety invariants
 
-That finding opens a **held** `fall_suspected` incident, not a family alert. The console keeps that feed live while it collects a 5–7 second evidence clip from the in-memory buffer, sends the clip to SAM for person masks and tracking, and asks the Muse Evidence Agent to corroborate it against SAM, household memory, recent events and any audio context. The planner may also issue a bounded `inspect_frame` call: one still from that same clip goes back to Muse with a model-written visual question, and the structured answer joins the evidence. Only a corroborated result releases the family alert, the spoken check-in, the no-answer escalation and the recovery evidence. The agent’s call trace — tool, question, observation — is stored and visible in Events and the focused feed. A rejected finding sends no family alert or check-in. A verification failure fails open for a possible fall: it escalates on the local floor rather than drop a fall because a cloud model was slow. One ongoing situation produces one incident; the per-track hold persists while the situation does, and a **seen upright recovery clears it**, so a second fall is not silenced by the first. Recovery is transactional: it resolves the incident, cancels any asking check-in and clears the escalation timer in one write, so an upright resident cannot receive “still needs help” a minute later. Every family-facing fall message names the resident and says they may have fallen — the deterministic copy pass runs after verification, so a model cannot leave a lock screen reading only “Possible fall”.
+The model may **raise** an alarm, never lower one below the deterministic floor.
 
-**Tracking keeps identities when bodies cross.** Each feed predicts the next box from velocity, gates matches by size, and fuses IoU with a small torso-colour descriptor. On the frame where two people overlap, geometry is ambiguous; clothing usually is not. A primary track is chosen by age and size, and the local resident box is passed to SAM so the family clip redacts the visitor, not the resident. If redaction fails, the raw clip and still are not signed at all.
-
-The SAM call is real and load-bearing on the wall: the incident ends with the 7-second clip, SAM's track/mask features, and an annotated/redacted copy. Without an alert, the frame buffer is never written to disk. The wall shows the verification state, the check-in countdown, the no-answer escalation, the SAM evidence and the family-facing decision; the resident screen is one link away. Muse is not called for quiet frames at all — only for the verification and decision of an incident. The household memory it reads is rebuilt from structured rows by Spark every six hours. The edge path remains phase-1 immediate; this verification gate is specific to the demo wall. Recovery is not wall-only: after two seconds of a seen upright body, the edge posts a signed recovery to `/api/ingest/recovery`, which closes the backend incident, cancels its check-in, clears the escalation timer and clears the edge's fall cooldown so a second fall is a new page.
-
-## The models
-
-Three models, three modalities. The rule: remove one and a capability disappears.
-
-| Model | Modality | The one job nothing else can do |
-|---|---|---|
-| **SAM 3.1** | video → geometry | Turn the noun `person` into a stable per-frame track with pixel masks — so we can answer *"did she cross the door line, and for how long?"* without training anything. The masks are then reused to redact people who did not consent to being filmed. When a check-in has a clip, SAM supplies the posture and person-count evidence the answer is read against. |
-| **Muse Spark** | structured judgment + tools | Runs the Evidence Agent: a fixed, read-only tool loop over SAM evidence, household memory, recent events and audio context, then returns the verified escalation/decision. It also reads ambiguous check-in answers, decides whether a cry over a television is a person or the room, writes the short morning note, and maintains the expiring household memory. The policy floor still bounds every decision. |
-| **Muse Voice Transcribe** | audio → text | Hear the cry for help and the resident's answer in her own language. Audio is deleted after transcription; the transcript is evidence, never a command. |
-
-The check-in question itself is rendered by the local operating-system voice, not by a model: the
-question must be available when the network is not, and its wording is deliberately fixed so it
-cannot acquire a medical claim. Muse Spark writes the *reading* of the answer and the family-facing
-decision, which are the parts that need judgment.
-
-**Muse Image is deliberately unused.** Nothing a family sees next to a real incident should be generated. Every pixel came from their own camera.
-
-## Safety: the model can raise the alarm, never lower it
-
-The policy floor is deterministic code, evaluated before the model and merged after it. A fall is urgent. A night door opening for a person with a cognitive condition is at least urgent. The model may add urgency; it may not lower an admitted incident.
-
-The wall’s Evidence Agent can decline to admit a candidate before it becomes an incident: that is how a false camera finding is rejected without paging the family. A completed rejection means no family alert and no check-in. A verification failure fails open for a possible fall. This distinction is deliberate: the model may veto a **candidate**, never downgrade an **incident**.
-
-Four invariants are enforced in the hot path, not merely asserted in tests:
-
-| # | Invariant | Enforced by |
-|---|---|---|
-| I1 | No severity below the policy floor | The only writer of `severity` is a pure merge function |
-| I2 | Every evidence token resolves to a real packet field | Validator runs on every model output before the row is written |
-| I3 | Only a fixed action vocabulary reaches the UI | Enum validation; the UI never renders model-authored text as a button |
-| I4 | No live feed in the reasoning path | The agent gets structured records plus at most one still from the incident clip — the redacted still when the clip is private — and every outbound still is ledgered |
-
-Read-only tools, a fixed action set, and a 20s timeout. If the model fails, times out, or returns invalid JSON, the floor plus a template still goes out.
+| Invariant | How it is enforced |
+|---|---|
+| Severity never goes below the policy floor | The only severity writer is a pure merge; the validator rejects model output below the floor |
+| A model may veto a candidate, never downgrade an incident | Rejection only applies while the row is `verifying`; after release the floor bounds every write |
+| Every evidence token resolves to a real packet field | The evidence gate runs before any decision row is written |
+| Only a fixed action vocabulary reaches the UI | Actions are enum-checked; model text is never rendered as a button |
+| No live feed reaches the reasoning path | The agent gets structured records plus at most one still from the incident clip, and every outbound image is ledgered |
+| A held candidate cannot leak | `verifying`/`releasing` rows are excluded from the family list, detail and media routes |
+| A crash cannot strand a fall | The release lease is swept; a stale `releasing` row is recovered and the notify-phase claim prevents a double page |
+| A late verdict cannot silence the next fall | Late SAM/Muse completion passes `arm_cooldown=False` when the incident was already recovered |
+| Silence is not recovery | Only a seen upright body closes an incident; absence alone does not |
 
 ## Privacy
 
-- **Raw video never leaves the home.** The default state uploads zero bytes.
-- **Only escalation clips leave** — ~3 MB, with `expires_after: 3600` on the API side, deleted immediately after parsing.
-- **The edge applies privacy masks before its ring buffer.** The browser demo wall keeps a short JPEG buffer in the local backend's memory and writes it only for an alert; it is never uploaded while idle. Raw evidence names are refused by the media route whenever SAM cannot prove a single-person clip.
-- **Redaction fails closed.** If SAM fails or a second person appears, the raw clip and stills are not signed, and the still sent to Muse is the redacted one. If no redacted copy exists, the visual tool is not offered.
-- **Audio is event-only and locally gated.** The edge keeps a short PCM ring in memory; a sustained loudness event writes one WAV, and only that WAV is sent for transcription. The microphone is never streamed. Enable the real path with `--audio` or `AEGIS_AUDIO=on` on a machine with a microphone. The raw audio is deleted after transcription; the ledger records that it left.
-- **The spoken question is local.** The prompt is rendered on the machine that holds the media, so it works offline and adds no third party to the room at 3 AM.
-- **Third-party redaction:** if more than one person is tracked, everyone except the resident is blurred in the clip the family receives. They did not consent to being filmed.
+- **Raw video does not go to a third party during quiet periods.** Quiet frames
+  remain in the in-home process's memory and are never written to disk.
+- **Only escalation evidence leaves.** A short clip goes to SAM with
+  `expires_after: 3600` and the uploaded file is deleted immediately after the
+  call; at most one still is sent to Muse, and the ledger records its bytes.
+- **Redaction fails closed.** If SAM cannot prove a single-person clip, raw
+  media is not signed. With more than one tracked person, every non-resident is
+  blurred using SAM masks; if no redacted copy exists, the visual tool is not
+  offered to the model.
+- **The masks are real, not a box blur.** Current-HEAD live probe: 240/240 SAM
+  masks decoded, 7 tracks, 192 mask blurs covering 502,825 pixels across 48
+  frames, zero box fallbacks (`evals/meta/sam_redaction.json`).
+- **Audio is event-only.** A sustained loudness event writes one WAV; only that
+  WAV is transcribed. The raw audio and WAV are deleted after the assessment.
+  No microphone stream is uploaded.
+- **Local retention is enforced in code.** Media directories are removed after
+  seven days; outbound ledger byte counts expire on their stated window; alert
+  metadata is purged after 90 days.
 - **No face recognition.** No identity claims, no biometric templates.
-- **A resident kiosk link is real and short-lived.** With a PIN set, the family alert page includes a 30-minute signed check-in link. The kiosk screen exposes only the prompt, timer and two answers, never the family history. Possession of that link is the resident credential.
-- **Turning alerts off removes the device from the house.** The browser unsubscribes and the server deletes the matching push subscription, so the next incident does not target a dead endpoint.
-- **The web app binds to loopback by default.** `npm run dev` / `npm run start` listen on `127.0.0.1:3000`. Exposing it to a phone on the LAN requires an explicit hostname change and a `HOUSEHOLD_PIN`; the backend already binds locally.
-- **Household access is optional but real.** Set `HOUSEHOLD_PIN` and every `/api` route except the login, signed edge ingest and signed media links requires a seven-day session cookie; the web app shows a PIN screen. The default demo on localhost is open and says so.
-- **No cameras in bathrooms or bedrooms** — enforced by placement and policy, not just settings.
-- **Pause is absolute while it is on.** New frames, audio and clips are refused, check-ins are cancelled and every notification path is suppressed. A provider call already on the wire cannot be recalled; the next provider and every later path are stopped. Resume is an explicit action with no covert mode. Roles are not separated: a family member with console access can resume, so this is a household control, not a resident-authenticated one.
-- **Every outbound request is logged**: destination, purpose, bytes, retention. The dashboard calls it *What left your home*.
-- **Edge uploads are bound to their bytes.** Clip and WAV signatures cover a SHA-256 of the evidence, so a captured five-minute request cannot swap the video or audio. Webhook V2 also binds a timestamp.
-- **Consent is a precondition for resume.** Revoking consent pauses monitoring; the console cannot silently switch it back on. Resume is refused until a new consent record exists.
-- **A held wall verification has a deadline.** If the verifier dies or the API restarts while SAM/Muse are working, a sweep releases the incident on the local safety floor instead of stranding a real fall.
-- **Local deletion includes the browser copy.** Delete-all pauses monitoring, clears server rows and consent, and removes the browser setup and IndexedDB recordings. Alert metadata follows the promised 90-day purge.
+- **Pausing is absolute while it is on.** New frames, audio and clips are
+  refused, check-ins are cancelled, verification releases are suppressed, and
+  notifications stop. A provider call already on the wire cannot be recalled.
+- **Consent gates resume.** Revoking consent pauses monitoring; resume is
+  refused until a new consent record exists.
+- **Delete-all also deletes the browser copy** and pauses monitoring.
+- **The console binds to loopback by default.** `npm run dev` / `npm run start`
+  listen on `127.0.0.1:3000`; the API binds `127.0.0.1:8000`. Exposing either to
+  a LAN requires an explicit hostname change, and family access should then be
+  protected with `HOUSEHOLD_PIN` and `SESSION_SECRET`.
+- **A resident kiosk link is signed and short-lived.** With a PIN set, the
+  alert page includes a 30-minute resident link; possession of the link is the
+  resident credential, and the kiosk exposes no family data.
+- **Turning push off removes the subscription server-side**, so a later alert
+  cannot target a dead endpoint.
 
-**The claim we make:** raw video never leaves the home on its own, and only escalation clips and at most one still are sent for analysis. **The claim we do not make:** "nothing ever leaves your home." Clips and stills do. The ledger shows them, and raw household media is refused once a clip is private.
+## Measured results
 
-## What is measured
+All artifacts are in `evals/`. The pilot is a 110-clip external corpus
+(GMDCSA24, three actors/rooms), not a field trial. Labels come from the dataset
+description: 57 floor falls, 5 bed falls, 48 ADL clips.
 
-Every figure below is produced by a run and linked to `evals/report.md`. A row with no measurement stays blank — the README does not soften a claim, it drops it.
-
-| Metric | Target | Measured |
+| Claim | Result | Artifact / command |
 |---|---|---|
-| Automated regression suite | all pass | **220 / 220** |
-| Wall evidence clip before a family alert | 5–7 s | **6.0–7.0 s; SAM 48–50 frames** |
-| Family alerts sent before verification | 0 | **0** |
-| Duplicate-person frames on the bed-sit clip | 0 | **0 after the 40% pose floor** |
-| Audio event path | real WAV → Transcribe | **4.0 s WAV; floor urgent; agent used audio_context** |
-| Household memory | ordinary routines only | **5 facts from door/still rows; no emergency facts** |
-| Restraint rate (events seen − alerts sent) / events seen | ≥ 85% | — |
-| Fall candidates (external, 57 floor-fall clips at 2 fps) | 25-fall target | **45 / 57 produced a candidate; 3 more were caught at 8 fps** |
-| Fall family alerts after the full SAM + Muse gate (external, 57 floor-fall clips) | 25-fall target | **45 / 57 (79%)**; the 12 misses were people lost to the frame, occluded, or supported-bed ambiguity — not gate rejections |
-| ADL family alerts (external, 48 clips) | 60-negative target | **0 / 48**; 5 local candidates, all rejected by the full gate |
-| Bed-fall family alerts (external, 5 clips) | — | **0 / 5**; 2 local candidates, both rejected because the bed is support |
-| Fall recall / precision (25 falls, 60 negatives) | ≥ 0.90 / ≥ 0.80 | — (pilot is n=110, three subjects/rooms, not the target study) |
-| Wall frame cost (external benchmark, 4 feeds) | — | **107 ms/frame dynamic; 12 ms repeated frame; 0.2 s first frame after warmup** (`evals/performance.md`) |
-| Alert latency, phase 1 p50 / p95 | ≤ 8s / ≤ 20s | — |
-| Enrichment latency p95 | ≤ 30s | — |
-| Idle upload, 60s | **0 B** | — |
-| Idle CPU, edge process | ≤ 8% | — |
-| Cost per alert | ≤ $0.05 | — |
-| 6-hour soak | no crash | — |
+| Backend regression suite | **228 / 228 passed** | `python -m pytest -q` |
+| Web typecheck + production build | **clean** | `npx tsc --noEmit`, `npm run build` |
+| Decision fixtures against Muse Spark | see `evals/report.md` (fresh run) | `python scripts/run_evals.py --runs 1` |
+| Floor falls that produced a wall candidate | **45 / 57** at 2 fps | `evals/fall_pilot.json` |
+| Floor falls that paged the family after the full SAM + Muse gate | **45 / 57 (79%)**; all 45 candidates released, 12 had no candidate | `evals/gate_pilot.json` |
+| Missed floor falls recovered at 8 fps | **3 / 12** | `evals/fall_pilot_8fps.json` |
+| ADL clips that paged the family | **0 / 48**; 5 candidates, all rejected by the gate | `evals/gate_pilot.json` |
+| Bed-fall clips that paged the family | **0 / 5**; 2 candidates, both rejected because the bed is support | `evals/gate_pilot.json` |
+| SAM mask decode + redaction at current HEAD | **240 / 240 masks, 7 tracks, 192 mask blurs, 502,825 pixels, 0 box fallbacks** | `evals/meta/sam_redaction.json` |
+| Check-in de-escalation suite (real ASR output) | **5 / 5 cases** | `evals/checkin.md` |
+| Privacy properties | **10 / 10**; idle egress 0 bytes in 3 s; every ledger row has retention | `evals/privacy.json` |
+| Wall cost, external footage | **92–96 ms/frame** dynamic (3 runs); **11–12 ms** repeated frame; 4-feed ceiling **2.6–2.7 fps/feed** | `evals/performance.md` |
+| Verification state machine | held rows hidden; release lease retry; late verdict does not re-arm cooldown | `tests/test_verification_lifecycle.py`, `tests/test_wall.py` |
+| Camera watchdog | one urgent incident per outage; never-connected cameras ignored | `tests/test_camera_watchdog.py` |
+
+The earlier 107 ms and 126 ms wall measurements were taken on the same machine
+under different CPU load; the benchmark is wall-clock and machine-specific.
+The browser console is slower than the benchmark because it also encodes,
+uploads and sleeps between samples; the console displays its own measured rate
+per feed instead of claiming the backend number.
 
 ## Limitations
 
-- **Not a medical device.** No vitals, no diagnosis, no advice.
-- **Not an emergency service.** It notifies family. It does not dispatch anyone.
-- **The camera input in the demo is licensed stock footage** replayed through the live pipeline, labelled `REPLAY` on the dashboard. The pipeline is real; the input is licensed.
-- **The external pilot is not the target study.** At wall rate it alerted on 45/57 labelled floor falls, 0/48 ADLs and 0/5 bed falls; most misses were person-loss or occlusion. Three more misses produced candidates when sampled at 8 fps. It is 110 clips across three actors/rooms, not a multi-night field trial.
+- **Not a medical device and not an emergency service.** It notifies family; it
+  does not dispatch anyone, diagnose, or monitor vitals.
+- **The fall pilot is small and not the target study.** It is 110 clips across
+  three actors/rooms. Twelve floor falls produced no candidate at 2 fps; most
+  were person-loss, occlusion, or a bed box making a floor fall look supported.
+  Three of those twelve were caught at 8 fps. Recall will differ in a real home.
+- **The check-in suite is five clean synthetic utterances.** It is a regression
+  suite for the de-escalation table, not an ASR benchmark in a noisy room.
+- **Audio distress is a heuristic**, not a medical classifier. It combines a
+  transcript, word signals and loudness; it still needs a multilingual,
+  noisy-room evaluation and a microphone-placement policy.
+- **The object vocabulary is small and sampled.** COCO classes are context, not
+  safety-grade scene understanding; the person check remains the primary
+  evidence.
+- **Night presence is not a burglar alarm.** It reports a second tracked person
+  after dark with the door state; it does not identify anyone or assess intent.
+- **Restlessness is a movement heuristic**, not a diagnosis. The message never
+  names a cause.
+- **Camera loss is detected only after a camera has connected.** The watchdog
+  does not page for a camera that was never installed, and it cannot see a
+  camera that fails before its first heartbeat.
+- **The demo input is licensed surveillance footage** replayed through the live
+  pipeline and labelled `REPLAY`. The pipeline is real; the input is licensed
+  and is not redistributed in this repository.
 - **Door and stove sensors in replay mode are simulated** and labelled as such.
-- **Audio distress is a heuristic, not a classifier of medical events.** It combines a short transcript, word signals, and loudness; the television/radio state is a context input the edge supplies. The real path is loudness-gated (`--audio`), tested with a 4s WAV and Muse Voice Transcribe. A real deployment still needs a multilingual/noisy-room evaluation and a hardware microphone-placement policy.
-- **The check-in's speech path is tested on clean synthesized speech, not a noisy room.** It is a regression suite for the de-escalation table, not an ASR benchmark. The check-in does not delay phase 1, and silence never lowers an alert below the floor.
-- **The context arbiter and the answer reader are newer than the 30-fixture suite.** They were exercised end to end on an ambiguous cry and a spoken "I'm okay", but they are not yet a statistical benchmark. The 30-decision fixtures and the 5-case ASR suite remain the measured artifacts.
-- **Night presence is not a burglar alarm.** It reports a second tracked person after dark and the door state; it does not identify the person, assess intent, detect forced entry, or call anyone. A camera cannot see every room or every entrance. The night page says what was recorded, never that the dark was empty.
-- **The object vocabulary is small and sampled.** It is COCO classes relevant to a care room, not a safety-grade scene understanding system. A missed object or a low-confidence label is possible; the model is told to treat labels as context, and the person check remains the primary evidence.
-- **Restlessness is a movement heuristic, not a diagnosis.** It sees a long path, many turns and little net displacement; it cannot know why. Exercise, cooking, prayer, worry or pain can all look alike. The memory is there to stop a familiar pattern from becoming a new alert, and the message never names a cause.
-- **The morning note is a summary of rows, not a guarantee.** It is generated on request by Muse Spark from the night's events; it can say what was noted and what stayed quiet, but it cannot say what the camera did not see. The page labels the model and the writing time.
-- It does not identify people, and it will not tell you *who* is at the door.
 
-## Built during the hackathon
+## Run it
 
-Written 27 Oct – 4 Nov 2026. Third-party components are named, not absorbed.
+**Prerequisites:** Python 3.11+, Node 20+, `ffmpeg` on `PATH`, and the two YOLO
+weights (`yolov8n.pt`, `yolov8n-pose.pt`) in the repository root.
 
-| Component | Origin |
-|---|---|
-| Edge pipeline, state machine, posture/place rules engine | Original |
-| Policy floor, merge, evidence validator | Original |
-| SAM integration, track features, overlay, redaction | Original |
-| Muse Spark prompt, decision schema, tool loop | Original |
-| Dashboard, ledger, hosted replay | Original |
-| Ultralytics YOLO, ByteTrack, OpenCV, ffmpeg, `meta-sam-parser` | Third-party (Apache-2.0 / MIT / per their licenses) |
-| Stock footage (Pexels), fall test clips (URFD, CC BY-NC-SA 4.0; GMDCSA24, MIT) | Third-party, credited. **Testing only — never redistributed in this repo** |
+```bash
+cp .env.example .env              # set META_API_KEY; add VAPID keys for push
+python -m venv .venv && . .venv/bin/activate    # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python scripts/serve.py           # API on 127.0.0.1:8000
 
-The commit history from 27 Oct is the authorship record. Coding assistance is disclosed and was reviewed line by line.
+cd web
+npm install
+npm run dev                       # console on 127.0.0.1:3000
+```
 
-## Credits
+Open `http://localhost:3000/setup`, add up to six feeds (a recording, a browser
+camera, or a lab clip), map each feed, review Muse's proposed watch plan, then
+activate. Activation requires every mapped feed and an approved configuration.
+The console stores feed choices in the browser; incidents, consent and watch
+decisions live in the local SQLite database.
 
-- [Meta Model API](https://dev.meta.ai/docs/overview) — SAM 3.1, Muse Spark, Muse Voice Transcribe
-- [UR Fall Detection Dataset](https://fenix.ur.edu.pl/mkepski/ds/uf.html) — Kwolek & Kepski, CC BY-NC-SA 4.0
-- [Pexels](https://www.pexels.com/license/) — licensed footage
-- Ultralytics YOLO · ByteTrack · OpenCV · ffmpeg
+Optional edge process:
 
-## License
+```bash
+python scripts/worker.py
+PYTHONPATH=edge python -m aegis_edge --config config/edge.yaml
+```
 
-MIT — see [LICENSE](LICENSE).
+Edge audio is opt-in (`AEGIS_AUDIO=on` or `--audio`). The lab footage picker
+reads `FOOTAGE_ROOT` (default `data/new-footage`).
+
+### Tests and evidence
+
+```bash
+python -m pytest -q
+cd web && npx tsc --noEmit && npm run build && cd ..
+python scripts/privacy_tests.py
+python scripts/bench_wall.py --mode dynamic --frames 24
+python scripts/probe_redaction.py     # live SAM, requires META_API_KEY
+python scripts/run_fall_pilot.py --fps 2 --json evals/fall_pilot.json
+python scripts/run_gate_pilot.py --pilot evals/fall_pilot.json --out evals/gate_pilot.json
+```
+
+See `evals/README.md` for what each artifact measures, when it was generated,
+and which artifacts depend on live model calls.
+
+## Repository map
+
+```
+backend/app/     FastAPI service: policy, wall, SAM/Muse gate, check-in,
+                 notifications, privacy, push, media, SQLite
+edge/aegis_edge/ deployable edge agent: camera, ring buffer, state machine,
+                 signed uploads and recovery
+web/             Next.js console, alert detail, resident kiosk, setup flow
+evals/           measured artifacts and reports
+scripts/         runners for evals, probes, the API and the edge
+tests/           backend regression suite
+config/          edge configuration and zones
+```
+
+## Credits and licensing
+
+- [Meta Model API](https://dev.meta.ai/docs/overview) — SAM 3.1, Muse Spark,
+  Muse Voice Transcribe.
+- CAVIAR (INRIA/University of Edinburgh, CC BY-SA) and URFD (Kwolek & Kepski
+  2014, CC BY-NC-SA 4.0) — testing only, never redistributed.
+- GMDCSA24 — external fall/ADL corpus used for the pilot; testing only.
+- Ultralytics YOLO, ByteTrack, OpenCV, ffmpeg and `meta-sam-parser` per their
+  respective licences.
+
+The repository code is MIT — see [LICENSE](LICENSE). Coding assistance was
+used and reviewed; the commit history is the authorship record.
 
 ---
 
-Built in Cairo, for the families who can't be there every minute, and the parents who don't want to be watched.
+Built in Cairo, for families who cannot be there every minute, and for parents
+who do not want to be watched.

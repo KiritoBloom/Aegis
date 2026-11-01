@@ -1,6 +1,6 @@
 # Aegis perception report
 
-Generated 2026-10-27 10:47 UTC.
+Generated 2026-11-01 14:50 UTC.
 
 Detector in use: **yolo**. Every clip below is real fixed-camera
 surveillance footage (CAVIAR, URFD) — not cinematic stock. Stock footage
@@ -22,22 +22,45 @@ annotations in the form this repo consumes.
 | Fall clips with a person detected | 5 / 5 |
 | Frames analysed | 986 |
 | Motion frames | 704 (71.4%) |
-| Median cost per frame | 101.2 ms |
-| Effective throughput | 9.9 fps |
+| Median cost per frame | 78.6 ms |
+| Effective throughput | 12.7 fps |
 
 ## Per clip
 
 | Clip | Label | Source | Person frames | Motion | Max conf | ms/frame |
 |---|---|---|---|---|---|---|
-| urfd_fall-01.mp4 | fall | URFD fall sequence 01 | 19/80 (24%) | 50% | 0.854 | 120.5 |
-| urfd_fall-02.mp4 | fall | URFD fall sequence 02 | 23/54 (43%) | 85% | 0.882 | 152.6 |
-| urfd_fall-03.mp4 | fall | URFD fall sequence 03 | 68/108 (63%) | 87% | 0.922 | 214.4 |
-| urfd_fall-04.mp4 | fall | URFD fall sequence 04 | 31/48 (65%) | 79% | 0.845 | 105.4 |
-| cctv_fall.mp4 | fall | CAVIAR Rest_FallOnFloor (lobby, fixed camera) | 15/150 (10%) | 35% | 0.804 | 39.4 |
-| cctv_corridor.mp4 | adl | CAVIAR OneStopEnter1cor (walking, stopping) | 166/180 (92%) | 92% | 0.932 | 101.2 |
-| cctv_corridor_wide.mp4 | adl | CAVIAR Walk1 (two people walking) | 29/178 (16%) | 64% | 0.895 | 65.1 |
-| cctv_entrance.mp4 | adl | CAVIAR EnterExitCrossingPaths1cor (crossing paths) | 84/105 (80%) | 80% | 0.911 | 86.8 |
-| cctv_shopfront.mp4 | adl | CAVIAR OneLeaveShop1cor (leaving a shop) | 69/83 (83%) | 83% | 0.908 | 81.5 |
+| urfd_fall-01.mp4 | fall | URFD fall sequence 01 | 33/80 (41%) | 50% | 0.936 | 123.8 |
+| urfd_fall-02.mp4 | fall | URFD fall sequence 02 | 32/54 (59%) | 85% | 0.882 | 100.0 |
+| urfd_fall-03.mp4 | fall | URFD fall sequence 03 | 77/108 (71%) | 87% | 0.922 | 87.0 |
+| urfd_fall-04.mp4 | fall | URFD fall sequence 04 | 33/48 (69%) | 79% | 0.845 | 77.8 |
+| cctv_fall.mp4 | fall | CAVIAR Rest_FallOnFloor (lobby, fixed camera) | 28/150 (19%) | 35% | 0.804 | 47.1 |
+| cctv_corridor.mp4 | adl | CAVIAR OneStopEnter1cor (walking, stopping) | 166/180 (92%) | 92% | 0.932 | 73.9 |
+| cctv_corridor_wide.mp4 | adl | CAVIAR Walk1 (two people walking) | 41/178 (23%) | 64% | 0.895 | 91.5 |
+| cctv_entrance.mp4 | adl | CAVIAR EnterExitCrossingPaths1cor (crossing paths) | 84/105 (80%) | 80% | 0.911 | 78.6 |
+| cctv_shopfront.mp4 | adl | CAVIAR OneLeaveShop1cor (leaving a shop) | 69/83 (83%) | 83% | 0.908 | 69.8 |
+
+## A defect this measurement found
+
+The first run of this report, at `imgsz: 320`, found a person in only
+**64.3%** of sampled frames and found **nothing at all** in the CAVIAR
+lobby fall clip. That clip is a ceiling fisheye where a person is about
+70px tall, and at 320px inference the model simply could not see her.
+
+Sampled across all clips:
+
+| imgsz | Frames with a person | ms/frame |
+|---|---|---|
+| 320 | 64.3% | 73 |
+| 480 | 68.0% | 93 |
+| 640 | 70.8% | 162 |
+| 960 | 82.7% | 266 |
+
+`config/edge.yaml` now runs at **640** — the knee of that curve, still
+comfortably inside the 8fps budget — and `min_area_ratio` dropped from
+0.012 to 0.004 so a person at the far end of a corridor is not filtered
+out by an area threshold meant for a close-up. After the change every
+fall clip detects a person. This is the kind of error that is invisible
+in a demo and fatal in a hallway.
 
 ## Honest limits
 

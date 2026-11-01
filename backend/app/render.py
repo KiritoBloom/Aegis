@@ -112,6 +112,9 @@ def render(src: Path | str, dst: Path | str, objects, *, timestamp: str = "",
     idx = -1
     drawn = 0
     redacted_ids: set[int] = set()
+    masks_decoded = 0
+    mask_pixels_redacted = 0
+    box_fallbacks = 0
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -140,6 +143,8 @@ def render(src: Path | str, dst: Path | str, objects, *, timestamp: str = "",
                         roi[sel] = blur[sel]
                         frame[y1:y1 + hh, x1:x1 + ww] = roi
                         redacted_ids.add(o.obj_id)
+                        masks_decoded += 1
+                        mask_pixels_redacted += int(sel.sum())
                 else:
                     # Honest fallback: no mask means blur the padded box.
                     pad_x = (o.x2 - o.x1) * 0.08
@@ -149,6 +154,7 @@ def render(src: Path | str, dst: Path | str, objects, *, timestamp: str = "",
                     if x2 > x1 and y2 > y1:
                         roi = frame[y1:y2, x1:x2]
                         frame[y1:y2, x1:x2] = cv2.GaussianBlur(roi, (51, 51), 0)
+                        box_fallbacks += 1
                         redacted_ids.add(o.obj_id)
             for oid in redacted_ids:
                 label = f"redacted: {len(redacted_ids)} non-resident"
@@ -226,6 +232,11 @@ def render(src: Path | str, dst: Path | str, objects, *, timestamp: str = "",
         "frames_annotated": drawn,
         "frames_total": idx + 1,
         "people_redacted": len(redacted_ids),
+        # The mask path is auditable: blob decodes and blurred pixels are
+        # counted separately from the box fallback taken when a mask is bad.
+        "masks_decoded": masks_decoded,
+        "mask_pixels_redacted": mask_pixels_redacted,
+        "box_fallbacks": box_fallbacks,
         "redaction_label": (f"redacted: {len(redacted_ids)} non-resident person"
                             + ("s" if len(redacted_ids) != 1 else ""))
         if redacted_ids else None,

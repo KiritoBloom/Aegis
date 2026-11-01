@@ -269,6 +269,7 @@ def recover_wall_incident(incident_id: str) -> dict:
         sensors.update({"recovered": True, "still_s": 0, "recovered_at": now()})
         cur = conn.execute(
             "UPDATE incidents SET status='resolved', escalation_due_at=NULL,"
+            " verification_due_at=NULL,"
             " sensors_json=?,"
             " checkin_status=CASE WHEN checkin_status='asking' THEN 'cancelled'"
             "                     ELSE checkin_status END,"
@@ -282,21 +283,61 @@ def recover_wall_incident(incident_id: str) -> dict:
             "checkin": row["checkin_status"]}
 
 
-def claim_verification_release(incident_id: str) -> bool:
+def claim_verification_release(incident_id: str, now_epoch: float,
+                               lease_s: float) -> bool:
     """Take a held wall incident out of `verifying` exactly once.
 
     The sweeper and the original verification task can both decide to release
     the same row. The status predicate is the lock: only one UPDATE can match,
-    and only the winner is allowed to page the family.
+    and only the winner is allowed to page the family. The deadline becomes a
+    lease rather than NULL so a process that dies mid-release is recoverable:
+    the row stays `releasing` with a due time the sweep can pick up.
     """
     with connect() as conn:
         cur = conn.execute(
-            "UPDATE incidents SET status='releasing', verification_due_at=NULL"
+            "UPDATE incidents SET status='releasing', verification_due_at=?"
             " WHERE id=? AND status='verifying'",
-            (incident_id,),
+            (now_epoch + max(1.0, lease_s), incident_id),
         )
         conn.commit()
     return bool(cur.rowcount)
+
+
+def claim_verification_retry(incident_id: str, now_epoch: float,
+                             lease_s: float) -> bool:
+    """Re-take a `releasing` row whose release lease expired.
+
+    A release writes its decision, notify phase and status before the network
+    call, so the retry is safe: `claim_notify_phase` prevents a second page,
+    and a release that died before claiming any phase is completed here.
+    """
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE incidents SET verification_due_at=?, status='releasing'"
+            " WHERE id=? AND status='releasing'"
+            " AND (verification_due_at IS NULL OR verification_due_at <= ?)",
+            (now_epoch + max(1.0, lease_s), incident_id, now_epoch),
+        )
+        conn.commit()
+    return bool(cur.rowcount)
+
+
+def clear_verification_deadline(incident_id: str) -> None:
+    """Mark a release as finished so the sweep never revisits the row."""
+    with connect() as conn:
+        conn.execute(
+            "UPDATE incidents SET verification_due_at=NULL WHERE id=?",
+            (incident_id,),
+        )
+        conn.commit()
+
+
+def incident_held(incident_id: str) -> bool:
+    """True while SAM/Muse still own the row and the family must not see it."""
+    with connect() as conn:
+        row = conn.execute("SELECT status FROM incidents WHERE id=?",
+                           (incident_id,)).fetchone()
+    return bool(row and row["status"] in ("verifying", "releasing"))
 
 
 def reject_verifying_incident(incident_id: str, reason: str = "") -> bool:
@@ -334,21 +375,27 @@ def reject_verifying_incident(incident_id: str, reason: str = "") -> bool:
 
 def due_verifications(now_epoch: float, legacy_age_s: float = 300.0,
                       limit: int = 10) -> list[dict]:
-    """Held wall incidents whose verifier is past its deadline.
+    """Held wall incidents whose verifier or release lease has expired.
 
     Rows written before the deadline column existed have NULL; for those the
     creation age is the backstop, so upgrading does not strand an old row.
+    A `releasing` row is also due when its lease expires, which covers a
+    process that claimed the release and died before paging or closing it.
     """
     cutoff = time.strftime(
         "%Y-%m-%dT%H:%M:%S", time.gmtime(now_epoch - max(0.0, legacy_age_s))
     ) + "Z"
     with connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM incidents WHERE status='verifying' AND ("
-            " (verification_due_at IS NOT NULL AND verification_due_at <= ?)"
-            " OR (verification_due_at IS NULL AND created_at <= ?))"
-            " ORDER BY COALESCE(verification_due_at, 0), created_at LIMIT ?",
-            (now_epoch, cutoff, limit),
+            "SELECT * FROM incidents WHERE ("
+            " (status='verifying' AND verification_due_at IS NOT NULL"
+            "  AND verification_due_at <= ?)"
+            " OR (status='verifying' AND verification_due_at IS NULL"
+            "  AND created_at <= ?)"
+            " OR (status='releasing' AND (verification_due_at IS NULL"
+            "  OR verification_due_at <= ?))"
+            ") ORDER BY COALESCE(verification_due_at, 0), created_at LIMIT ?",
+            (now_epoch, cutoff, now_epoch, limit),
         ).fetchall()
     return [_decode_incident(dict(r)) for r in rows]
 
@@ -369,12 +416,14 @@ def set_status(incident_id: str, status: str, severity: str | None = None) -> No
             # A resolution is the one path allowed to settle severity lower.
             if severity:
                 conn.execute(
-                    "UPDATE incidents SET status=?, severity=?, escalation_due_at=NULL"
-                    " WHERE id=?", (status, severity, incident_id),
+                    "UPDATE incidents SET status=?, severity=?, escalation_due_at=NULL,"
+                    " verification_due_at=NULL WHERE id=?",
+                    (status, severity, incident_id),
                 )
             else:
                 conn.execute(
-                    "UPDATE incidents SET status=?, escalation_due_at=NULL WHERE id=?",
+                    "UPDATE incidents SET status=?, escalation_due_at=NULL,"
+                    " verification_due_at=NULL WHERE id=?",
                     (status, incident_id),
                 )
             conn.commit()
@@ -465,10 +514,13 @@ def _is_rejected_wall_candidate(incident: dict) -> bool:
 
 
 def list_incidents(limit: int = 50, status: str | None = None) -> list[dict]:
-    q = "SELECT * FROM incidents"
+    # `verifying` and `releasing` are internal states: the evidence owner is
+    # still deciding and no family alert exists yet. They must never appear in
+    # a family-facing list, with or without media.
+    q = "SELECT * FROM incidents WHERE status NOT IN ('verifying','releasing')"
     args: list[Any] = []
     if status:
-        q += " WHERE status=?"
+        q += " AND status=?"
         args.append(status)
     q += " ORDER BY created_at DESC LIMIT ?"
     # Rejected wall candidates are filtered after decoding. Fetch a little
@@ -687,6 +739,34 @@ def last_heartbeat() -> dict | None:
         hb["objects"] = []
     hb["objects_at"] = hb.get("scene_at")
     return hb
+
+
+def stale_cameras(cutoff: str) -> list[dict]:
+    """Cameras that have checked in before and have now gone quiet.
+
+    A camera with no heartbeat has never been connected, so its silence is an
+    installation fact, not a loss of coverage.
+    """
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT id, name, location, status, last_heartbeat_at FROM cameras"
+            " WHERE last_heartbeat_at IS NOT NULL AND last_heartbeat_at <= ?"
+            " AND COALESCE(status,'unknown') != 'offline'",
+            (cutoff,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def mark_camera_offline(camera_id: str) -> bool:
+    """Flip a live camera to offline exactly once per outage."""
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE cameras SET status='offline'"
+            " WHERE id=? AND COALESCE(status,'unknown') != 'offline'",
+            (camera_id,),
+        )
+        conn.commit()
+    return bool(cur.rowcount)
 
 
 def add_ack(incident_id: str, action: str) -> None:
