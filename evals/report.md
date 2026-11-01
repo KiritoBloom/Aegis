@@ -67,7 +67,10 @@ No fixture failed.
 The fixtures are generated, not hand-written: `policy_floor` comes from
 `policy.evaluate` and the packet from the same builder the runtime uses.
 `tests/test_fixtures_current.py` recomputes every floor and fails if a fixture
-drifts from the current policy.
+drifts from the current policy. A template decision built from the same floor
+already matches severity/actions on most fixtures, so this suite is a
+regression test, not a model-lift measurement; the measured model-specific
+lifts are the agent's tool use and the two live check-in reads.
 
 ## Live gate, agent and redaction evidence
 

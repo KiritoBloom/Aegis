@@ -141,9 +141,11 @@ The model may **raise** an alarm, never lower one below the deterministic floor.
   seven days; outbound ledger byte counts expire on their stated window; alert
   metadata is purged after 90 days.
 - **No face recognition.** No identity claims, no biometric templates.
-- **Pausing is absolute while it is on.** New frames, audio and clips are
-  refused, check-ins are cancelled, verification releases are suppressed, and
-  notifications stop. A provider call already on the wire cannot be recalled.
+- **Pausing is absolute at the backend while it is on.** New frames, audio and
+  clips are refused, check-ins are cancelled, verification releases are
+  suppressed, and notifications stop. A provider call already on the wire
+  cannot be recalled. The edge process may keep its local camera loop alive,
+  but every ingest and alert path is closed.
 - **Consent gates resume.** Revoking consent pauses monitoring; resume is
   refused until a new consent record exists.
 - **Delete-all also deletes the browser copy** and pauses monitoring.
