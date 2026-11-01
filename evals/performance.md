@@ -45,6 +45,17 @@ current run is in `evals/performance.json`.
 Inference is ~98% of the backend cost. The steady state is model-bound; the only
 safe wins are avoiding duplicate model work, not weakening perception.
 
+## Lost-person recheck cost
+
+When a feed that saw a person moments ago now sees none, one recheck pass runs
+before the wall declares the room empty. The default runs `yolov8n` at 448 px
+(~55 ms) and was measured at 49/57 floor-fall candidates with no new ADL
+candidates. Setting `AEGIS_RECHECK_MODEL=yolov8m.pt` runs the stronger model at
+320 px (~150 ms) with higher confidence on prone bodies, but on the same
+corpus it traded one floor clip for another and turned one ADL clip into a
+family alert, so it is opt-in. The recheck is bounded to 6 s after the last
+sighting; steady-state cost is unchanged.
+
 ## Safe wins kept
 
 1. **Warm both models at startup.** `scene.warmup()` runs one 64×64 prediction

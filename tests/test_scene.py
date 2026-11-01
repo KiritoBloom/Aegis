@@ -45,6 +45,44 @@ def test_two_detectors_returning_one_body_are_one_person():
     assert len(wall_scene._merge_people([], [dict(a), dict(c)])) == 2
 
 
+def test_recheck_uses_the_stronger_model_when_its_weights_exist(monkeypatch):
+    fast, strong, pose = object(), object(), object()
+    monkeypatch.setattr(wall_scene, "_models", lambda: (fast, pose))
+    monkeypatch.setattr(wall_scene, "_recheck_yolo", lambda: strong)
+    captured = {}
+
+    def fake_analyze(frame, yolo, pose_model, w, h, **kwargs):
+        captured.update(yolo=yolo, imgsz=kwargs.get("person_imgsz"))
+        return {}
+
+    monkeypatch.setattr(wall_scene, "_analyze", fake_analyze)
+    wall_scene.analyze_frame_array(
+        __import__("numpy").zeros((8, 8, 3), dtype="uint8"),
+        objects=[], detect_objects=False, person_imgsz=320)
+
+    assert captured["yolo"] is strong
+    assert captured["imgsz"] == 320
+
+
+def test_recheck_falls_back_to_the_fast_model_at_a_larger_input(monkeypatch):
+    fast, pose = object(), object()
+    monkeypatch.setattr(wall_scene, "_models", lambda: (fast, pose))
+    monkeypatch.setattr(wall_scene, "_recheck_yolo", lambda: None)
+    captured = {}
+
+    def fake_analyze(frame, yolo, pose_model, w, h, **kwargs):
+        captured.update(yolo=yolo, imgsz=kwargs.get("person_imgsz"))
+        return {}
+
+    monkeypatch.setattr(wall_scene, "_analyze", fake_analyze)
+    wall_scene.analyze_frame_array(
+        __import__("numpy").zeros((8, 8, 3), dtype="uint8"),
+        objects=[], detect_objects=False, person_imgsz=320)
+
+    assert captured["yolo"] is fast
+    assert captured["imgsz"] == 448
+
+
 def test_heartbeat_round_trips_the_sampled_scene(monkeypatch, tmp_path):
     monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "scene.db"))
     db.init()

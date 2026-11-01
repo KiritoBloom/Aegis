@@ -1,0 +1,44 @@
+{
+  "fall_clips": 0,
+  "fall_alerts": 0,
+  "adl_clips": 1,
+  "adl_alerts": 1,
+  "results": [
+    {
+      "clip": "gmd-sub3-adl-08.mp4",
+      "frames": 146,
+      "triggers": [
+        {
+          "at_native_s": 4.02,
+          "kind": "possible_fall",
+          "person_count": 1,
+          "posture": "lying",
+          "support_surface": null,
+          "geometry_fall": false,
+          "box_aspect": 0.93,
+          "track_id": 1,
+          "box": [
+            0.38,
+            0.671,
+            0.666,
+            0.977
+          ],
+          "distance": "mid",
+          "lying_for_s": 1.0
+        }
+      ],
+      "gate": "escalate",
+      "status": "notified",
+      "dispatch_calls": [
+        {
+          "phase": 2,
+          "title": "Margaret may have fallen",
+          "severity": "urgent"
+        }
+      ],
+      "checkin_calls": [
+        "inc_gate_a367f570c6"
+      ]
+    }
+  ]
+}

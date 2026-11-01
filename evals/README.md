@@ -19,6 +19,8 @@ new commit; the reports record the date of their run.
 | `gate_targeted_after_fix.json` | The two bed-fall and five ADL candidates re-run after SAM geometry and the bed-fall prompt change | 2026-11-01 | live |
 | `fall_pilot.json` | Local candidate results for all 110 external clips at 2 fps (pre-recheck) | 2026-10-31 | local |
 | `fall_pilot_recheck.json` | Same corpus after the person-lost recheck: 49/57 floor-fall candidates, no new ADL candidates | 2026-11-01 | local |
+| `fall_pilot_yolov8m.json` | Opt-in `AEGIS_RECHECK_MODEL=yolov8m.pt` recheck: 49/57 floor falls (one swapped), 6/48 ADL candidates | 2026-11-01 | local |
+| `gate_adl08_yolov8m.json` | The extra ADL candidate under the v8m recheck escalated — the measured reason it is opt-in, not default | 2026-11-01 | live |
 | `gate_recheck_rescued.json` | The four rescued floor falls through the full gate: 3 verified escalations, 1 fail-open | 2026-11-01 | live |
 | `fall_pilot_8fps.json` | The 12 floor-fall misses re-sampled at 8 fps | 2026-10-31 | local |
 | `corpus_manifest.json` | Source labels: 57 floor falls, 5 bed falls, 48 ADL | 2026-10-31 | local |

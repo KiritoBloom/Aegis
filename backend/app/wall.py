@@ -28,7 +28,7 @@ OBJECT_EVERY_S = 5.0
 # camera is exactly what it drops. When a feed saw a person moments ago and now
 # sees none, one higher-resolution pass decides empty room vs. missed body.
 LOST_RECHECK_S = 6.0
-LOST_RECHECK_IMGSZ = 448
+LOST_RECHECK_IMGSZ = 320
 # A repeated decoded frame is provably the same input. Reusing the previous
 # analysis is exact, not an approximation, and keeps a paused or looping feed
 # from burning both models on every upload.

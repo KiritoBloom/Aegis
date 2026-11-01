@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import os
 import threading
 from pathlib import Path
 
@@ -18,6 +19,7 @@ SCENE_OBJECTS = {
 SUPPORT_LABELS = {"bed", "couch"}
 _YOLO = None
 _POSE = None
+_RECHECK = None
 _LOCK = threading.Lock()
 _INFER = threading.Lock()
 
@@ -36,6 +38,30 @@ def _models():
     return _YOLO, _POSE
 
 
+def _recheck_yolo():
+    """The optional stronger person pass for a feed that just lost its person.
+
+    Measured on the external corpus: yolov8m sees prone bodies the 320px fast
+    pass drops (and that yolo11n/yolo26n miss entirely), but it also turned one
+    ADL clip into a family alert with no net floor-fall gain. It is therefore
+    opt-in: set AEGIS_RECHECK_MODEL=yolov8m.pt to use it. The default fast
+    recheck at 448px keeps the measured-best restraint.
+    """
+    global _RECHECK
+    name = os.environ.get("AEGIS_RECHECK_MODEL", "").strip()
+    if not name:
+        return None
+    path = ROOT / name
+    if not path.exists():
+        return None
+    with _LOCK:
+        if _RECHECK is None:
+            from ultralytics import YOLO  # noqa: PLC0415
+
+            _RECHECK = YOLO(str(path))
+    return _RECHECK
+
+
 def warmup() -> None:
     """Load both models and run one real prediction through each.
 
@@ -47,6 +73,12 @@ def warmup() -> None:
     with _INFER:
         yolo.predict(frame, imgsz=416, verbose=False)
         pose.predict(frame, imgsz=448, verbose=False)
+    # The lost-person recheck must not pay a cold model load at the moment a
+    # body disappears; load and warm it in the same background startup task.
+    stronger = _recheck_yolo()
+    if stronger is not None:
+        with _INFER:
+            stronger.predict(frame, imgsz=320, verbose=False)
 
 
 def posture_from_keypoints(kp: list[tuple[float, float, float]] | None) -> str:
@@ -234,10 +266,17 @@ def analyze_frame_array(frame, objects: list[dict] | None = None,
                         person_imgsz: int | None = None) -> dict:
     """Analyze one in-memory BGR frame; optionally reuse cached object boxes.
 
-    `person_imgsz` forces the person-only pass to a larger input. The wall's
-    recheck uses it after a feed that just saw a person now sees none.
+    `person_imgsz` is the lost-person recheck: it runs the stronger detector
+    when its weights are present, or the fast detector at a larger input when
+    they are not.
     """
     yolo, pose = _models()
+    if person_imgsz is not None:
+        stronger = _recheck_yolo()
+        if stronger is not None:
+            yolo = stronger
+        else:
+            person_imgsz = max(person_imgsz, 448)
     h, w = frame.shape[:2]
     with _INFER:
         return _analyze(frame, yolo, pose, w, h,

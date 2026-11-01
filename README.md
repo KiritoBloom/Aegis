@@ -182,6 +182,7 @@ description: 57 floor falls, 5 bed falls, 48 ADL clips.
 | Wall cost, external footage | **91–96 ms/frame** dynamic; reused frame **0.2–0.5 ms median** (first frame pays full inference); 4-feed ceiling **2.6–2.7 fps/feed** in the recorded runs | `evals/performance.md`, `evals/performance.json` |
 | Verification state machine | held rows hidden; release lease retry; late verdict does not re-arm cooldown | `tests/test_verification_lifecycle.py`, `tests/test_wall.py` |
 | Camera watchdog | one urgent incident per outage; never-connected cameras ignored | `tests/test_camera_watchdog.py` |
+| Opt-in stronger recheck (`yolov8m.pt`) | 49 / 57 floor falls (one swapped), but 1 extra ADL candidate that escalates — why the fast recheck is the default | `evals/fall_pilot_yolov8m.json`, `evals/gate_adl08_yolov8m.json` |
 
 The earlier 107 ms and 126 ms wall measurements were taken on the same machine
 under different CPU load; a strict review run measured **121 ms/frame**. The
@@ -225,8 +226,12 @@ measured rate per feed instead of claiming the backend number.
 
 ## Run it
 
-**Prerequisites:** Python 3.11+, Node 20+, `ffmpeg` on `PATH`, and the two YOLO
-weights (`yolov8n.pt`, `yolov8n-pose.pt`) in the repository root.
+**Prerequisites:** Python 3.11+, Node 20+, `ffmpeg` on `PATH`, and the YOLO
+weights in the repository root: `yolov8n.pt` and `yolov8n-pose.pt` are
+required. `yolov8m.pt` is optional and only used if you set
+`AEGIS_RECHECK_MODEL=yolov8m.pt` for the lost-person recheck; it sees prone
+bodies more confidently but measured one extra ADL false alert on the corpus,
+so it is not the default.
 
 ```bash
 cp .env.example .env              # set META_API_KEY; add VAPID keys for push
