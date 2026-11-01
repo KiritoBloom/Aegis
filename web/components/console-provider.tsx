@@ -50,7 +50,7 @@ function requestSignal(parent: AbortSignal): AbortSignal {
     any?: (signals: AbortSignal[]) => AbortSignal;
   });
   if (timeout.timeout && timeout.any) {
-    return timeout.any([parent, timeout.timeout(20000)]);
+    return timeout.any([parent, timeout.timeout(30000)]);
   }
   return parent;
 }
@@ -551,6 +551,32 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   // Cross-tab alerts from the real pipeline, independent of the camera wall.
   useStream((frame, payload) => {
     const event = payload as Record<string, unknown>;
+    if (frame === "wall.verification") {
+      // Verification stages and verdicts arrive on the stream, so they keep
+      // advancing after frames stop (recording ended, slow feed).
+      const feedId = String(event.feed_id || "");
+      const alert = event.alert as WallAlert | undefined;
+      if (!feedId || !alert) return;
+      const feed = (setupRef.current?.feeds ?? []).find((f) => f.id === feedId);
+      if (feed) noteVerification(feed, alert);
+      setLive((prev) => {
+        const state = prev[feedId];
+        const current = state?.frame;
+        if (!state || !current) return prev;
+        const patch = (a: WallAlert | null | undefined): WallAlert | null =>
+          a && a.id === alert.id
+            ? { ...a, verification: alert.verification, recovered: alert.recovered }
+            : (a ?? null);
+        const nextAlert = patch(current.alert);
+        const nextLast = patch(current.last_alert);
+        if (nextAlert === current.alert && nextLast === current.last_alert) return prev;
+        return {
+          ...prev,
+          [feedId]: { ...state, frame: { ...current, alert: nextAlert, last_alert: nextLast } },
+        };
+      });
+      return;
+    }
     if (frame === "incident.decided") {
       const id = String(event.id || "");
       if (!id || seenIncidentsRef.current[id]) return;

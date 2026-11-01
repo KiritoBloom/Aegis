@@ -41,7 +41,9 @@ export function LiveFeed({
       el.srcObject = null;
     }
     const attempt = () => {
-      if (el.paused) void el.play().catch(() => {});
+      // An ended, non-looping recording stays ended: the capture worker owns
+      // replay, and resurrecting it here is how Loop-off looked like Loop-on.
+      if (el.paused && !(el.ended && !el.loop)) void el.play().catch(() => {});
     };
     attempt();
     el.addEventListener("loadeddata", attempt);
