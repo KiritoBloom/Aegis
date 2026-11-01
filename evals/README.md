@@ -30,12 +30,12 @@ The current mask evidence is in `meta/sam_redaction.json`.
 
 | Artifact | What it measures | Generated | Kind |
 |---|---|---|---|
-| `meta/sam_redaction.json` | Live SAM on a multi-person entrance reel: 240/240 masks decoded, 7 tracks, 192 mask blurs, 503,806 pixels, 0 box fallbacks, output hashes | 2026-11-01 | live |
+| `meta/sam_redaction.json` | Live SAM on a multi-person entrance reel: 240/240 masks decoded, 7 tracks, 192 mask blurs, 503,794 pixels, 0 box fallbacks, output hashes; generated at `26076cd` | 2026-11-01 | live |
 | `privacy.json` | Idle egress, retention coverage, private-zone masking, delete-all, no face recognition, pause/resume | 2026-10-31 | local |
 | `performance.md`, `performance.json` | Wall benchmark: dynamic, static and empty-room cost with raw output | 2026-11-01 | local |
 | `perception.md`, `perception.json` | Person detection on real CAVIAR/URFD footage | 2026-11-01 | local |
 | `checkin.md`, `checkin.json` | Five real Muse Voice Transcribe outputs through the de-escalation table | 2026-10-27 | live |
-| `checkin_read.json` | Two live Spark reads where the word list missed distress and the safety merge raised the answer to help | 2026-11-01 | live |
+| `checkin_read.json` | Two live Spark reads where the word list missed distress and the safety merge raised the answer to help; generated at `26076cd` | 2026-11-01 | live |
 
 The perception report is a person-detection check, not fall accuracy, and is
 not used to support a recall claim. The fall pilot is the recall evidence.

@@ -79,7 +79,7 @@ drifts from the current policy.
 | Camera loss has a producer | heartbeat watchdog: one urgent incident per outage after 90s; never-connected cameras ignored | `tests/test_camera_watchdog.py` |
 | Real fall, full gate | SAM found one person; Muse escalated; one phase-2 dispatch; check-in started | `gate_escalate_fall01.json` |
 | ADL candidate, full gate | Muse rejected; zero dispatches | `gate_reject_adl03.json` |
-| SAM mask decode and redaction at current HEAD | 240/240 masks decoded on a multi-person entrance reel, 7 tracks, 192 mask blurs, 503,806 pixels, 0 box fallbacks, 48 frames | `meta/sam_redaction.json` |
+| SAM mask decode and redaction at current HEAD | 240/240 masks decoded on a multi-person entrance reel, 7 tracks, 192 mask blurs, 503,794 pixels, 0 box fallbacks, 48 frames | `meta/sam_redaction.json` |
 | Check-in de-escalation with real ASR | 5/5 cases | `checkin.md` |
 | Spark check-in reading on word-list misses | 2/2 raised to help | `checkin_read.json` |
 

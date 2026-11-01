@@ -132,7 +132,7 @@ The model may **raise** an alarm, never lower one below the deterministic floor.
   blurred using SAM masks; if no redacted copy exists, the visual tool is not
   offered to the model.
 - **The masks are real, not a box blur.** Current-HEAD live probe: 240/240 SAM
-  masks decoded, 7 tracks, 192 mask blurs covering 503,806 pixels across 48
+  masks decoded, 7 tracks, 192 mask blurs covering 503,794 pixels across 48
   frames, zero box fallbacks (`evals/meta/sam_redaction.json`).
 - **Audio is event-only.** A sustained loudness event writes one WAV; only that
   WAV is transcribed. The raw audio and WAV are deleted after the assessment.
@@ -173,7 +173,7 @@ description: 57 floor falls, 5 bed falls, 48 ADL clips.
 | Missed floor falls that produced a candidate at 8 fps | **3 / 12** | `evals/fall_pilot_8fps.json` |
 | ADL clips that paged the family | **2 / 48** after the bed-fall fix (2 of 5 candidates escalated, 3 rejected). Before the fix: 0 / 48. | `evals/gate_targeted_after_fix.json` |
 | Bed-fall clips that paged the family | **2 / 5** after the bed-fall fix (both candidates escalated; 3 had no candidate). Before the fix: 0 / 5. | `evals/gate_targeted_after_fix.json` |
-| SAM mask decode + redaction at current HEAD | **240 / 240 masks, 7 tracks, 192 mask blurs, 503,806 pixels, 0 box fallbacks** | `evals/meta/sam_redaction.json` |
+| SAM mask decode + redaction at current HEAD | **240 / 240 masks, 7 tracks, 192 mask blurs, 503,794 pixels, 0 box fallbacks** | `evals/meta/sam_redaction.json` |
 | Check-in de-escalation suite (real ASR output) | **5 / 5 cases** | `evals/checkin.md` |
 | Spark check-in reading on word-list misses | **2 / 2 raised to help** | `evals/checkin_read.json` |
 | Privacy properties | **10 / 10**; idle egress 0 bytes in 3 s; every ledger row has retention | `evals/privacy.json` |
