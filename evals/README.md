@@ -29,7 +29,7 @@ The current mask evidence is in `meta/sam_redaction.json`.
 
 | Artifact | What it measures | Generated | Kind |
 |---|---|---|---|
-| `meta/sam_redaction.json` | Live SAM on a multi-person entrance reel: 240/240 masks decoded, 7 tracks, 192 mask blurs, 502,825 pixels, 0 box fallbacks, output hashes | 2026-10-31 | live |
+| `meta/sam_redaction.json` | Live SAM on a multi-person entrance reel: 240/240 masks decoded, 7 tracks, 192 mask blurs, 503,806 pixels, 0 box fallbacks, output hashes | 2026-11-01 | live |
 | `privacy.json` | Idle egress, retention coverage, private-zone masking, delete-all, no face recognition, pause/resume | 2026-10-31 | local |
 | `performance.md` | Three-run wall benchmark: dynamic vs repeated-frame cost | 2026-10-31 | local |
 | `perception.md`, `perception.json` | Person detection on real CAVIAR/URFD footage | 2026-11-01 | local |
