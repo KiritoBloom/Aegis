@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 import os
 import threading
+import time
 from pathlib import Path
 
 import cv2
@@ -14,9 +15,12 @@ ROOT = Path(__file__).resolve().parents[2]
 SCENE_OBJECTS = {
     "chair", "couch", "bed", "dining table", "tv", "laptop", "remote",
     "cell phone", "microwave", "oven", "sink", "refrigerator",
-    "book", "clock", "vase",
+    "book", "clock", "vase", "bench",
 }
-SUPPORT_LABELS = {"bed", "couch"}
+# Anything a person can be resting *on* rather than lying on the floor. A body
+# on a couch or a bench is not a fall, and treating only beds as support made
+# every other sleeping surface look like the floor.
+SUPPORT_LABELS = {"bed", "couch", "bench"}
 _YOLO = None
 _POSE = None
 _RECHECK = None
@@ -106,6 +110,19 @@ def posture_from_keypoints(kp: list[tuple[float, float, float]] | None) -> str:
     knee_y = sum(p[1] for p in knees) / len(knees) if knees else None
     if angle > 70:
         return "lying"
+    # A seated person can have a vertical torso. Look at both legs rather than
+    # calling every vertical shoulder-to-hip line "upright". Foreshortened
+    # thighs and lower legs extending down are the front-facing seated case.
+    seated_legs = 0
+    for hip, knee, ankle in ((11, 13, 15), (12, 14, 16)):
+        a, b, c = kp[hip], kp[knee], kp[ankle]
+        if min(a[2], b[2], c[2]) < .5:
+            continue
+        shin_drop = c[1] - b[1]
+        if shin_drop > .06 and abs(b[1] - a[1]) < shin_drop * .55:
+            seated_legs += 1
+    if angle <= 45 and seated_legs == 2:
+        return "sitting"
     if angle > 45:
         if knee_y is not None and hp[1] > knee_y - 0.02:
             return "sitting"
@@ -131,6 +148,29 @@ def _cover(inner: tuple[float, float, float, float],
     return _intersection(inner, outer) / base if base > 0 else 0.0
 
 
+def _is_floor_like(box: tuple[float, float, float, float]) -> bool:
+    """True for a wide, flat box that runs off the bottom of the frame.
+
+    Measured on the external corpus: a body falling onto a patterned rug had
+    the rug detected as a "bed" spanning x=0.02..0.78 and y=0.73..1.00, which
+    made a person on the floor look like a person on a bed and suppressed a
+    real fall. The floor is not furniture. A real bed in the same corpus is
+    never both this wide relative to its height and flush with the bottom
+    edge, because some floor stays visible beneath it.
+    """
+    width = max(0.0, box[2] - box[0])
+    height = max(1e-6, box[3] - box[1])
+    return box[3] >= 0.985 and width >= 0.60 and (width / height) >= 2.2
+
+
+# How far a lying body may hang below a surface's near edge and still be on it.
+# A bed's near edge is closer to the camera, so it sits lower in the frame than
+# the body resting on top of it. A body that extends further below that edge is
+# in front of the bed, on the floor. Measured on the corpus: a stale bed box was
+# covering a man who had already fallen onto the rug in front of it.
+LYING_HANG = 0.06
+
+
 def _iou(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
     inter = _intersection(a, b)
     union = ((a[2] - a[0]) * (a[3] - a[1])
@@ -138,11 +178,50 @@ def _iou(a: tuple[float, float, float, float], b: tuple[float, float, float, flo
     return inter / union if union > 0 else 0.0
 
 
-def _pose_people(pose, frame) -> list[dict]:
-    """Find people with pose when the detector misses a lying body."""
+def _skeleton(points, box, width: int, height: int, offset=(0, 0)) -> list[list[float]]:
+    """Map a model's own image coordinates once; reject unusable joints."""
+    x1, y1, x2, y2 = box
+    pad_x, pad_y = (x2 - x1) * .08, (y2 - y1) * .08
+    skeleton = []
+    for point in points:
+        x, y, confidence = float(point[0]) + offset[0], float(point[1]) + offset[1], float(point[2])
+        if (not all(math.isfinite(v) for v in (x, y, confidence))
+                or x <= 0 or y <= 0 or x > width or y > height
+                or not (x1 - pad_x <= x <= x2 + pad_x and y1 - pad_y <= y <= y2 + pad_y)):
+            skeleton.append([0.0, 0.0, 0.0])
+        else:
+            skeleton.append([round(x / width, 4), round(y / height, 4), round(confidence, 3)])
+    return skeleton
+
+
+def _posture(skeleton, width: int, height: int) -> str:
+    visible = [p for p in skeleton if p[2] >= .3]
+    scale = max(1, (max((p[0] for p in visible), default=0) - min((p[0] for p in visible), default=0)) * width,
+                (max((p[1] for p in visible), default=0) - min((p[1] for p in visible), default=0)) * height)
+    return posture_from_keypoints([(p[0] * width / scale, p[1] * height / scale, p[2]) for p in skeleton])
+
+
+def _unrotate_xy(x: float, y: float, width: int, height: int, rotation: int) -> tuple[float, float]:
+    """Undo a clockwise quarter-turn, using pixel or box-edge extents."""
+    if rotation == 90:
+        return y, height - x
+    if rotation == 180:
+        return width - x, height - y
+    if rotation == 270:
+        return width - y, x
+    return x, y
+
+
+def _pose_people(pose, frame, rotation: int = 0) -> list[dict]:
+    """Find people, mapping rotated observations back to the original frame."""
     h, w = frame.shape[:2]
+    model_frame = np.ascontiguousarray(np.rot90(frame, -(rotation // 90))) if rotation else frame
     try:
-        result = pose.predict(frame, imgsz=448, conf=0.40, verbose=False)
+        # A prone body scores lower than a standing one in every detector, and
+        # the pose pass is the fallback that exists to catch exactly that case.
+        # At 0.40 it was throwing away the bodies the object pass had already
+        # dropped, so a real fall on the floor ended as an empty room.
+        result = pose.predict(model_frame, imgsz=448, conf=0.25, verbose=False)
     except Exception:  # noqa: BLE001
         return []
     if not result:
@@ -156,24 +235,62 @@ def _pose_people(pose, frame) -> list[dict]:
         if str(r.names[int(r.boxes.cls[i])]) != "person":
             continue
         x1, y1, x2, y2 = (float(v) for v in box.tolist())
+        if rotation:
+            corners = [_unrotate_xy(x, y, w, h, rotation)
+                       for x, y in ((x1, y1), (x2, y2))]
+            x1, y1 = min(p[0] for p in corners), min(p[1] for p in corners)
+            x2, y2 = max(p[0] for p in corners), max(p[1] for p in corners)
         norm = (x1 / w, y1 / h, x2 / w, y2 / h)
         if _is_edge_sliver(norm):
             continue
         posture = "unknown"
+        strong = 0
+        skeleton = []
         if kp_all is not None and i < len(kp_all):
-            scale = max(1.0, x2 - x1, y2 - y1)
             kp = kp_all[i].tolist()
-            points = [((float(point[0]) - x1) / scale,
-                       (float(point[1]) - y1) / scale,
-                       float(point[2])) for point in kp]
-            posture = posture_from_keypoints(points)
+            if rotation:
+                # Joints are pixel centres; boxes are continuous image edges.
+                # Preserve missing (0,0) joints before the inverse transform.
+                kp = [[*_unrotate_xy(p[0], p[1], w - 1, h - 1, rotation), p[2]]
+                      if p[0] != 0 or p[1] != 0 else [0, 0, 0] for p in kp]
+            skeleton = _skeleton(kp, (x1, y1, x2, y2), w, h)
+            strong = sum(1 for point in skeleton if point[2] >= 0.3)
+            posture = _posture(skeleton, w, h)
         out.append({
             "box": [round(v, 4) for v in norm],
             "conf": round(float(r.boxes.conf[i]), 3),
             "posture": posture,
+            "keypoints": strong,
+            "skeleton": skeleton,
             "seen_by": "pose",
         })
     return out
+
+
+def _pose_quality(person: dict) -> tuple[int, float]:
+    """Compare complete observed body poses, never cherry-pick individual limbs."""
+    body = (person.get("skeleton") or [])[5:17]
+    confident = [p[2] for p in body if p[2] >= .5]
+    return len(confident), sum(confident)
+
+
+def _prone_rotation(person: dict, width: int, height: int) -> int:
+    box = person["box"]
+    if (person["posture"] != "lying"
+            and (box[2] - box[0]) * width < (box[3] - box[1]) * height * 1.5):
+        return 0
+    skeleton = person.get("skeleton") or []
+    shoulders = [p for p in skeleton[5:7] if p[2] >= .5]
+    hips = [p for p in skeleton[11:13] if p[2] >= .5]
+    if not shoulders or not hips:
+        return 90
+    dx = (sum(p[0] for p in hips) / len(hips)
+          - sum(p[0] for p in shoulders) / len(shoulders)) * width
+    dy = (sum(p[1] for p in hips) / len(hips)
+          - sum(p[1] for p in shoulders) / len(shoulders)) * height
+    if abs(dx) > abs(dy):
+        return 90 if dx > 0 else 270
+    return 180 if dy < 0 else 0
 
 
 
@@ -188,6 +305,16 @@ def _is_edge_sliver(box: list[float] | tuple[float, ...]) -> bool:
 
 def _same_person(a: dict, b: dict) -> bool:
     abox, bbox = tuple(a["box"]), tuple(b["box"])
+    # Two overlapping boxes can be two people. Distinct, confidently observed
+    # torsos must not be collapsed just because one box contains the other.
+    ka, kb = a.get("skeleton") or [], b.get("skeleton") or []
+    if len(ka) >= 13 and len(kb) >= 13:
+        distances = [math.hypot(ka[i][0] - kb[i][0], ka[i][1] - kb[i][1])
+                     for i in (5, 6, 11, 12) if min(ka[i][2], kb[i][2]) >= .5]
+        size = min(math.hypot(abox[2]-abox[0], abox[3]-abox[1]),
+                   math.hypot(bbox[2]-bbox[0], bbox[3]-bbox[1]))
+        if len(distances) >= 3 and sum(distances) / len(distances) > .15 * size:
+            return False
     if _iou(abox, bbox) >= 0.55:
         return True
     smaller = min((abox[2] - abox[0]) * (abox[3] - abox[1]),
@@ -197,22 +324,35 @@ def _same_person(a: dict, b: dict) -> bool:
 
 def _merge_people(yolo_people: list[dict], pose_people: list[dict]) -> list[dict]:
     merged = [dict(p, seen_by="person") for p in yolo_people]
-    for pp in pose_people:
-        best_idx, best_iou = -1, 0.45
-        for i, yp in enumerate(merged):
-            score = _iou(tuple(pp["box"]), tuple(yp["box"]))
-            if score > best_iou:
-                best_idx, best_iou = i, score
+    pairs = sorted((( _iou(tuple(pp["box"]), tuple(yp["box"])), pi, yi)
+                    for pi, pp in enumerate(pose_people) for yi, yp in enumerate(yolo_people)), reverse=True)
+    assigned, used = {}, set()
+    for score, pi, yi in pairs:
+        if score > .45 and pi not in assigned and yi not in used:
+            assigned[pi] = yi
+            used.add(yi)
+    for pi, pp in enumerate(pose_people):
+        best_idx = assigned.get(pi, -1)
         if best_idx < 0:
             # A pose-only box with no usable keypoints adds a duplicate person
             # without adding posture evidence. YOLO already covers that body.
-            if pp.get("posture") == "unknown":
+            # But a box the pose model found with a real skeleton is a body the
+            # object pass missed, and dropping it because the posture read was
+            # inconclusive is how a person on the floor became an empty room.
+            if pp.get("posture") == "unknown" and int(pp.get("keypoints") or 0) < 6:
                 continue
             merged.append(pp)
             continue
         yp = merged[best_idx]
-        yp["box"] = pp["box"]
-        yp["posture"] = pp["posture"]
+        if int(pp.get("keypoints") or 0) >= 6:
+            yp["box"] = pp["box"]
+        yp["skeleton"] = pp.get("skeleton") or []
+        yp["keypoints"] = pp.get("keypoints", 0)
+        # "unknown" is an absence of a reading, not a reading. Letting it
+        # overwrite a posture keeps a good answer from being lost when the
+        # second opinion is inconclusive.
+        if pp["posture"] != "unknown":
+            yp["posture"] = pp["posture"]
         yp["conf"] = max(yp["conf"], pp["conf"])
         yp["seen_by"] = "pose+yolo"
     # Two detectors can both return the same body, and pose can return a
@@ -225,30 +365,41 @@ def _merge_people(yolo_people: list[dict], pose_people: list[dict]) -> list[dict
     return kept
 
 
-def _pose_for_crop(pose, frame, box: tuple[float, float, float, float]) -> str:
+def _pose_for_crop(pose, frame, box: tuple[float, float, float, float]) -> dict:
+    """Refine the target person, returning joints in full-frame coordinates."""
+    unknown = {"posture": "unknown", "skeleton": [], "keypoints": 0}
     h, w = frame.shape[:2]
     x1, y1, x2, y2 = box
     cx1, cy1 = max(0, int(x1 * w) - 10), max(0, int(y1 * h) - 10)
     cx2, cy2 = min(w, int(x2 * w) + 10), min(h, int(y2 * h) + 10)
     if cx2 - cx1 < 24 or cy2 - cy1 < 24:
-        return "unknown"
+        return unknown
     crop = frame[cy1:cy2, cx1:cx2]
     try:
-        res = pose.predict(crop, imgsz=256, verbose=False)
+        res = pose.predict(crop, imgsz=384, conf=.25, verbose=False)
     except Exception:  # noqa: BLE001
-        return "unknown"
+        return unknown
     if not res or res[0].keypoints is None or res[0].keypoints.data is None:
-        return "unknown"
+        return unknown
     kp = res[0].keypoints.data
     if len(kp) == 0:
-        return "unknown"
-    ch, cw = crop.shape[:2]
+        return unknown
     skeletons = kp.tolist()
-    best = max(skeletons, key=lambda skeleton: sum(1 for point in skeleton if point[2] >= 0.3))
-    scale = max(1, cw, ch)
-    points = [(float(point[0]) / scale, float(point[1]) / scale, float(point[2]))
-              for point in best]
-    return posture_from_keypoints(points)
+    boxes = res[0].boxes.xyxy.tolist() if res[0].boxes is not None else []
+    if len(boxes) == len(skeletons):
+        # Prefer the skeleton belonging to this crop's target body, not a
+        # nearby bystander with more visible joints.
+        scores = [_iou(((b[0] + cx1) / w, (b[1] + cy1) / h,
+                        (b[2] + cx1) / w, (b[3] + cy1) / h), box) for b in boxes]
+        best_index = max(range(len(scores)), key=lambda i: scores[i])
+        if scores[best_index] < 0.2:
+            return unknown
+        best = skeletons[best_index]
+    else:
+        best = max(skeletons, key=lambda skeleton: sum(1 for point in skeleton if point[2] >= 0.3))
+    skeleton = _skeleton(best, (x1*w, y1*h, x2*w, y2*h), w, h, (cx1, cy1))
+    return {"posture": _posture(skeleton, w, h), "skeleton": skeleton,
+            "keypoints": sum(p[2] >= .3 for p in skeleton)}
 
 
 
@@ -262,8 +413,9 @@ def analyze_image_bytes(data: bytes) -> dict:
 
 
 def analyze_frame_array(frame, objects: list[dict] | None = None,
-                        detect_objects: bool = True,
-                        person_imgsz: int | None = None) -> dict:
+                         detect_objects: bool = True,
+                         person_imgsz: int | None = None,
+                         cached_pose: list[dict] | None = None) -> dict:
     """Analyze one in-memory BGR frame; optionally reuse cached object boxes.
 
     `person_imgsz` is the lost-person recheck: it runs the stronger detector
@@ -278,23 +430,29 @@ def analyze_frame_array(frame, objects: list[dict] | None = None,
         else:
             person_imgsz = max(person_imgsz, 448)
     h, w = frame.shape[:2]
+    queued = time.perf_counter()
     with _INFER:
-        return _analyze(frame, yolo, pose, w, h,
+        acquired = time.perf_counter()
+        result = _analyze(frame, yolo, pose, w, h,
                         cached_objects=objects, detect_objects=detect_objects,
-                        person_imgsz=person_imgsz)
+                         person_imgsz=person_imgsz, cached_pose=cached_pose)
+        result["timing"] = {"queue_ms": round((acquired - queued) * 1000, 1),
+                            "inference_ms": round((time.perf_counter() - acquired) * 1000, 1)}
+        return result
 
 
 def _analyze(frame, yolo, pose, w: int, h: int,
-            cached_objects: list[dict] | None = None,
-            detect_objects: bool = True,
-            person_imgsz: int | None = None) -> dict:
+             cached_objects: list[dict] | None = None,
+             detect_objects: bool = True,
+             person_imgsz: int | None = None,
+             cached_pose: list[dict] | None = None) -> dict:
     yolo_people: list[dict] = []
     objects: list[dict] = []
-    if detect_objects or cached_objects is None:
+    if detect_objects:
         result = yolo.predict(frame, imgsz=416, conf=0.30, verbose=False)
     else:
         # Objects are cached, people are not: a person can enter at any time.
-        objects = [dict(obj) for obj in cached_objects]
+        objects = [dict(obj) for obj in (cached_objects or [])]
         result = yolo.predict(frame, imgsz=person_imgsz or 320, conf=0.30,
                               classes=[0], verbose=False)
     if result:
@@ -319,10 +477,52 @@ def _analyze(frame, yolo, pose, w: int, h: int,
                         "conf": round(conf, 3),
                         "box": [round(v, 4) for v in norm],
                     })
-    persons = _merge_people(yolo_people, _pose_people(pose, frame))
+    full_pose = _pose_people(pose, frame) if cached_pose is None else cached_pose
+    persons = _merge_people(yolo_people, full_pose)
+    # Standing-trained pose networks miss sideways/face-down bodies or fold
+    # their legs into the torso. One additional full-frame orientation preserves
+    # scene context without enlarging an observed body to include the rug.
+    # All returned joints
+    # belong to that one real model observation, not a synthetic skeleton.
+    prone = [(p, _prone_rotation(p, w, h)) for p in persons]
+    prone = [(p, rotation) for p, rotation in prone if rotation]
+    rotation = (max(prone, key=lambda item: (item[0]["box"][2] - item[0]["box"][0])
+                    * (item[0]["box"][3] - item[0]["box"][1]))[1] if prone else 0)
+    if not persons:
+        rotation = 90
+    if rotation and cached_pose is None:
+        rotated_pose = _pose_people(pose, frame, rotation=rotation)
+        if not persons:
+            persons = _merge_people([], rotated_pose)
+        else:
+            # Association is one-to-one. A rotated bystander cannot donate
+            # joints to two boxes, and an unmatched rotated guess adds nobody.
+            pairs = sorted([(_iou(tuple(p["box"]), tuple(r["box"])), pi, ri)
+                            for pi, p in enumerate(persons)
+                            for ri, r in enumerate(rotated_pose)], reverse=True)
+            used_people, used_poses = set(), set()
+            for overlap, pi, ri in pairs:
+                if overlap < .45 or pi in used_people or ri in used_poses:
+                    continue
+                used_people.add(pi)
+                used_poses.add(ri)
+                person, refined = persons[pi], dict(rotated_pose[ri])
+                target_box = tuple(v * size for v, size in zip(person["box"], (w, h, w, h)))
+                refined["skeleton"] = _skeleton(
+                    [[p[0] * w, p[1] * h, p[2]] for p in refined["skeleton"]], target_box, w, h)
+                refined["keypoints"] = sum(p[2] >= .3 for p in refined["skeleton"])
+                refined["posture"] = _posture(refined["skeleton"], w, h)
+                if _pose_quality(refined) > _pose_quality(person):
+                    person.update(skeleton=refined["skeleton"], keypoints=refined["keypoints"],
+                                  posture=(refined["posture"] if refined["posture"] != "unknown"
+                                           else person["posture"]),
+                                  conf=max(person["conf"], refined["conf"]),
+                                  seen_by=person.get("seen_by", "pose") + "+rotated_pose")
     for person in persons:
-        if person["seen_by"] == "person":
-            person["posture"] = _pose_for_crop(pose, frame, tuple(person["box"]))
+        if person["posture"] == "unknown":
+            refined = _pose_for_crop(pose, frame, tuple(person["box"]))
+            if refined["posture"] != "unknown" or refined["keypoints"] > person.get("keypoints", 0):
+                person.update(refined)
         height = max(1e-6, person["box"][3] - person["box"][1])
         person["distance"] = ("near" if height >= 0.50 else
                               "mid" if height >= 0.18 else "far")
@@ -333,10 +533,20 @@ def _analyze(frame, yolo, pose, w: int, h: int,
         foot = ((box[0] + box[2]) / 2, box[3])
         support = None
         best_cover = 0.0
-        for obj in objects:
+        # Only a body that could be resting on something can be supported by it.
+        # A standing person in front of a bed has their box centre inside the
+        # bed's box in perspective, which used to label them "on the bed" and
+        # then hand that label to the same track after it fell to the floor.
+        resting = person["posture"] in ("lying", "sitting", "bending", "kneeling")
+        for obj in objects if resting else ():
             if obj["label"] not in SUPPORT_LABELS:
                 continue
             obox = tuple(obj["box"])
+            # A rug detected as a bed is the floor, and the floor supports
+            # nobody. Skipping it here is what stops a fall onto the ground
+            # from being filed as a lie-down on the bed behind it.
+            if _is_floor_like(obox):
+                continue
             ox1, oy1, ox2, oy2 = obox
             cover = _cover(box, obox)
             cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
@@ -346,7 +556,11 @@ def _analyze(frame, yolo, pose, w: int, h: int,
             # the body's foot or centre to be on the furniture.
             foot_on = ox1 <= foot[0] <= ox2 and oy1 <= foot[1] <= oy2
             centre_on = ox1 <= cx <= ox2 and oy1 <= cy <= oy2
-            if (foot_on or centre_on) and cover >= 0.30 and cover > best_cover:
+            # A body resting on a bed is photographed above the bed's near
+            # edge. A body that hangs further below that edge is in front of
+            # the furniture, on the floor, even when the two boxes overlap.
+            hangs_off = box[3] > oy2 + LYING_HANG
+            if (foot_on or centre_on) and not hangs_off and cover >= 0.30 and cover > best_cover:
                 support, best_cover = obj["label"], cover
         person["support_surface"] = support
     person_count = len(persons)
@@ -372,6 +586,7 @@ def _analyze(frame, yolo, pose, w: int, h: int,
         "persons": persons[:4],
         "objects": objects,
         "flags": flags,
+        "_pose_people": full_pose,
         "status": ("multiple_people" if person_count > 1 else
                    "person" if person_count == 1 else
                    "objects_only" if objects else "empty"),

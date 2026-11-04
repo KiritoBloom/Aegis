@@ -3,37 +3,72 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
+import logging
 
-from . import db, policy, scene, watch
+from . import db, policy, render, scene, watch
 from .meta import SPARK_MODEL, MetaClient
 from .prompt import SETUP_PROPOSE_PROMPT
+
+log = logging.getLogger("aegis.setup")
 
 MAX_FRAME_BYTES = 5 * 1024 * 1024
 
 
 async def map_frame(data: bytes) -> dict:
-    """Analyze one setup frame locally and discard it."""
+    """Analyze one setup frame locally, draw the room map, discard the frame.
+
+    Everything here runs on this machine: the detector names what it sees and
+    the map is drawn from those boxes. Nothing is uploaded, which is why the map
+    can keep the frame intact and the household can trust the privacy line under
+    it.
+    """
+    import cv2
+    import numpy as np
+
     if not data:
         raise ValueError("empty frame")
     if len(data) > MAX_FRAME_BYTES:
         raise ValueError("frame exceeds 5 MB")
-    det = await asyncio.to_thread(scene.analyze_image_bytes, data)
+
+    frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if frame is None:
+        raise ValueError("image could not be decoded")
+    h, w = frame.shape[:2]
+
+    det = await asyncio.to_thread(scene.analyze_frame_array, frame)
+    people = [{"label": "person", **p} for p in (det.get("persons") or [])]
+    furniture = list(det.get("objects") or [])
+    detections = furniture + people
+
+    # ASCII only: the note is drawn with OpenCV's Hershey font, which has no
+    # glyph for a middle dot.
+    note = f"mapped locally - {len(furniture)} object(s)"
+    if people:
+        note += f" - {len(people)} person(s)"
+    mapped, manifest = render.scene_map(frame, detections, note=note)
+    ok, out = cv2.imencode(".jpg", mapped, [cv2.IMWRITE_JPEG_QUALITY, 82])
+    if not ok:
+        raise ValueError("could not encode the map")
+
     return {
         "local": True,
-        "width": det["width"],
-        "height": det["height"],
-        "person_count": det["person_count"],
+        "width": w,
+        "height": h,
+        "person_count": det.get("person_count") or 0,
         "persons": [
             {"box": p["box"], "posture": p["posture"], "conf": p["conf"]}
             for p in (det.get("persons") or [])[:4]
         ],
         "objects": [
             {"label": o["label"], "conf": o["conf"], "box": o["box"]}
-            for o in (det.get("objects") or [])[:8]
+            for o in furniture[:8]
         ],
         "flags": det.get("flags") or [],
         "status": det.get("status"),
+        "map": "data:image/jpeg;base64," + base64.b64encode(out.tobytes()).decode(),
+        "sam": manifest,
     }
 
 

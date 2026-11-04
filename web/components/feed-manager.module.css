@@ -3,21 +3,21 @@
   --fm-muted: var(--ink-3, #7c877f);
   --fm-line: var(--line-2, rgba(29, 41, 36, 0.22));
   --fm-line-soft: var(--line, rgba(29, 41, 36, 0.13));
-  --fm-surface: #fdfbf7;
+  --fm-surface: var(--color-surface);
   --fm-accent: var(--green, #315746);
   --fm-danger: var(--red, #9a4036);
   --fm-radius: 8px;
 }
 
 .root[data-tone="dark"] {
-  --fm-text: #e6e3da;
-  --fm-muted: #8e9a92;
-  --fm-line: rgba(226, 232, 224, 0.24);
-  --fm-line-soft: rgba(226, 232, 224, 0.11);
-  --fm-surface: #161d1a;
-  --fm-accent: #9dc0aa;
-  --fm-danger: #dd8377;
-  --fm-radius: 5px;
+  --fm-text: var(--c-text);
+  --fm-muted: var(--c-dim);
+  --fm-line: var(--c-line);
+  --fm-line-soft: var(--c-line-soft);
+  --fm-surface: var(--c-panel);
+  --fm-accent: var(--c-sage);
+  --fm-danger: var(--c-red);
+  --fm-radius: 8px;
 }
 
 .root { position: relative; }
@@ -32,14 +32,14 @@
 .fileInput { display: none; }
 
 .add {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--fm-line);
   border-radius: var(--fm-radius);
   background: transparent;
   color: var(--fm-text);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 13px;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease, transform 120ms ease;
 }
@@ -177,14 +177,14 @@
 
 .field input {
   width: 100%;
-  min-height: 34px;
+  min-height: 44px;
   padding: 6px 9px;
   border: 1px solid var(--fm-line-soft);
   border-radius: calc(var(--fm-radius) - 2px);
   background: transparent;
   color: var(--fm-text);
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   outline: none;
 }
 

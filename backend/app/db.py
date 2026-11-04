@@ -78,6 +78,14 @@ CREATE TABLE IF NOT EXISTS checkins (
   id TEXT PRIMARY KEY, incident_id TEXT, transcript TEXT, outcome TEXT,
   model TEXT, created_at TEXT
 );
+-- Observed actions and evidence, persisted across stream reconnects.
+CREATE TABLE IF NOT EXISTS pipeline_steps (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, incident_id TEXT, feed_id TEXT,
+  feed_name TEXT, stage TEXT, status TEXT, title TEXT, detail TEXT,
+  metrics_json TEXT, created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pipeline_inc ON pipeline_steps(incident_id, id);
+CREATE INDEX IF NOT EXISTS idx_pipeline_feed ON pipeline_steps(feed_id, id);
 -- Who agreed, to which version of the text, and when. The resident consents on
 -- their own device; a family member cannot do it for them.
 CREATE TABLE IF NOT EXISTS consent (
@@ -159,6 +167,24 @@ def init() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
         _migrate(conn)
+        # Older releases left the occurrence marked pending forever. Reconcile
+        # only settled incidents; an open verification remains private.
+        conn.execute("""
+            WITH released AS (
+              SELECT id FROM incidents WHERE status='notified'
+              UNION SELECT incident_id FROM notifications
+            )
+            UPDATE events SET
+              suppressed=CASE WHEN incident_id IN (SELECT id FROM released) THEN 0 ELSE 1 END,
+              severity=CASE WHEN incident_id IN (SELECT id FROM released) THEN
+                (SELECT severity FROM incidents i WHERE i.id=events.incident_id)
+                ELSE 'info' END,
+              reason=CASE WHEN incident_id IN (SELECT id FROM released) THEN 'family_alert_released'
+                ELSE 'handled_without_family_alert' END
+            WHERE reason='verification_pending' AND incident_id IN
+              (SELECT id FROM incidents WHERE status NOT IN
+               ('verifying','releasing','resident_check'))
+        """)
         conn.execute(
             "INSERT OR IGNORE INTO households (id, name, timezone, created_at) VALUES (?,?,?,?)",
             ("hh_demo", "Cairo apartment", "Africa/Cairo", now()),
@@ -171,9 +197,9 @@ def init() -> None:
         conn.commit()
 
 
-def upsert_incident(payload: dict[str, Any]) -> None:
+def upsert_incident(payload: dict[str, Any]) -> bool:
     with connect() as conn:
-        conn.execute(
+        cur = conn.execute(
             """INSERT INTO incidents
                (id, household_id, camera_id, type, status, severity, started_at, local_time,
                 zone_id, features_json, sensors_json, privacy_json, evidence_json, source,
@@ -195,6 +221,7 @@ def upsert_incident(payload: dict[str, Any]) -> None:
             ),
         )
         conn.commit()
+        return bool(cur.rowcount)
 
 
 def attach_clip(incident_id: str, clip: str, still: str | None, thumb: str | None,
@@ -226,6 +253,47 @@ def attach_agent(incident_id: str, trace: list[dict]) -> None:
         conn.execute("UPDATE incidents SET agent_json=? WHERE id=?",
                      (json.dumps(trace), incident_id))
         conn.commit()
+
+
+def add_pipeline_step(incident_id: str, stage: str, status: str, title: str,
+                      detail: str = "", metrics: dict | None = None) -> dict | None:
+    with connect() as conn:
+        incident = conn.execute("SELECT camera_id,sensors_json FROM incidents WHERE id=?",
+                                (incident_id,)).fetchone()
+        if incident is None:
+            return None
+        feed = (json.loads(incident["sensors_json"] or "{}").get("wall_feed") or {})
+        row = {"incident_id": incident_id, "feed_id": feed.get("feed_id") or incident["camera_id"],
+               "feed_name": feed.get("feed_name") or "Camera", "stage": stage,
+               "status": status, "title": title, "detail": detail,
+               "metrics": metrics or {}, "created_at": now()}
+        cursor = conn.execute(
+            "INSERT INTO pipeline_steps (incident_id,feed_id,feed_name,stage,status,title,detail,metrics_json,created_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?)",
+            (incident_id, row["feed_id"], row["feed_name"], stage, status, title, detail,
+             json.dumps(row["metrics"]), row["created_at"]))
+        row["id"] = cursor.lastrowid
+        conn.commit()
+    return row
+
+
+def pipeline_steps(limit: int = 200, feed_id: str | None = None,
+                   incident_id: str | None = None) -> list[dict]:
+    clauses, args = [], []
+    for column, value in (("feed_id", feed_id), ("incident_id", incident_id)):
+        if value:
+            clauses.append(f"{column}=?")
+            args.append(value)
+    where = " WHERE " + " AND ".join(clauses) if clauses else ""
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM pipeline_steps" + where + " ORDER BY id DESC LIMIT ?",
+                            (*args, limit)).fetchall()
+    result = []
+    for raw in reversed(rows):
+        row = dict(raw)
+        row["metrics"] = json.loads(row.pop("metrics_json") or "{}")
+        result.append(row)
+    return result
 
 
 def attach_context_read(incident_id: str, read: dict) -> None:
@@ -337,7 +405,33 @@ def incident_held(incident_id: str) -> bool:
     with connect() as conn:
         row = conn.execute("SELECT status FROM incidents WHERE id=?",
                            (incident_id,)).fetchone()
-    return bool(row and row["status"] in ("verifying", "releasing"))
+    return bool(row and row["status"] in ("verifying", "releasing", "resident_check"))
+
+
+def hold_for_resident(incident_id: str, severity: str, due_at: float) -> bool:
+    """Move a verified fall to the resident-first gate.
+
+    Nothing has been sent to the family at this point. The row is marked
+    `resident_check`, which the family routes treat exactly like `verifying`:
+    invisible. The due time is a crash backstop for the window between this
+    write and the check-in claim, so a process that dies while asking the
+    resident cannot leave a verified fall with nobody to tell.
+    """
+    order = {"info": 0, "watch": 1, "urgent": 2, "emergency": 3}
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT severity FROM incidents WHERE id=?",
+                           (incident_id,)).fetchone()
+        current = (row["severity"] if row else None) or "info"
+        chosen = severity if order.get(severity, 0) >= order.get(current, 0) else current
+        cur = conn.execute(
+            "UPDATE incidents SET status='resident_check', severity=?,"
+            " verification_due_at=?, escalation_due_at=NULL"
+            " WHERE id=? AND status IN ('releasing','verifying')",
+            (chosen, due_at, incident_id),
+        )
+        conn.commit()
+    return bool(cur.rowcount)
 
 
 def reject_verifying_incident(incident_id: str, reason: str = "") -> bool:
@@ -381,6 +475,9 @@ def due_verifications(now_epoch: float, legacy_age_s: float = 300.0,
     creation age is the backstop, so upgrading does not strand an old row.
     A `releasing` row is also due when its lease expires, which covers a
     process that claimed the release and died before paging or closing it.
+    A `resident_check` row is due when its gate deadline passes without a
+    check-in ever being claimed, which covers a crash between the gate write
+    and the spoken question.
     """
     cutoff = time.strftime(
         "%Y-%m-%dT%H:%M:%S", time.gmtime(now_epoch - max(0.0, legacy_age_s))
@@ -394,8 +491,10 @@ def due_verifications(now_epoch: float, legacy_age_s: float = 300.0,
             "  AND created_at <= ?)"
             " OR (status='releasing' AND (verification_due_at IS NULL"
             "  OR verification_due_at <= ?))"
+            " OR (status='resident_check' AND verification_due_at IS NOT NULL"
+            "  AND verification_due_at <= ?)"
             ") ORDER BY COALESCE(verification_due_at, 0), created_at LIMIT ?",
-            (now_epoch, cutoff, now_epoch, limit),
+            (now_epoch, cutoff, now_epoch, now_epoch, limit),
         ).fetchall()
     return [_decode_incident(dict(r)) for r in rows]
 
@@ -411,6 +510,12 @@ def set_status(incident_id: str, status: str, severity: str | None = None) -> No
         # a duplicate answer must not put a closed conversation back on a phone.
         if row["status"] in ("resolved", "cancelled") \
                 and status not in ("resolved", "cancelled"):
+            return
+        # The resident-first gate is not a place a late write may promote from.
+        # Only the check-in answer and the gate sweep leave `resident_check`,
+        # and both do it through the paths that also settle the page.
+        if row["status"] == "resident_check" \
+                and status not in ("resolved", "cancelled", "notified"):
             return
         if status in ("resolved", "cancelled"):
             # A resolution is the one path allowed to settle severity lower.
@@ -516,10 +621,11 @@ def _is_rejected_wall_candidate(incident: dict) -> bool:
 def hidden_from_family(incident: dict) -> bool:
     """Rows the family routes must never expose.
 
-    Held states are still owned by SAM/Muse. A rejected wall candidate is an
-    audit row, not an incident; the event log keeps its history.
+    Held states are still owned by SAM/Muse, or by the resident being asked
+    first. A rejected wall candidate is an audit row, not an incident; the
+    event log keeps its history.
     """
-    return (incident.get("status") in ("verifying", "releasing")
+    return (incident.get("status") in ("verifying", "releasing", "resident_check")
             or _is_rejected_wall_candidate(incident))
 
 
@@ -528,24 +634,36 @@ def incident_hidden(incident_id: str) -> bool:
     return incident is None or hidden_from_family(incident)
 
 
-def list_incidents(limit: int = 50, status: str | None = None) -> list[dict]:
+def list_incidents(limit: int = 50, status: str | None = None, *,
+                   severity: str | None = None, etype: str | None = None,
+                   since: str | None = None) -> list[dict]:
     # `verifying` and `releasing` are internal states: the evidence owner is
-    # still deciding and no family alert exists yet. They must never appear in
+    # still deciding and no family alert exists yet. `resident_check` means the
+    # resident is being asked before anyone is paged. None of them may appear in
     # a family-facing list, with or without media.
-    q = "SELECT * FROM incidents WHERE status NOT IN ('verifying','releasing')"
+    q = ("SELECT * FROM incidents WHERE status NOT IN"
+         " ('verifying','releasing','resident_check')"
+         " AND NOT (COALESCE(source,'')='wall' AND status='resolved'"
+         " AND json_extract(CASE WHEN json_valid(sensors_json) THEN sensors_json"
+         " ELSE '{}' END, '$.verification') IS 'rejected')")
     args: list[Any] = []
     if status:
         q += " AND status=?"
         args.append(status)
-    q += " ORDER BY created_at DESC LIMIT ?"
-    # Rejected wall candidates are filtered after decoding. Fetch a little
-    # extra so a run of rejections cannot starve the family list of real rows.
-    args.append(limit + 20 if limit else limit)
+    for column, value in (("severity", severity), ("type", etype)):
+        if value:
+            q += f" AND {column}=?"
+            args.append(value)
+    if since:
+        q += " AND datetime(created_at) >= datetime(?)"
+        args.append(since)
+    q += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
+    args.append(limit)
     with connect() as conn:
         rows = conn.execute(q, args).fetchall()
         out = []
         for r in rows:
-            inc = dict(r)
+            inc = _decode_incident(dict(r))
             dec = conn.execute(
                 "SELECT * FROM decisions "
                 "WHERE incident_id=? ORDER BY phase DESC LIMIT 1", (inc["id"],)
@@ -560,23 +678,7 @@ def list_incidents(limit: int = 50, status: str | None = None) -> list[dict]:
                 inc["policy_floor"] = dec["policy_floor"]
             else:
                 inc["decision"] = None
-            try:
-                inc["sensors"] = json.loads(inc.pop("sensors_json") or "{}")
-            except (json.JSONDecodeError, TypeError):
-                inc["sensors"] = {}
-            try:
-                inc["agent"] = json.loads(inc.pop("agent_json") or "null")
-            except (json.JSONDecodeError, TypeError):
-                inc["agent"] = None
-            try:
-                inc["evidence"] = json.loads(inc.pop("evidence_json") or "[]")
-            except (json.JSONDecodeError, TypeError):
-                inc["evidence"] = []
-            inc.pop("features_json", None)
-            inc.pop("privacy_json", None)
-            inc.pop("sam_json", None)
-            if _is_rejected_wall_candidate(inc):
-                continue
+            inc["checkin"] = latest_checkin(inc["id"])
             out.append(inc)
             if limit and len(out) >= limit:
                 break
@@ -656,7 +758,7 @@ def purge_metadata(days: int = 90) -> dict:
             (cutoff,),
         )]
         for table in ("decisions", "acks", "notifications", "checkins", "events",
-                      "outbound_requests"):
+                      "outbound_requests", "pipeline_steps"):
             if not ids:
                 counts[table] = 0
                 continue
@@ -810,13 +912,17 @@ def resolve_camera_outages(camera_id: str) -> list[str]:
 
 def add_ack(incident_id: str, action: str) -> None:
     with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         conn.execute("INSERT INTO acks (incident_id, action, created_at) VALUES (?,?,?)",
                      (incident_id, action, now()))
         status = "resolved" if action in ("im_checking", "false_alarm", "send_help") else "acknowledged"
         conn.execute(
-            "UPDATE incidents SET status=?"
+            "UPDATE incidents SET status=?, acked_at=?, escalation_due_at=NULL,"
+            " verification_due_at=NULL, checkin_due_at=NULL,"
+            " checkin_status=CASE WHEN checkin_status='asking' THEN 'cancelled'"
+            " ELSE checkin_status END"
             " WHERE id=? AND status NOT IN ('resolved','cancelled')",
-            (status, incident_id),
+            (status, now(), incident_id),
         )
         conn.commit()
 
@@ -949,25 +1055,27 @@ def event_counts(days: int = 7) -> dict:
     with connect() as conn:
         total = conn.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]
         since = conn.execute(
-            "SELECT COUNT(*) c FROM events WHERE created_at >= datetime('now', ?)",
+            "SELECT COUNT(*) c FROM events WHERE datetime(created_at) >= datetime('now', ?)",
             (f"-{days} days",),
         ).fetchone()["c"]
         sent = conn.execute(
-            "SELECT COUNT(*) c FROM events WHERE suppressed=0 AND severity IN "
-            "('urgent','emergency')"
+            "SELECT COUNT(DISTINCT incident_id) c FROM notifications WHERE status='sent'"
+            " AND channel!='console' AND severity IN ('urgent','emergency')"
         ).fetchone()["c"]
         by_zone = conn.execute(
             "SELECT COALESCE(zone_id,'unknown') AS name, COUNT(*) AS count FROM events "
-            "WHERE created_at >= datetime('now', ?) GROUP BY 1 ORDER BY count DESC",
+            "WHERE datetime(created_at) >= datetime('now', ?) GROUP BY 1 ORDER BY count DESC",
             (f"-{days} days",),
         ).fetchall()
         by_type = conn.execute(
             "SELECT type AS name, COUNT(*) AS count FROM events "
-            "WHERE created_at >= datetime('now', ?) "
+            "WHERE datetime(created_at) >= datetime('now', ?) "
             "GROUP BY 1 ORDER BY count DESC", (f"-{days} days",),
         ).fetchall()
         kept = conn.execute(
             "SELECT COUNT(*) c FROM events WHERE suppressed=1"
+            " AND COALESCE(reason,'')!='verification_pending'"
+            " AND type NOT IN ('family_acknowledged','verification_suppressed')"
         ).fetchone()["c"]
     return {
         "seen": total,
@@ -980,10 +1088,39 @@ def event_counts(days: int = 7) -> dict:
     }
 
 
-def recent_events(limit: int = 50) -> list[dict]:
+def settle_verification_event(incident_id: str, severity: str, *,
+                              suppressed: bool, reason: str) -> None:
+    """The candidate's outcome updates its occurrence, not a second occurrence."""
     with connect() as conn:
+        conn.execute(
+            "UPDATE events SET severity=?, suppressed=?, reason=?"
+            " WHERE incident_id=? AND reason='verification_pending'",
+            (severity, int(suppressed), reason[:200], incident_id),
+        )
+        conn.commit()
+
+
+def extend_resident_deadline(incident_id: str, due_at: float) -> None:
+    with connect() as conn:
+        conn.execute("UPDATE incidents SET verification_due_at=?"
+                     " WHERE id=? AND status='resident_check'", (due_at, incident_id))
+        conn.commit()
+
+
+def recent_events(limit: int = 50, *, family: bool = False) -> list[dict]:
+    with connect() as conn:
+        where = (" WHERE COALESCE(e.reason,'') != 'verification_pending'"
+                 " AND (i.id IS NULL OR i.status NOT IN"
+                 " ('verifying','releasing','resident_check'))") if family else ""
         rows = conn.execute(
-            "SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,)
+            "SELECT e.*, CASE WHEN i.id IS NOT NULL AND i.status NOT IN"
+            " ('verifying','releasing','resident_check') AND NOT"
+            " (COALESCE(i.source,'')='wall' AND i.status='resolved' AND"
+            " json_extract(CASE WHEN json_valid(i.sensors_json) THEN i.sensors_json"
+            " ELSE '{}' END, '$.verification') IS 'rejected')"
+            " THEN 1 ELSE 0 END AS incident_available"
+            " FROM events e LEFT JOIN incidents i ON i.id=e.incident_id"
+            + where + " ORDER BY e.id DESC LIMIT ?", (limit,)
         ).fetchall()
     return [dict(r) for r in rows]
 

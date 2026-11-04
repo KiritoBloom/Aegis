@@ -178,13 +178,59 @@ def test_media_route_refuses_raw_names_for_private_incidents(monkeypatch, tmp_pa
     assert Path(response.path).name == "redacted.jpg"
 
 
-def test_agent_still_is_redacted_only_for_private_incidents(monkeypatch, tmp_path):
+def test_agent_still_is_never_the_raw_frame(monkeypatch, tmp_path):
+    """Muse may see a blurred still or nothing. It never sees the raw frame."""
     monkeypatch.setattr(api, "MEDIA_ROOT", tmp_path)
     folder = tmp_path / "inc_still"
     folder.mkdir()
-    (folder / "still.jpg").write_bytes(b"raw")
-    (folder / "redacted.jpg").write_bytes(b"masked")
-    monkeypatch.setattr(api.db, "media_private", lambda _id: True)
-    assert api._still_for_agent("inc_still").name == "redacted.jpg"
+    payload = b"x" * 4096
+    (folder / "still.jpg").write_bytes(payload)
     monkeypatch.setattr(api.db, "media_private", lambda _id: False)
-    assert api._still_for_agent("inc_still").name == "still.jpg"
+    assert api._still_for_agent("inc_still") is None
+
+    (folder / "redacted.jpg").write_bytes(payload)
+    assert api._still_for_agent("inc_still").name == "redacted.jpg"
+
+    (folder / "privacy.jpg").write_bytes(payload)
+    assert api._still_for_agent("inc_still").name == "privacy.jpg"
+
+
+def test_agent_still_ignores_a_truncated_blur(monkeypatch, tmp_path):
+    """A failed render leaves a stub file; a stub is not a usable still."""
+    monkeypatch.setattr(api, "MEDIA_ROOT", tmp_path)
+    folder = tmp_path / "inc_tiny"
+    folder.mkdir()
+    (folder / "privacy.jpg").write_bytes(b"x" * 64)
+    monkeypatch.setattr(api.db, "media_private", lambda _id: True)
+    assert api._still_for_agent("inc_tiny") is None
+
+
+def test_blurred_preview_includes_resident_and_missing_frames_without_overwriting_muse_image(tmp_path):
+    source = tmp_path / "clip.mp4"
+    writer = cv2.VideoWriter(str(source), cv2.VideoWriter_fourcc(*"mp4v"), 4.0, (320, 240))
+    # Fine detail makes a real blur measurable after browser-video encoding.
+    pixels = ((np.indices((240, 320)).sum(axis=0) // 4) % 2 * 255).astype(np.uint8)
+    frame = np.repeat(pixels[:, :, None], 3, axis=2)
+    for _ in range(4):
+        writer.write(frame)
+    writer.release()
+    image = tmp_path / "privacy.jpg"
+    image.write_bytes(b"the exact protected image already prepared for Muse")
+    before = image.read_bytes()
+    objects = [FakeObject(0, 1, (20, 40, 100, 220)), FakeObject(0, 2, (200, 40, 290, 220))]
+    manifest = render.render(source, tmp_path / "privacy.mp4", objects,
+                             annotate=False, trail=False, blur_all=True)
+    assert manifest["rendered"] is True
+    assert manifest["people_redacted"] == 2  # Resident included, not bystanders only.
+    assert manifest["untracked_frames_blurred"] == 3
+    assert manifest["frames_annotated"] == 0
+    assert manifest["still"] is None
+    assert image.read_bytes() == before
+    cap = cv2.VideoCapture(str(tmp_path / "privacy.mp4"))
+    ok, blurred = cap.read()
+    assert ok
+    assert blurred[70:190, 40:80].std() < frame[70:190, 40:80].std() / 2
+    assert blurred[70:190, 220:270].std() < frame[70:190, 220:270].std() / 2
+    ok, missing = cap.read()
+    assert ok and missing.std() < frame.std() / 2
+    cap.release()

@@ -37,14 +37,17 @@ deterministic rule ──► held candidate (`verifying`, invisible to the famil
    │                            ├─ SAM 3.1: track + pixel masks for a 5–7s clip
    │                            ├─ Muse Spark: read-only evidence tool loop
    │                            │   (SAM, household memory, recent events, audio,
-   │                            │    at most one still from that clip)
+   │                            │    a protected still; a targeted follow-up
+   │                            │    only if that evidence remains ambiguous)
    │                            ▼
    │                     release only if corroborated, or fail open on the
    │                     local safety floor if verification is unavailable
    ▼
-family alert (template or verified decision) ──► spoken check-in ──► escalation
-   │
-   └─ no trigger: raw frames stay in RAM; nothing is uploaded
+resident-first check-in (`resident_check`, family alert still held)
+   ├─ affirmative answer + visible recovery ──► resolve without paging
+   └─ help / no answer ──► family alert ──► escalation if unacknowledged
+
+no trigger: raw frames stay in RAM; nothing is uploaded
 ```
 
 **The verification gate.** A wall fall is first a *candidate*, not an incident.
@@ -52,9 +55,10 @@ It is stored as `verifying` and is absent from the family list, the incident
 detail route and the media route. The console keeps the feed live while the
 clip is cut from the in-memory buffer. SAM tracks the person and returns masks;
 Muse Spark runs a bounded, tool-using evidence pass and returns
-escalate/reject. On the console wall, only a verified release can page the
-family. A rejection keeps an audit row and sends nothing. A failed verifier
-fails **open** on the local floor: a cloud outage must not drop a possible fall.
+escalate/reject. A corroborated candidate enters the resident-first check-in;
+verification alone does not mean the family was alerted. A rejection keeps an
+audit row and sends nothing. A failed verifier proceeds on the local floor
+through the same resident-first gate: a cloud outage must not drop a possible fall.
 The edge process is different by design: it pages from the local floor
 immediately and never waits for a cloud model (see "The edge is optional").
 
@@ -71,12 +75,36 @@ or say help."* In the voice path, the answer is transcribed by Muse Voice
 Transcribe and read by Muse Spark against the camera evidence. Affirmative
 words plus a seen upright, moving body is the only path down. "I'm fine" from
 the floor is a contradiction and leaves the alert standing. Silence at the
-15-second deadline (configurable) escalates one step. In two live word-list
+30-second wall-gate deadline releases the family alert. The immediate-alert
+edge path uses its separate configurable check-in deadline (15 seconds by
+default). In two live word-list
 misses, Spark raised the answer to help where the deterministic classifier did
 not (`evals/checkin_read.json`). The resident kiosk at `/checkin/{id}` is a
 button fallback for someone who cannot speak: it posts "I'm okay" or "I need
 help" literally and exposes only the prompt, timer and two answers, never
-family history. It does not claim to be speech recognition.
+family history. It does not claim to be speech recognition. The expanded camera
+view exposes this signed resident screen in a new tab, keeping capture running.
+
+**The evidence is part of the product.** Cameras stay in a full-width grid with
+measured pose joints and fresh-observation boxes. Each displayed image is paired
+with the detections from that exact image; the view updates at the analysis rate.
+There is one playback clock per recording, and Loop off retains its final frame,
+including when opening the expanded view afterward. Expand a camera to see its
+normal feed log. When an event starts, that log transitions into a plain-language
+explanation of the movement, with SAM measurements available under details,
+Muse's selected evidence tools and questions,
+the resident prompt and deadline, and the actual response/delivery outcome.
+Capture continues throughout. A completed outcome remains briefly before
+the normal log returns. These are persisted steps, not an animation pretending a model has finished.
+They survive reconnects and appear in alert detail and the searchable camera
+log. Evidence JSON export omits signed resident and audio links.
+
+**Tracking and inference.** Global association combines motion, overlap and
+appearance, while posture history and down timers belong to individual tracks.
+The on-screen boxes use the same raw observation as the displayed image. Full-frame pose results
+are reused within each analysis; lost-person retries rotate input sizes with
+one retry per sample. Independent read-only Muse evidence tools run concurrently,
+and a clear still skips an unnecessary follow-up planning call.
 
 **The camera watchdog.** The edge heartbeats every ten seconds. A camera that
 has connected before and then misses 90 seconds becomes a real `camera_offline`
@@ -114,8 +142,8 @@ The model may **raise** an alarm, never lower one below the deterministic floor.
 | A model may veto a candidate, never downgrade an incident | Rejection only applies while the row is `verifying`; after release the floor bounds every write |
 | Every evidence token resolves to a real packet field | The evidence gate runs before any decision row is written |
 | Only a fixed action vocabulary reaches the UI | Actions are enum-checked; model text is never rendered as a button |
-| No live feed reaches the reasoning path | The agent gets structured records plus at most one still from the incident clip, and every outbound image is ledgered |
-| A held candidate cannot leak | `verifying`/`releasing` rows are excluded from the family list, detail and media routes |
+| No live feed reaches the reasoning path | The agent gets structured records and bounded protected-still inspections from the incident clip; every outbound image is ledgered |
+| Family history excludes held candidates | `verifying`/`releasing`/`resident_check` rows are excluded from the family list, detail and media routes; installation diagnostics expose their progress |
 | A crash cannot strand a fall | The release lease is swept; a stale `releasing` row is recovered and the notify-phase claim prevents a double page |
 | A late verdict cannot silence the next fall | Late SAM/Muse completion passes `arm_cooldown=False` when the incident was already recovered |
 | Silence is not recovery | Only a seen upright body closes an incident; absence alone does not |
@@ -126,7 +154,8 @@ The model may **raise** an alarm, never lower one below the deterministic floor.
   remain in the in-home process's memory and are never written to disk.
 - **Only escalation evidence leaves.** A short clip goes to SAM with
   `expires_after: 3600` and the uploaded file is deleted immediately after the
-  call; at most one still is sent to Muse, and the ledger records its bytes.
+  call; protected-still inspections are bounded by the evidence agent's tool
+  budget, and every request is recorded in the outbound ledger.
 - **Redaction fails closed.** If SAM cannot prove a single-person clip, raw
   media is not signed. With more than one tracked person, every non-resident is
   blurred using SAM masks; if no redacted copy exists, the visual tool is not
@@ -161,13 +190,14 @@ The model may **raise** an alarm, never lower one below the deterministic floor.
 
 ## Measured results
 
-All artifacts are in `evals/`. The pilot is a 110-clip external corpus
+All artifacts are in `evals/`. The corpus pilot below describes earlier runs,
+not a rerun of the latest tracker. The pilot is a 110-clip external corpus
 (GMDCSA24, three actors/rooms), not a field trial. Labels come from the dataset
 description: 57 floor falls, 5 bed falls, 48 ADL clips.
 
 | Claim | Result | Artifact / command |
 |---|---|---|
-| Backend regression suite | **233 / 233 passed** | `python -m pytest -q` |
+| Backend regression suite | **271 / 271 passed** | `python -m pytest -q` |
 | Web typecheck + production build | **clean** | `npx tsc --noEmit`, `npm run build` |
 | Decision fixtures against Muse Spark | see `evals/report.md` (fresh run) | `python scripts/run_evals.py --runs 1` |
 | Floor falls that produced a wall candidate | **49 / 57** at 2 fps (person-lost recheck; was 45/57) | `evals/fall_pilot_recheck.json` |
@@ -183,6 +213,14 @@ description: 57 floor falls, 5 bed falls, 48 ADL clips.
 | Verification state machine | held rows hidden; release lease retry; late verdict does not re-arm cooldown | `tests/test_verification_lifecycle.py`, `tests/test_wall.py` |
 | Camera watchdog | one urgent incident per outage; never-connected cameras ignored | `tests/test_camera_watchdog.py` |
 | Opt-in stronger recheck (`yolov8m.pt`) | 49 / 57 floor falls (one swapped), but 1 extra ADL candidate that escalates — why the fast recheck is the default | `evals/fall_pilot_yolov8m.json`, `evals/gate_adl08_yolov8m.json` |
+
+Latest refinement: the same 24-frame local benchmark improved from **119.8 to
+105.6 ms mean** and **339.3 to 185.8 ms p95**. A separate three-clip tracking
+check retained one identity throughout each clip, found the supplied fall at
+4.4 seconds, and produced no candidates on the two ADL clips. See
+[`evals/tracking_refinement.md`](evals/tracking_refinement.md) for the exact
+scope, measurements, commands, and validation coverage. These local results do
+not measure cloud verification latency or establish clinical accuracy.
 
 The earlier 107 ms and 126 ms wall measurements were taken on the same machine
 under different CPU load; a strict review run measured **121 ms/frame**. The

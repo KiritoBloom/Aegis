@@ -11,8 +11,7 @@ export function PeopleStep({ c }: { c: SetupController }) {
     <section>
       <h1 className={styles.title}>Who is this house watching over?</h1>
       <p className={styles.lede}>
-        For the person being cared for, the answers change when a fall becomes an emergency
-        call. For everyone else, they help Aegis tell family from a stranger at night.
+        Care needs help Aegis decide how urgently to alert you. Household details provide context; Aegis does not identify people by their faces.
       </p>
 
       <div className={styles.peopleList}>
@@ -94,8 +93,7 @@ export function PeopleStep({ c }: { c: SetupController }) {
             <div className={styles.conditionBlock}>
               <span className={styles.label}>Known conditions</span>
               <p className={styles.help}>
-                Self-reported context, not a diagnosis. Aegis uses it to decide how quickly
-                to call, never to name a cause in an alert.
+                Self-reported context helps prioritise alerts. It is not a diagnosis.
               </p>
               <div className={styles.chips}>
                 {CONDITION_SUGGESTIONS.map((condition) => {

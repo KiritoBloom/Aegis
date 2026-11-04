@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import {
   clock,
   dayLabel,
   severityLabel,
   type Incident,
+  type AegisEvent,
   type Severity,
   typeLabel,
   zoneLabel,
@@ -46,11 +47,12 @@ function feedName(incident: Incident): string {
 }
 
 function statusText(incident: Incident): string {
-  if (incident.checkin_status === "no_answer") return "Check-in escalated";
+  if (["resolved", "cancelled", "acknowledged"].includes(incident.status)) return incident.status;
+  if (incident.checkin_status === "no_answer") return "Check-in unanswered";
   if (incident.checkin_status === "asking") return "Check-in waiting";
   if (incident.checkin_status === "answered") return "Check-in answered";
   if (incident.status === "resolved") return "Resolved";
-  if (incident.status === "notified") return "Family notified";
+  if (incident.status === "notified") return "Alert raised";
   if (incident.status === "enriching") return "Gathering evidence";
   return incident.status.replace(/_/g, " ");
 }
@@ -63,10 +65,13 @@ function isRejectedWallCandidate(incident: Incident): boolean {
 }
 
 export default function EventsPage() {
-  const incidents = useApi<{ items: Incident[] }>("/api/incidents?limit=60", 15000);
-  const [scope, setScope] = useState<Scope>("today");
+  const [limit, setLimit] = useState(100);
+  const incidents = useApi<{ items: Incident[] }>(`/api/incidents?limit=${limit}`, 15000);
+  const [view, setView] = useState("alerts");
+  const [scope, setScope] = useState<Scope>("all");
   const [filter, setFilter] = useState<Filter>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  useEffect(() => { if (new URLSearchParams(window.location.search).get("view") === "activity") setView("activity"); }, []);
 
   useStream((frame) => {
     if (frame.startsWith("incident.") || frame.startsWith("checkin.") || frame === "snapshot") {
@@ -91,7 +96,7 @@ export default function EventsPage() {
     return scoped.filter((item) => severityRank(item.severity) === 0);
   }, [scoped, filter]);
 
-  const urgent = scoped.filter((item) => severityRank(item.severity) >= 2).length;
+  const urgent = scoped.filter((item) => severityRank(item.severity) >= 2 && !["resolved", "cancelled", "acknowledged"].includes(item.status)).length;
   const waiting = scoped.filter((item) => item.checkin_status === "asking").length;
   const todayCount = allItems.filter((item) => isToday(item.local_time || item.created_at)).length;
 
@@ -99,20 +104,23 @@ export default function EventsPage() {
     <div className={shared.page}>
       <div className={shared.pageHead}>
         <div>
-          <p className={shared.kicker}>Family-facing record</p>
-          <h1 className={shared.pageTitle}>What the house decided to raise.</h1>
+          <p className={shared.kicker}>Household history</p>
+          <h1 className={shared.pageTitle}>Events &amp; activity</h1>
           <p className={shared.pageLede}>
-            One row per incident, with the evidence behind it. Suppressed movement stays in the
-            per-camera logs, not here — an event list that includes every kettle is a list nobody
-            reads at 3 AM.
+            Review alerts, responses, and the activity Aegis handled quietly. Your history is saved on the local backend.
           </p>
         </div>
         <div className={shared.headStat}>
           <strong>{urgent}</strong>
-          <span>urgent or emergency</span>
+          <span>need attention</span>
         </div>
       </div>
 
+      <div className={styles.viewTabs} aria-label="Record view">
+        <button className={styles.viewTab} aria-pressed={view === "alerts"} onClick={() => setView("alerts")}>Alerts <span>{allItems.length}</span></button>
+        <button className={styles.viewTab} aria-pressed={view === "activity"} onClick={() => setView("activity")}>Activity log</button>
+      </div>
+      {view === "activity" ? <ActivityLog /> : <>
       {waiting ? (
         <div className={shared.noteBar}>
           <span>{waiting} check-in{waiting === 1 ? "" : "s"} still waiting for an answer. Silence escalates.</span>
@@ -126,7 +134,7 @@ export default function EventsPage() {
           Today <span style={{ marginLeft: 5, opacity: 0.6 }}>{todayCount}</span>
         </button>
         <button type="button" className={shared.filter} data-on={scope === "all"} onClick={() => { setScope("all"); setOpenId(null); }}>
-          All time <span style={{ marginLeft: 5, opacity: 0.6 }}>{allItems.length}</span>
+          Recent history <span style={{ marginLeft: 5, opacity: 0.6 }}>{allItems.length}</span>
         </button>
         <span className={shared.scopeDivider} />
         {FILTERS.map((item) => (
@@ -135,6 +143,7 @@ export default function EventsPage() {
             type="button"
             className={shared.filter}
             data-on={filter === item.id}
+            aria-pressed={filter === item.id}
             onClick={() => setFilter(item.id)}
           >
             {item.label}
@@ -199,7 +208,7 @@ export default function EventsPage() {
                       <span>{typeLabel(incident.type)}</span>
                       <span>{statusText(incident)}</span>
                       {incident.decision?.model && incident.decision.model !== "template" ? (
-                        <span>verified by Muse</span>
+                         <span>evidence reviewed</span>
                       ) : incident.decision ? (
                         <span>local template</span>
                       ) : null}
@@ -303,16 +312,50 @@ export default function EventsPage() {
           </h2>
           <p>
             {scope === "today"
-              ? "Switch to all time to read the household record. Suppressed movement stays in the per-camera logs."
+               ? "Switch to Recent history, or open the Activity log to see quiet events."
               : filter === "all"
                 ? "When the local floor raises something and verification allows a family alert, it appears here with its clip and its reasoning."
-                : "Try another filter. Suppressed movement is recorded in the per-camera logs, never as an alert."}
+                 : "Try another filter, or open the Activity log for quiet events."}
           </p>
           <div>
             <Link className={shared.smallButton} href="/logs">Open the logs</Link>
           </div>
         </div>
       )}
+      {allItems.length >= limit && limit < 500 ? <button className={shared.smallButton} onClick={() => setLimit((n) => Math.min(500, n + 100))}>Load older alerts</button> : null}
+      </>}
     </div>
   );
+}
+
+function ActivityLog() {
+  const [limit, setLimit] = useState(100);
+  const [query, setQuery] = useState("");
+  const [quietOnly, setQuietOnly] = useState(false);
+  const events = useApi<{ items: AegisEvent[] }>(`/api/events?limit=${limit}`, 15000);
+  useStream((frame) => {
+    if (frame === "snapshot" || frame.startsWith("incident.") || frame.startsWith("checkin.") || frame.startsWith("privacy.")) events.reload();
+  });
+  const items = (events.data?.items ?? []).filter((event) => (!quietOnly || event.suppressed)
+    && `${typeLabel(event.type)} ${zoneLabel(event.zone_id)} ${event.source || ""} ${event.reason || ""}`.toLowerCase().includes(query.toLowerCase()));
+  return <>
+    <div className={shared.toolbar}>
+      <label className={styles.searchField}><span>Search activity</span><input type="search" placeholder="Event, room, or outcome" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      <button className={shared.filter} aria-pressed={quietOnly} data-on={quietOnly} onClick={() => setQuietOnly(!quietOnly)}>Quiet events only</button>
+      <button className={shared.ghostButton} onClick={events.reload}>Refresh activity</button>
+    </div>
+    {events.error ? <div className={shared.noteBar} role="alert"><span>Activity could not be loaded: {events.error}</span><button className={shared.smallButton} onClick={events.reload}>Try again</button></div> : null}
+    {events.loading && !events.data ? <div className="skeleton-block" aria-label="Loading activity" /> : items.length ? <div className={styles.activityList}>
+      {items.map((event, index) => <article className={styles.activityRow} key={event.id ?? index}>
+        <div className={styles.eventTime}><strong>{clock(event.ts)}</strong>{dayLabel(event.ts)}</div>
+        <span className={styles.eventBar} data-sev={event.suppressed ? "info" : event.severity} />
+        <div><h2 className={styles.eventTitle}>{typeLabel(event.type)}</h2>
+          <p className={styles.eventText}>{event.reason ? event.reason.replace(/_/g, " ") : event.suppressed ? "Handled without an alert" : "Recorded by Aegis"}</p>
+          <div className={styles.eventMeta}><span>{zoneLabel(event.zone_id)}</span><span>{event.source || "local"}</span><span>{event.suppressed ? "Quiet" : severityLabel(event.severity)}</span></div>
+        </div>
+        {event.incident_available && event.incident_id ? <Link className={shared.smallButton} href={`/alerts/${event.incident_id}`}>Details</Link> : <span className={styles.auditLabel}>Activity only</span>}
+      </article>)}
+    </div> : !events.error ? <div className={shared.emptyState}><Icon name="logs" size={24} /><h2>{query || quietOnly ? "No matching activity" : "No activity recorded yet"}</h2><p>New events, quiet outcomes, recoveries, and family responses appear here automatically.</p></div> : null}
+    {(events.data?.items.length ?? 0) >= limit && limit < 500 ? <button className={shared.smallButton} onClick={() => setLimit((n) => Math.min(500, n + 100))}>Load older activity</button> : null}
+  </>;
 }

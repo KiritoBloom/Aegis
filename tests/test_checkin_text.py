@@ -200,6 +200,59 @@ def test_an_empty_answer_is_rejected_and_the_deadline_stays_live(monkeypatch, tm
     assert inc["checkin_due_at"] is not None
 
 
+def test_help_opens_an_emergency_gate_without_waiting_for_timeout(monkeypatch, tmp_path):
+    class HelpMeta(FakeMeta):
+        def decide(self, packet, system, schema, effort="low"):
+            return ({"class": "help", "read": "Help requested", "evidence": ["help"],
+                     "confidence": 0.99}, SimpleNamespace(output_tokens=12, latency_ms=8))
+
+    class HelpRequest(FakeRequest):
+        async def body(self):
+            return b'{"answer":"help me"}'
+
+    monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "emergency-gate.db"))
+    monkeypatch.setattr(api, "meta", lambda: HelpMeta())
+    db.init()
+    db.upsert_incident({"incident_id": "inc_help", "type": "fall_confirmed",
+                        "status": "resident_check", "severity_hint": "emergency",
+                        "track": {"person_count": 1, "posture": "lying"},
+                        "sensors": {"no_recovery_s": 30}, "source": "wall"})
+    db.record_event("inc_help", None, "fall_confirmed", None, db.now(), "emergency",
+                    suppressed=True, reason="verification_pending", source="wall")
+    db.start_checkin("inc_help", "Are you okay?", time.time() + 30, 30)
+    sent = []
+
+    async def dispatch(alert, phase, broadcast=None):
+        sent.append((alert, phase))
+        return []
+
+    monkeypatch.setattr(api.notify, "dispatch", dispatch)
+    asyncio.run(api.checkin("inc_help", HelpRequest()))
+    assert len(sent) == 1 and sent[0][1] == 3
+    assert db.get_incident("inc_help")["status"] == "notified"
+    assert db.recent_events(family=True)[0]["reason"] == "resident_requested_help"
+
+
+def test_recovered_gate_history_is_visible_without_claiming_a_family_alert(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "recovered-gate.db"))
+    monkeypatch.setattr(api, "meta", lambda: FakeMeta())
+    db.init()
+    db.upsert_incident({"incident_id": "inc_gate_ok", "type": "fall_suspected",
+                        "status": "resident_check", "severity_hint": "urgent",
+                        "track": {"person_count": 1, "posture": "upright"},
+                        "sensors": {"recovered": True, "no_recovery_s": 0}, "source": "wall"})
+    db.record_event("inc_gate_ok", None, "fall_suspected", None, db.now(), "urgent",
+                    suppressed=True, reason="verification_pending", source="wall")
+    db.start_checkin("inc_gate_ok", "Are you okay?", time.time() + 30, 30)
+    asyncio.run(api.checkin("inc_gate_ok", FakeRequest()))
+    events = db.recent_events(family=True)
+    assert len(events) == 2
+    assert all(event["suppressed"] and event["severity"] == "info" for event in events)
+    assert db.notifications_for("inc_gate_ok") == []
+    db.init()
+    assert all(event["reason"] != "family_alert_released" for event in db.recent_events(family=True))
+
+
 def test_a_failed_audio_decode_restores_the_deadline(monkeypatch, tmp_path):
     monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "bad-audio.db"))
     db.init()

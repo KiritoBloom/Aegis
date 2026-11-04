@@ -22,7 +22,7 @@ const MODE_LABEL: Record<string, string> = {
 };
 
 export default function SettingsPage() {
-  const { setup, updateSetup, resident, active, setActive } = useConsole();
+  const { setup, updateSetup, resident, active, switching, setActive } = useConsole();
   const watch = useApi<WatchState>("/api/watch", 0);
   const [initialized, setInitialized] = useState(false);
   const [modes, setModes] = useState<Record<string, string>>({});
@@ -37,11 +37,9 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!setup || initialized) return;
-    const source = Object.keys(setup.watchModes).length
-      ? { modes: setup.watchModes, quiet: setup.quiet, door: setup.doorHours }
-      : watch.data
-        ? { modes: watch.data.plan.modes, quiet: watch.data.plan.quiet, door: watch.data.plan.door_hours }
-        : null;
+    const source = watch.data
+      ? { modes: watch.data.plan.modes, quiet: watch.data.plan.quiet, door: watch.data.plan.door_hours }
+      : null;
     if (!source) return;
     setModes(source.modes);
     setQuiet(source.quiet);
@@ -117,10 +115,9 @@ export default function SettingsPage() {
       <div className={shared.pageHead}>
         <div>
           <p className={shared.kicker}>Installation</p>
-          <h1 className={shared.pageTitle}>Settings that change what can reach you.</h1>
+          <h1 className={shared.pageTitle}>Household settings</h1>
           <p className={shared.pageLede}>
-            Cameras, the watch plan, and the notice that makes the system legible. Safety classes
-            stay locked; everything else here changes the volume, not the net.
+            Manage cameras, choose which events need attention, and keep your household details up to date.
           </p>
         </div>
         <div className={shared.headStat}>
@@ -141,8 +138,8 @@ export default function SettingsPage() {
               ? "The system is watching. Changes here apply to the next analyzed frame."
               : "The system is in standby. Settings are saved, but no camera is open."}
           </span>
-          <button type="button" className={shared.ghostButton} onClick={() => void setActive(!active)}>
-            {active ? "Pause system" : "Activate system"}
+          <button type="button" className={shared.ghostButton} disabled={switching} onClick={() => void setActive(!active)}>
+            {switching ? "Updating…" : active ? "Pause monitoring" : "Start monitoring"}
           </button>
         </div>
       )}

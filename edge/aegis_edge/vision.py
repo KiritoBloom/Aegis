@@ -49,12 +49,12 @@ class Detection:
 # scene vocabulary, not "detect everything": a chair, a bed, a table and a
 # television explain more about a posture than a hundred unrelated labels.
 OBJECT_CLASSES = {
-    56: "chair", 57: "couch", 59: "bed", 60: "dining table",
+    56: "chair", 57: "couch", 59: "bed", 60: "dining table", 13: "bench",
     62: "tv", 63: "laptop", 65: "remote", 67: "cell phone",
     68: "microwave", 69: "oven", 71: "sink", 72: "refrigerator",
     73: "book", 74: "clock", 75: "vase",
 }
-SUPPORT_CLASSES = {"bed", "couch"}
+SUPPORT_CLASSES = {"bed", "couch", "bench"}
 
 
 @dataclass

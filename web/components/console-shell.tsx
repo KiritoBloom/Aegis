@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
+import { Modal } from "./modal";
 import { useConsole } from "@/components/console-provider";
 import { setupReadyToWatch } from "@/lib/console";
 import styles from "./console-shell.module.css";
@@ -20,23 +21,28 @@ const TITLES: Record<string, string> = {
   "/events": "Events",
   "/logs": "Per-camera logs",
   "/settings": "Settings",
+  "/privacy": "Privacy & consent",
+  "/profile": "Household profile",
+  "/night": "Night summary",
+  "/sim": "Test scenarios",
+  "/live": "Activity",
 };
 
 function clockText(date: Date): string {
-  return date.toLocaleTimeString("en-GB", { hour12: false });
+  return date.toLocaleTimeString("en-GB", { hour12: false, hour: "2-digit", minute: "2-digit" });
 }
 
 export function ConsoleShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const {
-    ready, setup, resident, active, setActive, feeds, live,
+    ready, setup, resident, active, switching, setActive, feeds, live,
     toasts, dismissToast, blockedReason, clearBlocked,
   } = useConsole();
   const [clock, setClock] = useState(() => new Date());
 
   useEffect(() => {
-    const timer = window.setInterval(() => setClock(new Date()), 1000);
+    const timer = window.setInterval(() => setClock(new Date()), 30000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -89,7 +95,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
 
         <nav className={styles.nav} aria-label="Console">
           {NAV.map((item) => {
-            const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+              const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href) || (item.href === "/events" && pathname.startsWith("/alerts/"));
             return (
               <Link key={item.href} href={item.href} className={styles.navLink} data-active={isActive}
                 aria-current={isActive ? "page" : undefined}>
@@ -102,12 +108,13 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
 
         <div className={styles.sideFoot}>
           <p>
-            Frames stay on this machine. Mapping is local. A clip leaves only when
-            a confirmed event needs the family.
+             Camera frames are analysed locally. A short event clip may be sent for verification.
           </p>
           <Link href={setupHref} className={styles.sideLink}>
             {readiness.ready ? "Review installation" : "Finish installation"}
           </Link>
+          <Link href="/privacy" className={styles.sideLink}>Privacy &amp; consent</Link>
+          <Link href="/night" className={styles.sideLink}>Night summary</Link>
         </div>
       </aside>
 
@@ -116,7 +123,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
           <div className={styles.crumb}>
             <span className={styles.crumbRoot}>Household</span>
             <span className={styles.crumbSlash}>/</span>
-            <span className={styles.crumbTitle}>{TITLES[pathname] ?? "Console"}</span>
+            <span className={styles.crumbTitle}>{pathname.startsWith("/deeper-look/") ? "A deeper look" : pathname.startsWith("/alerts/") ? "Alert details" : TITLES[pathname] ?? "Console"}</span>
           </div>
           <div className={styles.topMeta}>
             <span className={styles.date}>
@@ -128,12 +135,13 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
               className={styles.activate}
               data-on={active}
               onClick={() => void toggle()}
+              disabled={switching}
               role="switch"
               aria-checked={active}
               aria-label={active ? "Deactivate monitoring" : "Activate monitoring"}
             >
               <span className={styles.led} />
-              <span>{active ? "System active" : "Activate system"}</span>
+              <span>{switching ? "Updating…" : active ? "Pause monitoring" : "Start monitoring"}</span>
             </button>
           </div>
         </header>
@@ -145,15 +153,16 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
 
       <nav className={styles.mobileNav} aria-label="Console">
         {NAV.map((item) => {
-          const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href) || (item.href === "/events" && pathname.startsWith("/alerts/"));
           return (
-            <Link key={item.href} href={item.href} data-active={isActive}>
+            <Link key={item.href} href={item.href} data-active={isActive} aria-current={isActive ? "page" : undefined}>
               <Icon name={item.icon} size={18} />
               <span>{item.label}</span>
             </Link>
           );
         })}
         <button type="button" data-active={active} onClick={() => void toggle()}
+          disabled={switching}
           aria-label={active ? "Deactivate monitoring" : "Activate monitoring"}>
           <Icon name="pause" size={18} />
           <span>{active ? "Pause" : "Activate"}</span>
@@ -171,20 +180,18 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             {toast.detail ? <p className={styles.toastBody}>{toast.detail}</p> : null}
+            {toast.tone === "alert" && toast.incidentId ? <Link className={styles.sideLink} href={`/alerts/${encodeURIComponent(toast.incidentId)}`}>Review alert</Link> : null}
           </div>
         ))}
       </div>
 
       {blockedReason ? (
-        <div className={styles.overlay} role="presentation">
-          <div className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="gate-title">
+          <Modal className={styles.dialog} labelId="gate-title" onClose={clearBlocked}>
             <p className={styles.dialogKicker}>Activation blocked</p>
-            <h2 id="gate-title" className={styles.dialogTitle}>This installation is not ready yet.</h2>
+            <h2 id="gate-title" className={styles.dialogTitle}>Monitoring could not start.</h2>
             <p className={styles.dialogBody}>{blockedReason}</p>
             <p className={styles.dialogNote}>
-              Activation only unlocks after every camera has a local map and the configuration
-              Muse prepared has been approved. This is deliberate: an unmapped camera is a camera
-              that cannot tell a bed from a floor.
+              Check the connection, camera inputs, approved plan, and resident consent. No local capture was started.
             </p>
             <div className={styles.dialogActions}>
               <button type="button" className={styles.dialogPrimary}
@@ -195,8 +202,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
                 Not now
               </button>
             </div>
-          </div>
-        </div>
+          </Modal>
       ) : null}
     </div>
   );

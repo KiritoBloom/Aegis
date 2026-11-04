@@ -56,11 +56,12 @@ def test_stale_verifying_row_is_released_on_the_local_floor(monkeypatch, tmp_pat
     db.init()
     called: list[tuple[str, str]] = []
 
-    async def fake_phase_one(incident_id):
+    async def fake_phase_one(incident_id, *_args, **_kwargs):
         called.append(("phase_one", incident_id))
 
-    async def fake_checkin(incident_id):
+    async def fake_checkin(incident_id, *_args, **_kwargs):
         called.append(("checkin", incident_id))
+        return {"prompt": "Are you okay?", "due_at": time.time() + 30, "timeout_s": 30}
 
     async def fake_broadcast(payload):
         return None
@@ -81,10 +82,12 @@ def test_stale_verifying_row_is_released_on_the_local_floor(monkeypatch, tmp_pat
 
     assert released == [incident_id]
     inc = db.get_incident(incident_id)
-    assert inc["status"] == "detected"
+    # Fail-open still asks the resident first: the family is only paged when
+    # the gate expires, so the row is held rather than marked detected.
+    assert inc["status"] == "resident_check"
     assert inc["sensors"]["verification"] == "verification_timeout_local_floor"
-    assert ("phase_one", incident_id) in called
     assert ("checkin", incident_id) in called
+    assert ("phase_one", incident_id) not in called
     assert any(e["reason"] == "verification_deadline"
                and e["incident_id"] == incident_id
                for e in db.recent_events(20))
@@ -98,7 +101,7 @@ def test_fresh_verifying_row_is_untouched(monkeypatch, tmp_path):
     async def fake_phase_one(incident_id):
         called.append("phase_one")
 
-    async def fake_checkin(incident_id):
+    async def fake_checkin(incident_id, *_args, **_kwargs):
         called.append("checkin")
 
     async def fake_broadcast(payload):
@@ -124,11 +127,12 @@ def test_sweep_release_makes_a_late_verifier_a_no_op(monkeypatch, tmp_path):
     db.init()
     pages: list[str] = []
 
-    async def fake_phase_one(incident_id):
+    async def fake_phase_one(incident_id, *_args, **_kwargs):
         pages.append("phase1")
 
-    async def fake_checkin(incident_id):
-        return None
+    async def fake_checkin(incident_id, *_args, **_kwargs):
+        return {"prompt": "Are you okay?", "due_at": time.time() + 30,
+                "timeout_s": 30}
 
     async def fake_dispatch(alert, phase, broadcast=None):
         pages.append(f"phase{phase}")
@@ -155,10 +159,11 @@ def test_sweep_release_makes_a_late_verifier_a_no_op(monkeypatch, tmp_path):
     incident_id, late = asyncio.run(scenario())
 
     assert late is False
-    assert pages == ["phase1"]
+    # Fail-open asks first and stores the template for a durable timeout page.
+    assert pages == []
     inc = db.get_incident(incident_id)
-    assert inc["status"] == "detected"
-    assert inc["decision"] is None
+    assert inc["status"] == "resident_check"
+    assert inc["decision"]["model"] == "template"
 
 
 def test_a_second_release_cannot_double_dispatch(monkeypatch, tmp_path):
@@ -166,7 +171,7 @@ def test_a_second_release_cannot_double_dispatch(monkeypatch, tmp_path):
     db.init()
     dispatched: list[tuple[str, int]] = []
 
-    async def fake_checkin(incident_id):
+    async def fake_checkin(incident_id, *_args, **_kwargs):
         return None
 
     async def fake_dispatch(alert, phase, broadcast=None):
@@ -312,11 +317,12 @@ def test_expired_release_lease_is_recovered_without_double_paging(monkeypatch, t
     db.init()
     pages: list[str] = []
 
-    async def fake_phase_one(incident_id):
+    async def fake_phase_one(incident_id, *_args, **_kwargs):
         pages.append("phase_one")
 
-    async def fake_checkin(incident_id):
-        return None
+    async def fake_checkin(incident_id, *_args, **_kwargs):
+        return {"prompt": "Are you okay?", "due_at": time.time() + 30,
+                "timeout_s": 30}
 
     async def fake_broadcast(payload):
         return None
@@ -340,10 +346,11 @@ def test_expired_release_lease_is_recovered_without_double_paging(monkeypatch, t
 
     assert recovered == [incident_id]
     inc = db.get_incident(incident_id)
-    assert inc["status"] == "detected"
+    # The lease expiry fails open through the resident gate: held for the
+    # question, not paged, and the gate deadline is handed to the check-in.
+    assert inc["status"] == "resident_check"
     assert inc["sensors"]["verification"] == "release_lease_expired_local_floor"
-    assert inc["verification_due_at"] is None
-    assert pages == ["phase_one"]
+    assert pages == []
     assert any(e["reason"] == "release_lease_expired" for e in db.recent_events(20))
 
 
@@ -388,7 +395,7 @@ def test_a_stored_decision_is_delivered_after_a_crashed_release(monkeypatch, tmp
         dispatched.append((alert["incident_id"], phase))
         return []
 
-    async def fake_start_checkin(incident_id):
+    async def fake_start_checkin(incident_id, *_args, **_kwargs):
         return None
 
     async def fake_broadcast(payload):
@@ -431,8 +438,9 @@ def test_release_crash_after_phase_two_claim_is_not_downgraded(monkeypatch, tmp_
         dispatched.append(phase)
         return []
 
-    async def fake_start_checkin(incident_id):
-        return None
+    async def fake_start_checkin(incident_id, *_args, **_kwargs):
+        return {"prompt": "Are you okay?", "due_at": time.time() + 30,
+                "timeout_s": 30}
 
     async def fake_broadcast(payload):
         return None
@@ -458,6 +466,7 @@ def test_release_crash_after_phase_two_claim_is_not_downgraded(monkeypatch, tmp_
 
     assert recovered == [incident_id]
     inc = db.get_incident(incident_id)
-    assert inc["status"] == "notified"
-    assert inc["verification_due_at"] is None
+    # The gate held the row and asked the resident. The phase-2 claim that the
+    # crashed release took is finished by the gate sweep, not duplicated here.
+    assert inc["status"] == "resident_check"
     assert dispatched == []

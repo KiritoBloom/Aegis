@@ -1,0 +1,25 @@
+.context { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--c-panel); border-left: 1px solid var(--c-line); }
+.view { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; opacity: 0; visibility: hidden; transform: translateY(10px); transition: opacity 160ms ease, transform 240ms cubic-bezier(.2,.8,.2,1), visibility 0s 240ms; }
+.view[data-visible="true"] { opacity: 1; visibility: visible; transform: translateY(0); transition-delay: 90ms, 70ms, 0s; }
+.eventView > section { border: 0; border-radius: 0; }
+.announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.logHead { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 24px 24px 10px; }
+.logHead > div { display: flex; align-items: center; gap: 10px; }
+.logHead h3 { font-size: 20px; font-weight: 600; letter-spacing: -.03em; }
+.logHead a { font-size: 12px; color: var(--c-muted); text-decoration: none; }
+.logHead a:hover { color: var(--c-sage); }
+.liveIndicator { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--c-sage); flex: none; }
+.logIntro { padding: 0 24px 22px; font-size: 13px; color: var(--c-muted); border-bottom: 1px solid var(--c-line); }
+.logList { list-style: none; padding: 0 24px 24px; }
+.logList li { padding: 18px 0; border-bottom: 1px solid var(--c-line); }
+.logMeta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: var(--c-muted); font-size: 11px; }
+.logMeta time { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.logList strong { display: block; font-size: 13px; font-weight: 550; line-height: 1.5; }
+.logList p { margin-top: 5px; font-size: 12px; color: var(--c-muted); line-height: 1.6; overflow-wrap: anywhere; }
+.logList li[data-tone="alert"] .logMeta > span { color: var(--c-red); }
+.logList li[data-tone="warn"] .logMeta > span { color: var(--c-amber); }
+.empty, .pending { padding: 24px; color: var(--c-muted); font-size: 13px; line-height: 1.65; }
+.pending h3 { margin: 16px 0 8px; color: var(--c-text); font-size: 22px; font-weight: 600; }
+@media (max-width: 860px) { .context { border-left: 0; border-top: 1px solid var(--c-line); } }
+@media (max-width: 600px) { .logHead { padding: 20px 16px 10px; } .logIntro { padding-inline: 16px; } .logList { padding-inline: 16px; } }
+@media (prefers-reduced-motion: reduce) { .view, .view[data-visible="true"] { transition: none; transform: none; } }

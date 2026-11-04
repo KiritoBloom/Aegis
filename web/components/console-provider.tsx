@@ -1,14 +1,16 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { send } from "@/lib/api";
-import { useStream } from "@/lib/useApi";
-import type { ConsoleToast, FeedSource, LiveFeed, LogEntry, WallAlert, WallFrame } from "@/lib/console-types";
-import { captureFrame, sleep } from "@/lib/frame";
+import { useApi, useStream } from "@/lib/useApi";
+import type { ConsoleToast, FeedSource, LiveFeed, LogEntry, PipelineStep, WallAlert, WallFrame } from "@/lib/console-types";
+import { captureObservation, sleep } from "@/lib/frame";
 import { CaptureVideo } from "@/components/capture-video";
 import {
   getFeedMedia,
+  clearLocalConsoleData,
+  defaultSetup,
   loadSetup,
   primaryOccupant,
   saveSetup,
@@ -23,13 +25,15 @@ type ConsoleContextValue = {
   setup: ConsoleSetup | null;
   resident: Occupant | null;
   active: boolean;
+  switching: boolean;
   setActive: (on: boolean) => Promise<void>;
   feeds: ConsoleFeed[];
   updateSetup: (mutate: (setup: ConsoleSetup) => ConsoleSetup) => void;
   sources: Record<string, FeedSource>;
   live: Record<string, LiveFeed>;
-  trackDisplay: (feedId: string, el: HTMLVideoElement) => () => void;
   logs: Record<string, LogEntry[]>;
+  pipeline: PipelineStep[];
+  pipelineError: string | null;
   clearLogs: (feedId?: string) => void;
   toasts: ConsoleToast[];
   dismissToast: (id: number) => void;
@@ -68,12 +72,21 @@ function loadLogs(): Record<string, LogEntry[]> {
 
 export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [setup, setSetup] = useState<ConsoleSetup | null>(null);
   const [ready, setReady] = useState(false);
   const [active, setActiveState] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [sources, setSources] = useState<Record<string, FeedSource>>({});
   const [live, setLive] = useState<Record<string, LiveFeed>>({});
   const [logs, setLogs] = useState<Record<string, LogEntry[]>>({});
+  const [pipeline, setPipeline] = useState<PipelineStep[]>([]);
+  const diagnostics = useApi<{ items: PipelineStep[] }>("/api/diagnostics?limit=300", 15000);
+  const mergePipeline = useCallback((rows: PipelineStep[]) => {
+    setPipeline((old) => [...new Map([...old, ...rows].map((row) => [row.id, row])).values()]
+      .sort((a, b) => a.id - b.id).slice(-500));
+  }, []);
+  useEffect(() => { if (diagnostics.data?.items) mergePipeline(diagnostics.data.items); }, [diagnostics.data, mergePipeline]);
   const [toasts, setToasts] = useState<ConsoleToast[]>([]);
   const [blockedReason, setBlockedReason] = useState<string | null>(null);
 
@@ -81,16 +94,20 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   const sourcesRef = useRef<Record<string, FeedSource>>({});
   const objectUrlsRef = useRef<Record<string, string>>({});
   const cameraStreamsRef = useRef<Record<string, MediaStream>>({});
+  const openingCameras = useRef(new Set<string>());
+  const switchingRef = useRef(false);
   const captureRefs = useRef<Record<string, HTMLVideoElement | null>>({});
-  const displayRefs = useRef<Record<string, Set<HTMLVideoElement>>>({});
   const workersRef = useRef<Map<string, AbortController>>(new Map());
   const sessionRef = useRef<string | null>(null);
   const logSeq = useRef(0);
   const toastSeq = useRef(0);
-  const toastTimers = useRef<number[]>([]);
+  const toastTimers = useRef(new Set<number>());
   const feedStateRef = useRef<Record<string, { started: boolean; persons: number; posture: string; objects: string; alertId: string | null; lastPosture: number; lastHeartbeat: number }>>({});
   const verificationRef = useRef<Record<string, boolean>>({});
   const seenIncidentsRef = useRef<Record<string, boolean>>({});
+  const publishedIncidents = useRef(new Set<string>());
+  const settledIncidents = useRef(new Map<string, "recovered" | "acknowledged">());
+  const hydratedLogs = useRef(false);
   const endedRef = useRef<Record<string, boolean>>({});
   const activeRef = useRef(false);
 
@@ -106,12 +123,16 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  const toast = useCallback((tone: ConsoleToast["tone"], title: string, detail?: string) => {
+  const toast = useCallback((tone: ConsoleToast["tone"], title: string, detail?: string, incidentId?: string) => {
     toastSeq.current += 1;
     const id = toastSeq.current;
-    setToasts((prev) => [...prev, { id, tone, title, detail }].slice(-3));
-    const timer = window.setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 9000);
-    toastTimers.current.push(timer);
+    setToasts((prev) => [...prev.filter((item) => !incidentId || item.incidentId !== incidentId),
+      { id, tone, title, detail, incidentId }].slice(-3));
+    const timer = window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+      toastTimers.current.delete(timer);
+    }, 9000);
+    toastTimers.current.add(timer);
   }, []);
 
   const dismissToast = useCallback((id: number) => {
@@ -121,20 +142,22 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const loaded = loadSetup();
     if (!loaded || !loaded.completed) {
-      router.replace("/setup");
+      if (["/", "/logs", "/settings", "/live"].includes(pathname)) router.replace("/setup");
+      setSetup(loaded ?? defaultSetup());
+      setupRef.current = loaded ?? null;
       setReady(true);
       return;
     }
     setSetup(loaded);
     setupRef.current = loaded;
-    const storedLogs = loadLogs();
-    const maxLogId = Object.values(storedLogs)
-      .flat()
-      .reduce((max, entry) => Math.max(max, entry.id), 0);
-    logSeq.current = maxLogId;
-    setLogs(storedLogs);
+    if (!hydratedLogs.current) {
+      const storedLogs = loadLogs();
+      logSeq.current = Object.values(storedLogs).flat().reduce((max, entry) => Math.max(max, entry.id), 0);
+      setLogs(storedLogs);
+      hydratedLogs.current = true;
+    }
     setReady(true);
-  }, [router]);
+  }, [router, pathname]);
 
   useEffect(() => {
     setupRef.current = setup;
@@ -148,60 +171,11 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
     activeRef.current = active;
   }, [active]);
 
-  // The worker analyses frames from the hidden capture element. A tile plays
-  // its own copy of the same recording, and two <video> elements do not share
-  // a clock: a remount, a paused tile or an independent loop leaves the
-  // visible copy seconds behind the frames being analysed. That made the boxes
-  // and the fall toast appear before the fall the family could see. Keep every
-  // visible copy on the capture clock so "shown" and "judged" are one moment.
-  const trackDisplay = useCallback((feedId: string, el: HTMLVideoElement) => {
-    const elements = (displayRefs.current[feedId] ??= new Set<HTMLVideoElement>());
-    elements.add(el);
-    return () => {
-      elements.delete(el);
-      if (!elements.size) delete displayRefs.current[feedId];
-    };
-  }, []);
-
-  useEffect(() => {
-    const sync = window.setInterval(() => {
-      for (const [feedId, elements] of Object.entries(displayRefs.current)) {
-        const master = captureRefs.current[feedId];
-        if (!master || master.readyState < 2 || !master.videoWidth) continue;
-        // A live MediaStream has no seekable timeline. Both elements render the
-        // same live source, so there is no recorded clock to align.
-        if (master.srcObject) continue;
-        const duration = master.duration;
-        for (const el of elements) {
-          if (el.readyState < 2 || el.seeking) continue;
-          if (master.paused) {
-            if (!el.paused) el.pause();
-            continue;
-          }
-          if (el.paused) void el.play().catch(() => {});
-          if (!Number.isFinite(duration) || duration <= 0) continue;
-          let delta = el.currentTime - master.currentTime;
-          // A loop wraps the clock; compare across the boundary instead of
-          // seeking the whole recording.
-          if (delta > duration / 2) delta -= duration;
-          else if (delta < -duration / 2) delta += duration;
-          if (Math.abs(delta) > 0.2) {
-            try {
-              el.currentTime = master.currentTime;
-            } catch {
-              // The element may not be seekable yet; the next tick retries.
-            }
-          }
-        }
-      }
-    }, 250);
-    return () => window.clearInterval(sync);
-  }, []);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (typeof window !== "undefined") {
-        window.localStorage.setItem(LOG_KEY, JSON.stringify(logs));
+        try { window.localStorage.setItem(LOG_KEY, JSON.stringify(logs)); }
+        catch { /* Telemetry must not crash capture when browser storage is full. */ }
       }
     }, 500);
     return () => window.clearTimeout(timer);
@@ -237,7 +211,8 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Resolve local videos and demo URLs into playable sources.
+  // Metadata edits must not revoke the URL of a recording being analysed.
+  const sourceKey = JSON.stringify(setup?.feeds.map((feed) => [feed.id, feed.kind, feed.demoUrl]));
   useEffect(() => {
     if (!setup) return;
     let cancelled = false;
@@ -259,7 +234,8 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
             continue;
           }
           const previous = objectUrlsRef.current[feed.id];
-          if (previous) URL.revokeObjectURL(previous);
+          if (previous) { next[feed.id] = { url: previous }; continue; }
+          if (cancelled) return;
           const url = URL.createObjectURL(blob);
           objectUrlsRef.current[feed.id] = url;
           next[feed.id] = { url };
@@ -274,10 +250,11 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
           delete objectUrlsRef.current[id];
         }
       }
+      sourcesRef.current = next;
       setSources(next);
     })();
     return () => { cancelled = true; };
-  }, [setup?.feeds]);
+  }, [sourceKey]);
 
   const updateSetup = useCallback((mutate: (current: ConsoleSetup) => ConsoleSetup) => {
     setSetup((current) => {
@@ -297,69 +274,89 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   }, [addLog]);
 
   const noteVerification = useCallback((feed: ConsoleFeed, alert: WallAlert) => {
+    if (alert.verification?.timeline) return;
     const status = alert.verification?.status;
     if (!status) return;
     const stage = alert.verification?.stage || "";
     const reason = alert.verification?.reason || "";
-    const key = `${alert.id}:${status}:${stage}:${reason}`;
+    // One row per thing said, not per (status, stage, reason) triple. The frame
+    // response reports the same stage as `pending` with different wording, so
+    // keying on all three printed every stage twice.
+    const message = status === "verifying" || status === "pending"
+      ? stage === "sam" ? "Evidence clip collected · SAM is tracking"
+        : stage === "muse" ? "SAM finished · Muse is deciding"
+          : "Collecting the evidence clip"
+      : status === "verified" ? "Evidence verified · resident check-in"
+        : status === "rejected" ? "Not corroborated"
+          : status === "unavailable" ? "Verification unavailable"
+            : status === "recovered" ? "Verification cleared" : "";
+    if (!message) return;
+    const key = `${alert.id}:${message}`;
     if (verificationRef.current[key]) return;
     verificationRef.current[key] = true;
     if (status === "verifying" || status === "pending") {
-      const message = stage === "sam" ? "Evidence clip collected · SAM is tracking"
-        : stage === "muse" ? "SAM finished · Muse is deciding"
-          : "Collecting the evidence clip";
       addLog(feed.id, "Model", "info", message,
         reason || "No family alert has been sent yet.");
     } else if (status === "verified") {
-      addLog(feed.id, "Alert", "alert", "Verified alert released", reason || "The family alert was released after corroboration.");
+      addLog(feed.id, "Model", "info", message, reason || "The resident is asked before a family alert is released.");
     } else if (status === "rejected") {
-      addLog(feed.id, "Alert", "warn", "Not corroborated", reason || "No family alert was sent.");
-      toast("warn", "Not corroborated", `${feed.label} · no family alert was sent.`);
+      addLog(feed.id, "Alert", "warn", message, reason || "No family alert was sent.");
+      toast("warn", message, `${feed.label} · no family alert was sent.`);
     } else if (status === "unavailable") {
-      addLog(feed.id, "System", "alert", "Verification unavailable", reason || "Escalated on the local floor.");
-      toast("alert", "Verification unavailable", `${feed.label} · local alert escalated.`);
+      addLog(feed.id, "System", "warn", message, reason || "The local safety floor still applies; waiting for the resident check-in.");
     } else if (status === "recovered") {
-      addLog(feed.id, "Alert", "good", "Verification cleared", reason || "The resident stood up.");
+      addLog(feed.id, "Alert", "good", message, reason || "The resident stood up.");
     }
   }, [addLog, toast]);
 
-  const applyFrame = useCallback((feed: ConsoleFeed, data: WallFrame) => {
+  const applyFrame = useCallback((feed: ConsoleFeed, data: WallFrame, observation: NonNullable<LiveFeed["observation"]>) => {
+    if (data.paused) { activeRef.current = false; setActiveState(false); return; }
+    for (const alert of [data.alert, data.last_alert]) {
+      if (!alert?.incident_id) continue;
+      if (settledIncidents.current.has(alert.incident_id)) {
+        alert.active = false;
+        alert.recovered = settledIncidents.current.get(alert.incident_id) === "recovered";
+        alert.verification = { ...alert.verification, status: settledIncidents.current.get(alert.incident_id) };
+      } else if (publishedIncidents.current.has(alert.incident_id)) {
+        alert.verification = { ...alert.verification, status: "notified", escalated: true };
+      }
+    }
     setLive((prev) => ({
       ...prev,
-      [feed.id]: { frame: data, status: "watching", receivedAt: Date.now() },
+      [feed.id]: { frame: data, observation, status: observation.ended ? "ended" : "watching", receivedAt: Date.now() },
     }));
     const state = feedStateRef.current[feed.id] ?? {
       started: false, persons: 0, posture: "none", objects: "", alertId: null,
       lastPosture: 0, lastHeartbeat: 0,
     };
     const now = Date.now();
-    const primary = data.persons[0];
+    const primary = data.persons.find((person) => person.primary) ?? data.persons[0];
     const posture = primary?.posture ?? "none";
-    const objects = data.objects.map((o) => o.label).join("|");
+    const objects = [...new Set(data.objects.map((o) => o.label))].sort().join("|");
     if (!state.started) {
       state.started = true;
       addLog(feed.id, "Vision", "good", "Tracking started",
-        `${data.person_count} ${data.person_count === 1 ? "person" : "people"} · ${posture} · ${data.tracking.fps || 0} fps local`);
+        `${data.person_count} ${data.person_count === 1 ? "person" : "people"} · ${posture} · acquiring track${primary?.track_id ? ` #${primary.track_id}` : ""}`);
       state.lastHeartbeat = now;
     } else {
       if (state.persons === 0 && data.person_count > 0) {
         addLog(feed.id, "Vision", "good", "Person entered",
           `${data.person_count} ${data.person_count === 1 ? "person" : "people"}${primary?.track_id ? ` · track #${primary.track_id}` : ""}`);
       } else if (state.persons > 0 && data.person_count === 0) {
-        addLog(feed.id, "Vision", "info", "Person left the frame", "Still watching the room.");
+        addLog(feed.id, "Vision", "info", "Person not detected", "Rechecking the observation. Absence alone does not count as recovery.");
       }
       if (posture !== "none" && posture !== state.posture && now - state.lastPosture > 1200) {
         addLog(feed.id, "Vision", posture === "lying" ? "warn" : "info",
           `Posture ${posture}`,
-          primary?.support_surface ? `support surface: ${primary.support_surface}` : "local pose check");
+          `Track #${primary?.track_id ?? "—"} · ${state.posture} → ${posture} · ${primary?.support_surface ? `supported by ${primary.support_surface}` : "no supporting furniture confirmed"}`);
         state.lastPosture = now;
       }
       if (objects && objects !== state.objects) {
-        addLog(feed.id, "Vision", "info", "Room context", data.objects.slice(0, 4).map((o) => o.label).join(", "));
+        addLog(feed.id, "Vision", "info", "Room context", objects.split("|").join(", "));
       }
       if (now - state.lastHeartbeat > 20000) {
         addLog(feed.id, "Vision", "info", "Steady",
-          `${data.person_count} ${data.person_count === 1 ? "person" : "people"} · ${posture} · ${data.tracking.fps || 0} fps`);
+          `${data.person_count} ${data.person_count === 1 ? "person" : "people"} · ${posture} · ${data.tracking.fps || "sampling"} fps · ${data.tracking.processing_ms ?? "—"} ms analysis · ${data.tracking.queue_ms ?? "—"} ms queue`);
         state.lastHeartbeat = now;
       }
     }
@@ -374,23 +371,23 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
       if (isNew) {
         const what = data.alert.kind === "possible_fall"
           ? `${residentName} may have fallen`
-          : "More than one person in view";
+            : "More than one person in view";
         addLog(feed.id, "Alert", data.alert.severity === "alert" ? "alert" : "warn",
-          what, feed.name || feed.location);
-        toast(data.alert.severity === "alert" ? "alert" : "warn",
-          what,
-          `${feed.name || feed.label} · ${data.alert.kind === "possible_fall" ? "local alert · no family alert sent yet" : "review the feed"}`);
+          what, `Local candidate only · ${data.alert.evidence?.lying_for_s?.toFixed(1) ?? "—"}s down · evidence verification starts before any family alert`);
+        if (data.alert.kind !== "possible_fall") toast("warn", what, `${feed.name || feed.label} · review the feed`);
       }
       noteVerification(feed, data.alert);
     }
     if (data.last_alert) noteVerification(feed, data.last_alert);
-    if (data.resolved) {
+    if (data.resolved && !verificationRef.current[`${data.resolved.id}:recovery`]) {
+      verificationRef.current[`${data.resolved.id}:recovery`] = true;
       addLog(feed.id, "Alert", "good", "Condition cleared", "The person is upright; recovery recorded.");
     }
   }, [addLog, noteVerification, residentName, toast]);
 
   const worker = useCallback(async (feed: ConsoleFeed, session: string, signal: AbortSignal) => {
     let failures = 0;
+    let lastMediaTime = -1;
     while (!signal.aborted) {
       const video = captureRefs.current[feed.id];
       if (!video || video.readyState < 2 || !video.videoWidth) {
@@ -399,30 +396,21 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
       }
       if (video.ended) {
         if (!video.loop) {
-          if (!endedRef.current[feed.id]) {
-            endedRef.current[feed.id] = true;
-            setLive((prev) => ({
-              ...prev,
-              [feed.id]: {
-                ...(prev[feed.id] ?? { status: "ended" }),
-                status: "ended", error: undefined, receivedAt: Date.now(),
-              },
-            }));
-            addLog(feed.id, "System", "info", "Recording finished",
-              "Loop is off for this feed. Enable Loop in setup to replay it.");
+          if (endedRef.current[feed.id]) {
+            await sleep(400, signal);
+            continue;
           }
-          await sleep(400, signal);
+          // Analyse the final decoded image once before freezing the view.
+        } else {
+          endedRef.current[feed.id] = false;
+          video.currentTime = 0;
+          await video.play().catch(() => {});
+          await sleep(200, signal);
           continue;
         }
-        // Loop was switched on while the recording was already at its end.
-        endedRef.current[feed.id] = false;
-        video.currentTime = 0;
-        await video.play().catch(() => {});
-        await sleep(200, signal);
-        continue;
       }
-      endedRef.current[feed.id] = false;
-      if (video.paused) {
+      if (!video.ended) endedRef.current[feed.id] = false;
+      if (video.paused && !video.ended) {
         // Activation is a user gesture; muted playback should be allowed. If
         // the browser suspended an offscreen element, nudge it back to life.
         void video.play().catch(() => {});
@@ -432,16 +420,21 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
           continue;
         }
       }
-      const blob = await captureFrame(video);
-      if (!blob) {
-        await sleep(400, signal);
+      if (!video.ended && Math.abs(video.currentTime - lastMediaTime) < 0.001) {
+        await sleep(32, signal);
         continue;
       }
-      const form = new FormData();
-      form.append("session", session);
-      form.append("feed", JSON.stringify({ id: feed.id, name: feed.name || feed.label, kind: feed.kind }));
-      form.append("frame", blob, `${feed.id}.jpg`);
+      const requestStarted = performance.now();
       try {
+        const captured = await captureObservation(video);
+        if (!captured) { await sleep(400, signal); continue; }
+        if (signal.aborted) return;
+        const { blob, ...observation } = captured;
+        const form = new FormData();
+        form.append("session", session);
+        const currentFeed = setupRef.current?.feeds.find((item) => item.id === feed.id) ?? feed;
+        form.append("feed", JSON.stringify({ id: feed.id, name: currentFeed.name || currentFeed.label, kind: feed.kind, location: currentFeed.location }));
+        form.append("frame", blob, `${feed.id}.jpg`);
         const res = await fetch("/api/wall/frame", {
           method: "POST", body: form, signal: requestSignal(signal),
         });
@@ -453,8 +446,15 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
         }
         const data = (await res.json()) as WallFrame;
         if (signal.aborted) return;
+        lastMediaTime = captured.mediaTime;
+        data.tracking = { ...data.tracking, round_trip_ms: Math.round(performance.now() - requestStarted),
+          media_delay_ms: Math.round(Math.max(0, video.currentTime - captured.mediaTime) * 1000) };
         failures = 0;
-        applyFrame(feed, data);
+        applyFrame(feed, data, observation);
+        if (captured.ended) {
+          endedRef.current[feed.id] = true;
+          addLog(feed.id, "System", "info", "Recording finished", "Showing the final frame. Loop is off.");
+        }
       } catch (err) {
         if (signal.aborted) return;
         failures += 1;
@@ -490,29 +490,42 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
     const current = setupRef.current;
     if (!current) return;
     for (const feed of current.feeds.filter((f) => f.kind === "camera" && current.mapping[f.id])) {
-      if (cameraStreamsRef.current[feed.id]) continue;
+      if (cameraStreamsRef.current[feed.id] || openingCameras.current.has(feed.id)) continue;
+      openingCameras.current.add(feed.id);
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: feed.deviceId ? { deviceId: { exact: feed.deviceId } } : true,
           audio: false,
         });
+        if (!activeRef.current) { stream.getTracks().forEach((t) => t.stop()); continue; }
         cameraStreamsRef.current[feed.id] = stream;
         setSources((prev) => ({ ...prev, [feed.id]: { ...prev[feed.id], stream, error: undefined } }));
         addLog(feed.id, "System", "good", "Camera connected");
       } catch {
         setSources((prev) => ({ ...prev, [feed.id]: { ...prev[feed.id], error: "Camera permission is not available." } }));
         addLog(feed.id, "System", "warn", "Camera not connected", "Check the browser permission.");
+      } finally {
+        openingCameras.current.delete(feed.id);
       }
     }
   }, [addLog]);
 
   const setActive = useCallback(async (on: boolean) => {
+    if (switchingRef.current || on === activeRef.current) return;
+    switchingRef.current = true;
+    setSwitching(true);
+    try {
     if (on) {
       const current = setupRef.current;
       if (!current) return;
       const readiness = setupReadyToWatch(current);
       if (!readiness.ready) {
         setBlockedReason(readiness.reason);
+        return;
+      }
+      const unavailable = current.feeds.find((feed) => feed.kind !== "camera" && !sourcesRef.current[feed.id]?.url);
+      if (unavailable) {
+        setBlockedReason(sourcesRef.current[unavailable.id]?.error || `${unavailable.name || unavailable.label} is still opening. Retry when the recording is ready.`);
         return;
       }
       try {
@@ -525,6 +538,8 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (!sessionRef.current) sessionRef.current = sessionId();
+      activeRef.current = true;
+      endedRef.current = {};
       setActiveState(true);
       setLive(Object.fromEntries(current.feeds.map((feed) => [
         feed.id, { status: "idle" as const, receivedAt: Date.now() },
@@ -532,6 +547,7 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
       addLogForAll("System", "good", "Watching started", "Local tracking is active.");
       await startCameras();
     } else {
+      activeRef.current = false;
       setActiveState(false);
       stopWorkers();
       stopCameras();
@@ -545,11 +561,23 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
       }
       try {
         await send("/api/privacy/pause", { by: "household console", reason: "monitoring switched off from the console" });
-      } catch { /* the local switch still stopped capture */ }
+      } catch (err) {
+        toast("warn", "Local capture stopped", err instanceof Error ? `The backend pause could not be confirmed: ${err.message}` : "The backend pause could not be confirmed.");
+      }
       addLogForAll("System", "info", "Watching paused", "No frames are being analyzed.");
       setLive({});
     }
-  }, [addLogForAll, startCameras, stopCameras, stopWorkers]);
+    } finally {
+      switchingRef.current = false;
+      setSwitching(false);
+    }
+  }, [addLogForAll, startCameras, stopCameras, stopWorkers, toast]);
+
+  useEffect(() => {
+    if (active && (pathname === "/setup" || !setupReadyToWatch(setup).ready)) {
+      void setActive(false);
+    }
+  }, [active, pathname, setup, setActive]);
 
   // One independent worker per feed, reconciled as feeds and sources change.
   useEffect(() => {
@@ -582,6 +610,7 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!setup) return;
     if (active) void startCameras();
+    else stopCameras();
     const currentIds = new Set(
       setup.feeds
         .filter((feed) => feed.kind === "camera" && setup.mapping[feed.id])
@@ -598,10 +627,17 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
     }
-  }, [active, setup, startCameras]);
+  }, [active, setup, startCameras, stopCameras]);
 
   // Cross-tab alerts from the real pipeline, independent of the camera wall.
   useStream((frame, payload) => {
+    if (frame === "pipeline.step") {
+      mergePipeline([(payload as { step: PipelineStep }).step]);
+      return;
+    }
+    if (frame === "snapshot" && (payload as { pipeline?: PipelineStep[] }).pipeline) {
+      mergePipeline((payload as { pipeline: PipelineStep[] }).pipeline);
+    }
     const event = payload as Record<string, unknown>;
     if (frame === "wall.verification") {
       // Verification stages and verdicts arrive on the stream, so they keep
@@ -617,7 +653,13 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
         if (!state || !current) return prev;
         const patch = (a: WallAlert | null | undefined): WallAlert | null =>
           a && a.id === alert.id
-            ? { ...a, verification: alert.verification, recovered: alert.recovered }
+             ? { ...a, verification: a.incident_id && settledIncidents.current.has(a.incident_id)
+               ? { ...alert.verification, status: settledIncidents.current.get(a.incident_id) }
+               : a.incident_id && publishedIncidents.current.has(a.incident_id)
+                 ? { ...alert.verification, status: "notified", escalated: true } : alert.verification,
+               active: a.incident_id && settledIncidents.current.has(a.incident_id) ? false : a.active,
+                recovered: a.incident_id && settledIncidents.current.has(a.incident_id)
+                  ? settledIncidents.current.get(a.incident_id) === "recovered" : alert.recovered }
             : (a ?? null);
         const nextAlert = patch(current.alert);
         const nextLast = patch(current.last_alert);
@@ -629,7 +671,46 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
       });
       return;
     }
-    if (frame === "incident.decided") {
+    if (frame === "privacy.paused" || frame === "privacy.deleted"
+        || (frame === "snapshot" && (event.pause as { paused?: boolean } | undefined)?.paused && activeRef.current)) {
+      activeRef.current = false;
+      setActiveState(false);
+      stopWorkers();
+      stopCameras();
+      setLive({});
+      sessionRef.current = null;
+      if (frame === "privacy.deleted") {
+        clearLocalConsoleData();
+        window.localStorage.removeItem(LOG_KEY);
+        setToasts([]);
+        setLogs({});
+        setPipeline([]);
+        diagnostics.setData({ items: [] });
+        setSetup(null);
+        setupRef.current = null;
+      }
+      return;
+    }
+    if (frame === "incident.notified") {
+      const id = String(event.id || "");
+      const key = `${id}:${event.phase || 1}`;
+      if (!id || settledIncidents.current.has(id) || seenIncidentsRef.current[key]) return;
+      seenIncidentsRef.current[key] = true;
+      publishedIncidents.current.add(id);
+      const channels = Array.isArray(event.channels) ? event.channels.map(String) : [];
+      toast("alert", "An alert needs attention", channels.some((c) => ["webpush", "sms", "webhook"].includes(c))
+        ? "A family delivery channel accepted the alert. Open Events to respond."
+        : "The alert is available in this console. Open Events to respond.", id);
+      addLog("system", "Alert", "alert", "Alert released", `${id} · ${channels.join(", ") || "console"}`);
+      setLive((prev) => Object.fromEntries(Object.entries(prev).map(([feedId, state]) => {
+        if (!state.frame) return [feedId, state];
+        const publish = (alert: WallAlert | null | undefined) => alert?.incident_id === id
+          ? { ...alert, verification: { ...alert.verification, status: "notified", escalated: true } } : alert;
+        return [feedId, { ...state, frame: { ...state.frame,
+          alert: publish(state.frame.alert) ?? null, last_alert: publish(state.frame.last_alert) } }];
+      })));
+    } else if (frame === "incident.decided") {
+      if (event.resident_first) return;
       const id = String(event.id || "");
       if (!id || seenIncidentsRef.current[id]) return;
       seenIncidentsRef.current[id] = true;
@@ -638,19 +719,38 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
       const named = title.toLowerCase().startsWith(residentName.toLowerCase())
         ? title
         : `${residentName}: ${title}`;
-      toast(severity === "emergency" || severity === "urgent" ? "alert" : "warn",
-        named, "Open Events for the full evidence.");
-      addLog("system", "Alert", "alert", named,
-        severity === "emergency" || severity === "urgent" ? "Family alert released" : "Care note");
+      addLog("system", "Model", "info", named, `${severity} · evidence updated`);
     } else if (frame === "checkin.started") {
-      toast("info", `Check-in started for ${residentName}`, "Waiting for an answer.");
+      toast("info", `Check-in started for ${residentName}`, "Waiting for an answer.", String(event.id || ""));
       addLog("system", "System", "warn", `Check-in started for ${residentName}`);
     } else if (frame === "checkin.no_answer") {
-      toast("alert", `No answer from ${residentName}`, "The check-in timed out. The alert was escalated.");
+      if (event.escalated) toast("alert", `No answer from ${residentName}`, "The check-in timed out. Open Events to respond.", String(event.id || ""));
       addLog("system", "Alert", "alert", `No answer from ${residentName}`);
     } else if (frame === "checkin.answered") {
-      toast("good", `${residentName} answered`, "The answer was read against the camera evidence.");
-      addLog("system", "System", "good", `${residentName} answered the check-in`);
+      const id = String(event.id || "");
+      if (event.resolution !== "already_closed" && !publishedIncidents.current.has(id)) {
+        const recovered = event.resolution === "self_recovered";
+        toast(recovered ? "good" : "info", `${residentName} answered`,
+          recovered ? "Recovery confirmed. No further response is needed." : "The answer is recorded; the safety check may still need attention.", id);
+      }
+      addLog("system", "System", "info", `${residentName} answered the check-in`);
+    }
+    if (frame === "incident.recovered" || frame === "incident.ack"
+        || (frame === "checkin.answered" && event.resolution === "self_recovered")) {
+      const id = String(event.id || "");
+      if (!id) return;
+      const outcome = frame === "incident.ack" ? "acknowledged" : "recovered";
+      settledIncidents.current.set(id, outcome);
+      setToasts((prev) => prev.filter((item) => item.incidentId !== id || item.tone === "good"));
+      setLive((prev) => Object.fromEntries(Object.entries(prev).map(([feedId, state]) => {
+        if (!state.frame) return [feedId, state];
+        const settle = (alert: WallAlert | null | undefined) => alert?.incident_id === id
+          ? { ...alert, active: false, recovered: outcome === "recovered",
+            verification: { ...alert.verification, status: outcome } } : alert;
+        return [feedId, { ...state, frame: { ...state.frame,
+          alert: settle(state.frame.alert) ?? null, last_alert: settle(state.frame.last_alert) } }];
+      })));
+      addLog("system", "Alert", "good", frame === "incident.ack" ? "Family response recorded" : "Recovery recorded", id);
     }
   });
 
@@ -663,30 +763,47 @@ export function ConsoleProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const combinedLogs = useMemo(() => {
+    const result = Object.fromEntries(Object.entries(logs).map(([id, entries]) => [id, [...entries]]));
+    for (const step of pipeline) {
+      const source: LogEntry["source"] = ["sam", "muse"].includes(step.stage) ? "Model"
+        : step.stage === "local" ? "Vision" : step.stage === "delivery" ? "Alert" : "System";
+      (result[step.feed_id] ??= []).push({ id: -step.id, pipelineId: step.id,
+        at: new Date(step.created_at).getTime(), source,
+        tone: step.status === "failed" ? "warn" : step.status === "done" ? "good" : "info",
+        message: `${step.title}${step.status === "running" ? " · started" : ""}`,
+        detail: [step.detail, step.metrics.duration_ms != null ? `${(step.metrics.duration_ms / 1000).toFixed(1)}s` : ""].filter(Boolean).join(" · ") });
+    }
+    for (const entries of Object.values(result)) entries.sort((a, b) => a.at - b.at || b.id - a.id);
+    return result;
+  }, [logs, pipeline]);
+
   const value = useMemo<ConsoleContextValue>(() => ({
     ready,
     setup,
     resident,
     active,
+    switching,
     setActive,
     feeds: setup?.feeds ?? [],
     updateSetup,
     sources,
     live,
-    trackDisplay,
-    logs,
+    logs: combinedLogs,
+    pipeline,
+    pipelineError: diagnostics.error,
     clearLogs,
     toasts,
     dismissToast,
     blockedReason,
     clearBlocked: () => setBlockedReason(null),
-  }), [ready, setup, resident, active, setActive, updateSetup, sources, live, trackDisplay, logs, clearLogs, toasts, dismissToast, blockedReason]);
+  }), [ready, setup, resident, active, switching, setActive, updateSetup, sources, live, combinedLogs, pipeline, diagnostics.error, clearLogs, toasts, dismissToast, blockedReason]);
 
   return (
     <ConsoleContext.Provider value={value}>
       {children}
       <div aria-hidden="true" className="console-capture">
-        {(setup?.feeds ?? []).map((feed) => {
+        {(active ? setup?.feeds ?? [] : []).map((feed) => {
           const source = sources[feed.id];
           if (!source?.url && !source?.stream) return null;
           return (

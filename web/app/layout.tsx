@@ -1,18 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
-import { Newsreader } from "next/font/google";
 import { SessionGate } from "@/components/session-gate";
+import { WorkspaceProvider } from "@/components/workspace-provider";
 import "./globals.css";
-
-/** Three typefaces: Newsreader for editorial numbers, Geist Sans for UI, Geist Mono for machine facts. */
-const newsreader = Newsreader({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  style: ["normal", "italic"],
-  variable: "--font-newsreader",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Aegis — private care console",
@@ -34,7 +25,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
-  themeColor: "#f6f3ed",
+  themeColor: "#f7f8f7",
   viewportFit: "cover",
 };
 
@@ -43,10 +34,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       data-scroll-behavior="smooth"
-      className={`${GeistSans.variable} ${GeistMono.variable} ${newsreader.variable}`}
+      className={`${GeistSans.variable} ${GeistMono.variable}`}
     >
       <body>
-        <SessionGate>{children}</SessionGate>
+        <SessionGate><WorkspaceProvider>{children}</WorkspaceProvider></SessionGate>
         {/*
           Registered from the root layout rather than the profile page so the
           worker is alive before anyone opens settings — a push that arrives

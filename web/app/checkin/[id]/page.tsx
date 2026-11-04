@@ -2,10 +2,14 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "@/lib/useApi";
 import { clock, type Incident } from "@/lib/api";
+import { canRecord, startRecording, type Recorder } from "@/lib/recorder";
 import styles from "./checkin.module.css";
+
+/** Long enough to say a sentence, short enough that nobody holds it forever. */
+const MAX_VOICE_S = 10;
 
 type Answer = {
   transcript: string;
@@ -39,9 +43,13 @@ function ResidentCheckinPage() {
     : `/api/incidents/${id}`;
   const { data: inc, error, loading, reload } = useApi<Incident>(apiPath, 5000);
   const [answer, setAnswer] = useState<Answer | null>(null);
-  const [busy, setBusy] = useState<"ok" | "help" | null>(null);
+  const [busy, setBusy] = useState<"ok" | "help" | "voice" | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [listening, setListening] = useState(false);
+  const [heard, setHeard] = useState(0);
+  const recorderRef = useRef<Recorder | null>(null);
+  const listenStopRef = useRef<number | null>(null);
 
   const pending = inc?.checkin_status === "asking";
   const seconds = inc?.checkin_due_at
@@ -68,19 +76,13 @@ function ResidentCheckinPage() {
     window.speechSynthesis.speak(utterance);
   };
 
-  const send = async (kind: "ok" | "help") => {
-    setBusy(kind);
-    setSendError(null);
-    try {
+  const post = useCallback(
+    async (body: BodyInit, contentType: string): Promise<Answer> => {
       const res = await fetch(
         token
           ? `/api/resident/checkin/${id}?t=${encodeURIComponent(token)}`
           : `/api/incidents/${id}/checkin`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ answer: kind === "ok" ? "I'm okay" : "I need help" }),
-        },
+        { method: "POST", headers: { "content-type": contentType }, body },
       );
       const text = await res.text();
       if (!res.ok) {
@@ -92,7 +94,21 @@ function ResidentCheckinPage() {
         }
         throw new Error(detail);
       }
-      setAnswer(JSON.parse(text) as Answer);
+      return JSON.parse(text) as Answer;
+    },
+    [id, token],
+  );
+
+  const send = async (kind: "ok" | "help") => {
+    setBusy(kind);
+    setSendError(null);
+    try {
+      setAnswer(
+        await post(
+          JSON.stringify({ answer: kind === "ok" ? "I'm okay" : "I need help" }),
+          "application/json",
+        ),
+      );
       reload();
     } catch (err) {
       setSendError(err instanceof Error ? err.message : "Could not send the answer.");
@@ -100,6 +116,68 @@ function ResidentCheckinPage() {
       setBusy(null);
     }
   };
+
+  const stopListening = useCallback(() => {
+    if (listenStopRef.current !== null) {
+      window.clearTimeout(listenStopRef.current);
+      listenStopRef.current = null;
+    }
+    setListening(false);
+  }, []);
+
+  // Speak the answer instead of tapping: the backend transcribes it, and a
+  // transcript can escalate ("help") or clear the alert in a way a fixed
+  // button cannot. The recording is deleted after transcription.
+  const finishVoice = async () => {
+    const rec = recorderRef.current;
+    recorderRef.current = null;
+    stopListening();
+    if (!rec) return;
+    setBusy("voice");
+    try {
+      const wav = await rec.stop();
+      setAnswer(await post(wav, "audio/wav"));
+      reload();
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : "Could not send the answer.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const sendVoice = async () => {
+    if (busy || listening) return;
+    if (!canRecord()) {
+      setSendError("This device cannot record audio. Use the buttons instead.");
+      return;
+    }
+    setSendError(null);
+    setHeard(0);
+    try {
+      const rec = await startRecording((seconds) => setHeard(seconds));
+      recorderRef.current = rec;
+      setListening(true);
+      listenStopRef.current = window.setTimeout(() => {
+        listenStopRef.current = null;
+        void finishVoice();
+      }, MAX_VOICE_S * 1000);
+    } catch {
+      setSendError("The microphone could not be opened. Use the buttons instead.");
+      stopListening();
+    }
+  };
+
+  const cancelVoice = () => {
+    recorderRef.current?.cancel();
+    recorderRef.current = null;
+    stopListening();
+  };
+
+  useEffect(() => () => {
+    recorderRef.current?.cancel();
+    recorderRef.current = null;
+    if (listenStopRef.current !== null) window.clearTimeout(listenStopRef.current);
+  }, []);
 
   if (error) {
     return (
@@ -213,7 +291,7 @@ function ResidentCheckinPage() {
                 type="button"
                 className={styles.okButton}
                 onClick={() => void send("ok")}
-                disabled={busy !== null}
+                disabled={busy !== null || listening}
               >
                 <span className={styles.okMark} aria-hidden="true">✓</span>
                 <span>
@@ -225,7 +303,7 @@ function ResidentCheckinPage() {
                 type="button"
                 className={styles.helpButton}
                 onClick={() => void send("help")}
-                disabled={busy !== null}
+                disabled={busy !== null || listening}
               >
                 <span className={styles.helpMark} aria-hidden="true">!</span>
                 <span>
@@ -233,6 +311,32 @@ function ResidentCheckinPage() {
                   <small>Please tell my family</small>
                 </span>
               </button>
+            </div>
+
+            <div className={styles.voiceRow}>
+              {listening ? (
+                <>
+                  <button type="button" className={styles.voiceButton} onClick={() => void finishVoice()}>
+                    <span className={styles.voiceDot} aria-hidden="true" />
+                    Listening · tap when you are done
+                  </button>
+                  <button type="button" className={styles.voiceCancel} onClick={cancelVoice}>
+                    Cancel
+                  </button>
+                  <span className={styles.speakHint}>
+                    {heard < 1 ? "Say “I’m okay” or “help”." : `${Math.round(heard)}s heard.`}
+                  </span>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.voiceButton}
+                  onClick={() => void sendVoice()}
+                  disabled={busy !== null}
+                >
+                  {busy === "voice" ? "Sending your answer…" : "Say it instead"}
+                </button>
+              )}
             </div>
 
             {sendError ? <p className={styles.error} role="alert">{sendError}</p> : null}

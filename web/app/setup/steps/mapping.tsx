@@ -1,19 +1,22 @@
+import { useState } from "react";
+
 import type { SetupController } from "../controller";
 import styles from "../setup.module.css";
 
 export function MappingStep({ c }: { c: SetupController }) {
   const {
-    setup, allMapped, museApplied, scanning, mapError, previews, proposing,
+    setup, allMapped, museApplied, scanning, mapError, previews, maps, proposing,
     museError, setShowProposal, missingMap, mapFeed, propose, go,
     setMuseConsent, askMuseAgain,
   } = c;
+  const [view, setView] = useState<Record<string, "map" | "frame">>({});
   return (
     <section>
       <h1 className={styles.title}>Map each view before anything is watched.</h1>
       <p className={styles.lede}>
-        Aegis maps one frame from every camera on this machine. That map tells the local
-        tracker what normal looks like: a bed, a chair, a doorway. Nothing is sent to Meta
-        during this scan.
+        Aegis maps one frame from every camera on this machine and draws what it found: a bed,
+        a chair, a doorway, a vase. That map tells the local tracker what normal looks like, and
+        it tells you whether the camera is aimed at the room you think it is.
       </p>
 
       {!setup.feeds.length ? (
@@ -31,14 +34,23 @@ export function MappingStep({ c }: { c: SetupController }) {
           {setup.feeds.map((feed) => {
             const mapping = setup.mapping[feed.id];
             const preview = previews[feed.id];
+            const map = maps[feed.id];
             const busy = scanning === feed.id;
+            const showing = view[feed.id] === "frame" ? preview : (map || preview);
             return (
               <div key={feed.id} className={styles.mapCard}>
                 <div className={styles.mapPreview}>
-                  {preview ? (
+                  {showing ? (
                     // The frame is captured locally and lived in memory only.
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={preview} alt={`Local mapping frame from ${feed.name || feed.label}`} />
+                    <img
+                      src={showing}
+                      alt={
+                        showing === map
+                          ? `Room map for ${feed.name || feed.label}`
+                          : `Local mapping frame from ${feed.name || feed.label}`
+                      }
+                    />
                   ) : (
                     <div className={styles.offline}>
                       {mapping ? "MAPPED EARLIER\nREMAP FOR A FRESH LOCAL FRAME" : "NO FRAME YET\nONE LOCAL FRAME IS NEEDED"}
@@ -47,6 +59,24 @@ export function MappingStep({ c }: { c: SetupController }) {
                   <span className={styles.mapLive}>
                     {busy ? "SCANNING" : mapping ? "MAPPED" : "UNMAPPED"}
                   </span>
+                  {map && preview ? (
+                    <div className={styles.mapToggle}>
+                      <button
+                        type="button"
+                        className={view[feed.id] === "frame" ? "" : styles.mapToggleOn}
+                        onClick={() => setView((prev) => ({ ...prev, [feed.id]: "map" }))}
+                      >
+                        Map
+                      </button>
+                      <button
+                        type="button"
+                        className={view[feed.id] === "frame" ? styles.mapToggleOn : ""}
+                        onClick={() => setView((prev) => ({ ...prev, [feed.id]: "frame" }))}
+                      >
+                        Frame
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
                 <div className={styles.mapBody}>
                   <p className={styles.mapTitle}>{feed.name || feed.label}</p>
@@ -100,8 +130,8 @@ export function MappingStep({ c }: { c: SetupController }) {
         <span aria-hidden="true">◇</span>
         <p>
           <strong>The frame does not leave this machine.</strong> The setup scan is a local
-          YOLO pass. The browser sends the JPEG to the local backend, which returns labels
-          and boxes and keeps neither. Muse is not called by the scan.
+          pass: the browser sends the JPEG to the local backend, which draws the map and keeps
+          neither the frame nor the map. No model outside this machine sees it.
         </p>
       </div>
 

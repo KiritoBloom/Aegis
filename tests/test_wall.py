@@ -11,6 +11,7 @@ import asyncio
 import io
 import json
 import sys
+import time
 from pathlib import Path
 
 import cv2
@@ -26,9 +27,14 @@ from app import api, db, policy, wall  # noqa: E402
 
 
 def _det(posture: str, support: str | None = None, count: int = 1) -> dict:
+    # A lying body is wider than it is tall, and standing up moves the head,
+    # not the feet: the fixture keeps both honest so the wall's aspect check and
+    # its track matching are exercised the way real frames behave.
+    box = ([0.32, 0.62, 0.68, 0.95] if posture == "lying"
+           else [0.40, 0.20, 0.60, 0.95])
     return {
         "width": 640, "height": 480, "person_count": count,
-        "persons": [{"box": [0.2, 0.2, 0.6, 0.9], "conf": 0.9, "posture": posture,
+        "persons": [{"box": box, "conf": 0.9, "posture": posture,
                      "support_surface": support, "seen_by": "pose"}],
         "objects": [{"label": "chair", "conf": 0.7, "box": [0.0, 0.5, 0.2, 0.9]}],
         "flags": ["lying"] if posture == "lying" else [], "status": "person",
@@ -72,7 +78,8 @@ def test_a_second_fall_after_recovery_is_not_suppressed_by_the_cooldown(monkeypa
     monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("upright"))
     state.process(None, 5000.0)
     monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))
-    first = state.process(None, 5000.4)
+    assert state.process(None, 5000.4)["trigger"] is None
+    first = state.process(None, 5000.8)
     assert first["trigger"] is not None
     first_id = first["trigger"]["id"]
 
@@ -84,7 +91,8 @@ def test_a_second_fall_after_recovery_is_not_suppressed_by_the_cooldown(monkeypa
 
     state.process(None, 5004.4)  # upright again, then a new fall
     monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))
-    second = state.process(None, 5005.0)
+    assert state.process(None, 5005.0)["trigger"] is None
+    second = state.process(None, 5005.6)
     assert second["trigger"] is not None
     assert second["trigger"]["id"] != first_id
 
@@ -94,7 +102,8 @@ def test_late_verification_for_a_recovered_alert_does_not_arm_the_cooldown(monke
     monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("upright"))
     state.process(None, 8000.0)
     monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))
-    triggered = state.process(None, 8000.4)
+    assert state.process(None, 8000.4)["trigger"] is None
+    triggered = state.process(None, 8000.8)
     assert triggered["trigger"] is not None
     alert_id = triggered["trigger"]["id"]
 
@@ -111,7 +120,8 @@ def test_late_verification_for_a_recovered_alert_does_not_arm_the_cooldown(monke
                            arm_cooldown=False)
     state.process(None, 8004.4)
     monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))
-    second = state.process(None, 8005.0)
+    assert state.process(None, 8005.0)["trigger"] is None
+    second = state.process(None, 8005.6)
     assert second["trigger"] is not None
 
 
@@ -146,7 +156,7 @@ def test_a_person_lost_after_an_upright_sample_is_rechecked(monkeypatch):
 
     def fake(frame, objects=None, detect_objects=True, person_imgsz=None):
         calls.append({"imgsz": person_imgsz, "detect_objects": detect_objects})
-        if person_imgsz == wall.LOST_RECHECK_IMGSZ:
+        if person_imgsz in wall.LOST_RECHECK_IMGSZ:
             return lying()
         if not detect_objects or len(calls) == 1:
             return upright()
@@ -159,7 +169,7 @@ def test_a_person_lost_after_an_upright_sample_is_rechecked(monkeypatch):
     second = state.process(None, 5000.7)        # cheap pass loses them
     third = state.process(None, 5001.4)         # still lost on the cheap pass
 
-    assert any(c["imgsz"] == wall.LOST_RECHECK_IMGSZ for c in calls)
+    assert any(c["imgsz"] in wall.LOST_RECHECK_IMGSZ for c in calls)
     assert any(r["trigger"] is not None and r["trigger"]["kind"] == "possible_fall"
                for r in (second, third))
     assert third["person_count"] == 1
@@ -172,7 +182,7 @@ def test_the_recheck_stops_once_the_room_is_really_empty(monkeypatch):
     non_recheck = {"n": 0}
 
     def fake(frame, objects=None, detect_objects=True, person_imgsz=None):
-        if person_imgsz == wall.LOST_RECHECK_IMGSZ:
+        if person_imgsz in wall.LOST_RECHECK_IMGSZ:
             rechecks.append(person_imgsz)
         non_recheck["n"] += 1
         if non_recheck["n"] == 1:
@@ -193,7 +203,7 @@ def test_the_recheck_stops_once_the_room_is_really_empty(monkeypatch):
         state.process(None, ts)                 # room is truly empty
 
     assert rechecks                             # rechecked while recently seen
-    assert len(rechecks) <= 3                   # ...and stopped after the window
+    assert len(rechecks) <= 6                   # ...and stopped after the window
 
 
 def test_absence_alone_does_not_resolve_a_fall(monkeypatch):
@@ -218,9 +228,14 @@ def test_a_fast_transition_to_floor_is_a_candidate(monkeypatch):
     monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("upright"))
     state.process(None, 3000.0)
     monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: _det("lying"))
+    # The first lying sample is not enough: object detection flickers, and one
+    # frame without a bed under a resting body must not page a family.
     first = state.process(None, 3000.4)
-    assert first["trigger"] is not None
-    assert first["trigger"]["kind"] == "possible_fall"
+    assert first["trigger"] is None
+    # A body that stays down is a candidate on the next sample.
+    second = state.process(None, 3001.2)
+    assert second["trigger"] is not None
+    assert second["trigger"]["kind"] == "possible_fall"
 
 
 def test_two_people_keep_their_track_ids_while_walking(monkeypatch):
@@ -369,8 +384,10 @@ def test_wall_fall_is_held_then_released_after_verification(monkeypatch, tmp_pat
     async def fake_phase_one(incident_id):
         started.append(("phase_one", incident_id))
 
-    async def fake_checkin(incident_id):
+    async def fake_checkin(incident_id, *_args, **_kwargs):
         started.append(("checkin", incident_id))
+        return {"prompt": "Are you okay?", "due_at": time.time() + 30,
+                "timeout_s": 30}
 
     async def fake_broadcast(payload):
         return None
@@ -405,9 +422,12 @@ def test_wall_fall_is_held_then_released_after_verification(monkeypatch, tmp_pat
         return incident_id
 
     incident_id = asyncio.run(run())
-    assert {name for name, _ in started} == {"phase_one", "checkin"}
+    # Fail-open asks the resident first. The family is only paged when the gate
+    # window expires, so the row is held as `resident_check` rather than
+    # `detected`, and phase 1 must not run underneath it.
+    assert [name for name, _ in started] == ["checkin"]
     inc = db.get_incident(incident_id)
-    assert inc["status"] == "detected"
+    assert inc["status"] == "resident_check"
     assert inc["type"] == "fall_suspected"
     assert inc["source"] == "wall"
     assert inc["sensors"]["verification"] == "sam_muse_verified"
@@ -423,7 +443,7 @@ def test_a_rejected_wall_fall_sends_no_family_alert(monkeypatch, tmp_path):
     async def fake_phase_one(incident_id):
         started.append("phase_one")
 
-    async def fake_checkin(incident_id):
+    async def fake_checkin(incident_id, *_args, **_kwargs):
         started.append("checkin")
 
     async def fake_broadcast(payload):
@@ -462,7 +482,7 @@ def test_a_verified_agent_decision_is_the_single_family_alert(monkeypatch, tmp_p
     async def fake_phase_one(incident_id):
         started.append("phase_one")
 
-    async def fake_checkin(incident_id):
+    async def fake_checkin(incident_id, *_args, **_kwargs):
         started.append("checkin")
 
     async def fake_dispatch(alert, phase, broadcast=None):
@@ -561,7 +581,10 @@ def test_box_geometry_catches_a_fall_that_pose_calls_upright(monkeypatch):
     state.process(None, 9000.0)
     monkeypatch.setattr(wall.scene, "analyze_frame_array",
                         lambda frame, **_: wide)
-    result = state.process(None, 9000.5)
+    # One wide sample is not enough: object detection flickers, so a single
+    # frame must never page a family.
+    assert state.process(None, 9000.5)["trigger"] is None
+    result = state.process(None, 9001.3)
     assert result["trigger"] is not None
     assert result["trigger"]["evidence"]["geometry_fall"] is True
     assert "body changed" in result["trigger"]["summary"]
@@ -602,7 +625,8 @@ def test_a_fast_collapse_onto_a_bed_is_a_candidate_not_a_silent_support(monkeypa
     monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: upright)
     state.process(None, 9300.0)
     monkeypatch.setattr(wall.scene, "analyze_frame_array", lambda frame, **_: wide)
-    result = state.process(None, 9300.4)
+    assert state.process(None, 9300.4)["trigger"] is None
+    result = state.process(None, 9301.2)
     assert result["trigger"] is not None
     assert result["trigger"]["evidence"]["support_surface"] == "bed"
     assert result["trigger"]["evidence"]["geometry_fall"] is True

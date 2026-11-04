@@ -43,6 +43,7 @@ export type SetupController = {
   scanning: string | null;
   mapError: string | null;
   previews: Record<string, string>;
+  maps: Record<string, string>;
   proposing: boolean;
   museError: string | null;
   rejectedMuse: boolean;

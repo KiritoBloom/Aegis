@@ -33,7 +33,11 @@ def _frame(seed: int, size: tuple[int, int] = (48, 64)) -> np.ndarray:
 
 
 def _det(posture: str, support: str | None = None, person: bool = True) -> dict:
-    persons = ([{"box": [0.20, 0.20, 0.60, 0.90], "conf": 0.9,
+    # A lying body is wider than tall; anything else in this fixture is a
+    # standing body. The wall rejects a "lying" verdict that still looks upright.
+    box = ([0.32, 0.62, 0.68, 0.95] if posture == "lying"
+           else [0.40, 0.20, 0.60, 0.95])
+    persons = ([{"box": box, "conf": 0.9,
                  "posture": posture, "support_surface": support,
                  "seen_by": "pose+yolo"}] if person else [])
     return {

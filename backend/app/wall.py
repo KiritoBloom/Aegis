@@ -16,6 +16,18 @@ from . import scene
 
 LYING_ALERT_S = 1.0
 LYING_ALERT_SAMPLES = 2
+# A body reported as lying must also look horizontal: its box at least this
+# wide relative to its height. Pose alone calls a seated lean "lying", and that
+# misread on a standing body is the false positive that pages a family.
+LYING_MIN_ASPECT = 0.85
+# A body that fell toward the camera runs off the bottom of the frame, so its
+# visible box is shorter than the body and reads less horizontal than it is.
+# These bodies are only held to a looser bar. It is a narrow relaxation on
+# purpose: measured on the external corpus, a person bent over touching the
+# floor reads "lying" with aspect 0.62-0.70 and a tall box, while a genuinely
+# prone body reads 0.93-1.5 with a flat one. A looser bar here pages a family
+# for someone doing stretches.
+LYING_MIN_ASPECT_TRUNCATED = 0.80
 POSTURE_GRACE_S = 1.2
 RESOLVE_S = 2.0
 # One local situation, one incident. A person can stay on the floor for
@@ -26,13 +38,23 @@ IOU_MATCH = 0.25
 OBJECT_EVERY_S = 5.0
 # The 320px person pass trades recall for speed, and a prone body far from the
 # camera is exactly what it drops. When a feed saw a person moments ago and now
-# sees none, one higher-resolution pass decides empty room vs. missed body.
+# sees none, these higher-resolution passes decide empty room vs. missed body.
+# Cycle sizes across successive missed observations. One bounded retry per
+# sample prevents an empty feed from monopolising the shared inference lock.
 LOST_RECHECK_S = 6.0
-LOST_RECHECK_IMGSZ = 320
+LOST_RECHECK_IMGSZ = (448, 640, 960)
 # A repeated decoded frame is provably the same input. Reusing the previous
 # analysis is exact, not an approximation, and keeps a paused or looping feed
 # from burning both models on every upload.
 REUSE_IDENTICAL_FRAMES = True
+# A bed or couch disappears from the object list for a sample or two while the
+# body on it is still there. Remember the surface for this long so a detection
+# gap cannot turn "resting on the bed" into "lying on the floor".
+SUPPORT_MEMORY_S = 3.0
+SUPPORT_MEMORY_IOU = 0.35
+# How far down a body may drift and still count as the same resting position.
+# In frame fractions. Beyond this the surface is stale, not remembered.
+SUPPORT_MEMORY_DROP = 0.02
 SESSION_TTL_S = 30 * 60
 MAX_FEEDS = 6
 # A browser tab that is closed without calling /session/close must not grow an
@@ -96,6 +118,13 @@ class _Track:
     desc: np.ndarray | None = None
     upright_h: float = 0.0
     upright_at: float = 0.0
+    # When this track was first seen resting on a bed or couch, continuously.
+    # Zero when the person is not currently supported by furniture.
+    support_since: float = 0.0
+    posture: str = "none"
+    posture_at: float = 0.0
+    pre_lie_posture: str = "none"
+    display_box: tuple | None = None
 
 
 @dataclass
@@ -143,12 +172,19 @@ class FeedState:
         self._sample_times: list[float] = []
         self.tracks: dict[int, _Track] = {}
         self._next_track = 1
+        self._recheck_index = 0
         self._lying_since: float | None = None
+        self._lying_track_id: int | None = None
         self._last_lie = 0.0
         self._lie_samples = 0
         self._last_posture = "none"
         self._last_posture_at = 0.0
         self._fall_transition = False
+        # The posture the body held immediately before the current lie started.
+        # `_last_posture` becomes "lying" on the first lying sample, so using it
+        # for the settle check made every sustained lie look like a lie-down
+        # after resting, and a real collapse onto a bed could never re-arm.
+        self._pre_lie_posture = "none"
         self._last_objects: list[dict] = []
         self._object_cache: list[dict] = []
         self._objects_at = 0.0
@@ -157,12 +193,14 @@ class FeedState:
         self._last_det: dict | None = None
         # Alert evidence only: a short rolling buffer in memory, written to a
         # clip only if this feed escalates. Quiet hours write nothing.
-        self._raw_frames: deque[tuple[float, bytes]] = deque(maxlen=24)
+        self._raw_frames: deque[tuple[float, bytes]] = deque(maxlen=80)
         self._quiet_since: float | None = None
         self._saw_upright = False
         self._upright_h = 0.0
         self._upright_at = 0.0
         self._cooldown_by_track: dict[int, float] = {}
+        # Per-track sleeping surface, carried across a short detection gap.
+        self._support_memory: dict[int, tuple[str, tuple, float]] = {}
         self._primary_track_id: int | None = None
         self.alert: Alert | None = None
         self.alerts: list[Alert] = []
@@ -172,6 +210,50 @@ class FeedState:
         self.kind = str(meta.get("kind") or self.kind)[:20]
 
     # -- tracking --------------------------------------------------------
+    def _recall_support(self, persons: list[dict], now: float) -> None:
+        """Hold a sleeping surface across a short object-detection gap.
+
+        Measured on the bed clip: YOLO returns no objects at all for ~3s while
+        the body on the bed has not moved. Support then reads as None, and a
+        person resting in bed looks exactly like a person on the floor, which
+        is what raised a fall for someone lying on a bed.
+
+        The memory is per track, expires in seconds, and is only used when the
+        body is still in the same place and at the same height. A body that
+        slid off the bed has moved down, so nothing is recalled and the normal
+        candidate path still sees a fall.
+        """
+        self._support_memory = {k: v for k, v in self._support_memory.items()
+                                if k in self.tracks}
+        for person in persons:
+            track_id = int(person.get("track_id") or 0)
+            box = tuple(person.get("box") or ())
+            label = person.get("support_surface")
+            if label and track_id and len(box) == 4:
+                self._support_memory[track_id] = (str(label), box, now)
+                continue
+            if label or not track_id:
+                continue
+            remembered = self._support_memory.get(track_id)
+            if remembered is None:
+                continue
+            label, rbox, seen_at = remembered
+            if now - seen_at > SUPPORT_MEMORY_S:
+                self._support_memory.pop(track_id, None)
+                continue
+            if len(box) != 4 or person.get("posture") != "lying":
+                continue
+            # Recall is for a detection gap, not for a body in motion. The
+            # body's bottom edge may barely move while its top edge drops,
+            # because the feet stay put and the head falls: compare the box
+            # centre too. A body that slid off the bed has moved down, and
+            # this used to recall the bed onto a person already on the floor.
+            dropped = (box[3] - rbox[3]) + ((box[1] + box[3]) - (rbox[1] + rbox[3])) / 2
+            if (_iou(box, rbox) >= SUPPORT_MEMORY_IOU
+                    and dropped <= SUPPORT_MEMORY_DROP):
+                person["support_surface"] = label
+                person["support_recalled"] = True
+
     def _descriptor(self, frame, box: list[float]) -> np.ndarray | None:
         """A small torso colour histogram: the tie-breaker when boxes cross.
 
@@ -207,7 +289,7 @@ class FeedState:
             area = bw * bh
             desc = descriptors[pi] if pi < len(descriptors) else None
             for tid, track in active.items():
-                dt = max(0.05, now - track.last)
+                dt = min(1.0, max(0.05, now - track.last))
                 px = (track.box[0] + track.vx * dt,
                       track.box[1] + track.vy * dt,
                       track.box[2] + track.vx * dt,
@@ -220,18 +302,37 @@ class FeedState:
                 pcx, pcy = (px[0] + px[2]) / 2, (px[1] + px[3]) / 2
                 gap = ((cx - pcx) ** 2 + (cy - pcy) ** 2) ** 0.5
                 iou = _iou(box, px)
-                if iou < IOU_MATCH and gap > 0.22:
+                # A fall changes the centre but often keeps the feet anchored.
+                anchored = (abs(box[3] - track.box[3]) < 0.12
+                            and abs(cx - (track.box[0] + track.box[2]) / 2) < 0.13
+                            and (bh < tbh * 0.65 or tbh < bh * 0.65))
+                if iou < IOU_MATCH and gap > 0.22 and not anchored:
                     continue
                 sim = 0.0
                 if desc is not None and track.desc is not None:
-                    sim = float(np.dot(desc, track.desc))
-                score = iou * 0.60 + max(0.0, 0.30 - gap) * 0.75 + sim * 0.55
+                    # Histogram intersection in [0,1], unlike a dot product
+                    # whose scale changes with the number of clothing colours.
+                    sim = float(np.sqrt(desc * track.desc).sum())
+                score = iou * 0.60 + max(0.0, 0.30 - gap) * 0.75 + sim * 0.55 + (0.2 if anchored else 0)
                 pairs.append((score, pi, tid))
+        # Globally maximise the assignment. Greedy matching can steal the only
+        # plausible match from a second person during a crossing. At most four
+        # detections makes this O(tracks * 2^people * people), without a solver.
+        assignments: dict[int, tuple[float, list[tuple[int, int]]]] = {0: (0.0, [])}
+        for tid in active:
+            candidates = [(score, pi) for score, pi, candidate in pairs if candidate == tid]
+            updated = dict(assignments)
+            for mask, (total, chosen) in assignments.items():
+                for score, pi in candidates:
+                    if mask & (1 << pi):
+                        continue
+                    next_mask = mask | (1 << pi)
+                    if total + score > updated.get(next_mask, (-1.0, []))[0]:
+                        updated[next_mask] = (total + score, chosen + [(pi, tid)])
+            assignments = updated
+        matches = max(assignments.values(), key=lambda item: item[0])[1]
         used_persons: set[int] = set()
-        used_tracks: set[int] = set()
-        for _score, pi, tid in sorted(pairs, reverse=True):
-            if pi in used_persons or tid in used_tracks:
-                continue
+        for pi, tid in matches:
             person, track = persons[pi], active[tid]
             box = tuple(person["box"])
             old_cx = (track.box[0] + track.box[2]) / 2
@@ -240,7 +341,18 @@ class FeedState:
             new_cy = (box[1] + box[3]) / 2
             dt = max(0.05, now - track.last)
             track.vx = 0.65 * track.vx + 0.35 * (new_cx - old_cx) / dt
-            track.vy = 0.65 * track.vy + 0.35 * (new_cy - old_cy) / dt
+            height_changed = abs((box[3] - box[1]) / max(1e-6, track.box[3] - track.box[1]) - 1) > 0.35
+            # A collapsing box moves its centre without the body translating
+            # by that distance. Predict from the feet during that shape change;
+            # otherwise the next prediction overshoots the person on the floor.
+            dy = box[3] - track.box[3] if height_changed else new_cy - old_cy
+            track.vy = 0.65 * track.vy + 0.35 * dy / dt
+            previous = track.display_box or track.box
+            # Smooth detector jitter only. A fast movement/fall uses the new
+            # observation immediately; these display boxes never drive policy.
+            alpha = 0.65 if _iou(box, track.box) > 0.75 else 1.0
+            track.display_box = tuple(alpha * b + (1 - alpha) * a
+                                      for a, b in zip(previous, box))
             track.box, track.last, track.hits = box, now, track.hits + 1
             desc = descriptors[pi] if pi < len(descriptors) else None
             if desc is not None:
@@ -248,7 +360,6 @@ class FeedState:
                 total = float(blend.sum())
                 track.desc = (blend / total).astype(np.float32) if total > 0 else blend
             used_persons.add(pi)
-            used_tracks.add(tid)
             person["track_id"] = tid
             person["track_hits"] = track.hits
             person["track_age_s"] = round(now - track.first, 1)
@@ -267,12 +378,16 @@ class FeedState:
             del self.tracks[tid]
             self._cooldown_by_track.pop(tid, None)
         visible = [p for p in persons if p.get("track_id") in self.tracks]
-        if visible:
+        if visible and not any(p["track_id"] == self._primary_track_id for p in visible):
             primary = max(visible, key=lambda p: (int(p.get("track_hits") or 0),
                                                    _area(p["box"])))
             self._primary_track_id = int(primary["track_id"])
         for person in persons:
             person["primary"] = person.get("track_id") == self._primary_track_id
+            track = self.tracks[int(person["track_id"])]
+            person["display_box"] = list(track.display_box or track.box)
+            person["velocity"] = [round(track.vx, 4), round(track.vy, 4)]
+            person["track_state"] = "confirmed" if track.hits >= 3 else "acquiring"
 
     # -- alert lifecycle -------------------------------------------------
     def _local_summary(self, kind: str, lying_for: float, count: int) -> str:
@@ -399,10 +514,18 @@ class FeedState:
         self._last_det = copy.deepcopy(det)
 
     def process(self, frame, now: float, raw: bytes | None = None) -> dict:
+        started = time.perf_counter()
         with self.lock:
-            if raw:
+            # Time-based evidence retention must survive a faster analysis loop.
+            # At most eight evidence frames/second; all frames still get analysed.
+            if raw and (not self._raw_frames or now - self._raw_frames[-1][0] >= 0.12):
                 self._raw_frames.append((now, raw))
-            if self._same_frame(frame):
+            while self._raw_frames and now - self._raw_frames[0][0] > 9.0:
+                self._raw_frames.popleft()
+            reused = self._same_frame(frame)
+            rechecks = 0
+            queue_ms = inference_ms = 0.0
+            if reused:
                 det = copy.deepcopy(self._last_det)
             else:
                 # An empty object list is still an unsampled scene: a bed or
@@ -414,19 +537,22 @@ class FeedState:
                     objects=self._object_cache if not detect_objects else None,
                     detect_objects=detect_objects,
                 )
+                queue_ms += det.get("timing", {}).get("queue_ms", 0)
+                inference_ms += det.get("timing", {}).get("inference_ms", 0)
                 if not det.get("person_count") \
                         and now - self._person_seen_at <= LOST_RECHECK_S:
-                    # The cheap pass lost a person the feed saw moments ago.
-                    # Re-check once at a larger input before declaring the room
-                    # empty: a prone body is what the fast pass drops, and
-                    # "upright then vanished" is exactly the blind spot a real
-                    # fall falls into.
+                    # Keep multi-scale recall without stalling every camera
+                    # behind three consecutive retries for an empty image.
+                    recheck_imgsz = LOST_RECHECK_IMGSZ[self._recheck_index % len(LOST_RECHECK_IMGSZ)]
+                    self._recheck_index += 1
+                    rechecks = 1
                     rechecked = scene.analyze_frame_array(
-                        frame,
-                        objects=self._object_cache or None,
-                        detect_objects=False,
-                        person_imgsz=LOST_RECHECK_IMGSZ,
+                        frame, objects=det.get("objects") or self._object_cache,
+                        detect_objects=False, person_imgsz=recheck_imgsz,
+                        **({"cached_pose": det["_pose_people"]} if "_pose_people" in det else {}),
                     )
+                    queue_ms += rechecked.get("timing", {}).get("queue_ms", 0)
+                    inference_ms += rechecked.get("timing", {}).get("inference_ms", 0)
                     if rechecked.get("person_count"):
                         det = rechecked
                         det["recheck"] = True
@@ -436,6 +562,7 @@ class FeedState:
                 self._remember_frame(frame, det)
             if det.get("person_count"):
                 self._person_seen_at = now
+                self._recheck_index = 0
             self._last_objects = self._object_cache
             self.samples += 1
             self.seen = now
@@ -452,9 +579,32 @@ class FeedState:
                 self.person_samples += 1
             descriptors = [self._descriptor(frame, p.get("box") or []) for p in persons]
             self._assign_tracks(persons, now, descriptors)
+            self._recall_support(persons, now)
+
+            # Pose is the fallible input here, and it fails in both directions:
+            # it calls a horizontal body "upright" when knees are occluded, and
+            # it calls a standing body "lying" when it reads a seated lean as a
+            # shoulder-to-hip horizontal. The box does not have that ambiguity,
+            # so a "lying" verdict is only believable when the body is at least
+            # roughly as wide as it is tall. Measured on the external ADL
+            # corpus, every pose false positive had a box taller than wide.
+            def _credible_lying(p: dict) -> bool:
+                box = p.get("box") or [0, 0, 0, 0]
+                height = max(1e-6, box[3] - box[1])
+                width = max(1e-6, box[2] - box[0])
+                aspect = width / height
+                # A body falling toward the camera is cut off by the bottom of
+                # the frame, so the box understates its length and a real fall
+                # looks less horizontal than it is. Judge a truncated box on a
+                # looser width only; an untruncated one must look properly flat.
+                if box[3] >= 0.97:
+                    return aspect >= LYING_MIN_ASPECT_TRUNCATED
+                return aspect >= LYING_MIN_ASPECT
 
             unsupported = [p for p in persons
-                           if p.get("posture") == "lying" and not p.get("support_surface")]
+                           if p.get("posture") == "lying"
+                           and not p.get("support_surface")
+                           and _credible_lying(p)]
             primary = max(unsupported, key=lambda p: _area(p["box"])) if unsupported else None
             # Pose can keep calling a horizontal body "upright" when knees or
             # shoulders are occluded. The person box does not lie: a standing
@@ -469,26 +619,53 @@ class FeedState:
                 track = self.tracks.get(int(person.get("track_id") or 0))
                 if track is None:
                     continue
-                if aspect <= 0.85 and height >= 0.20:
-                    track.upright_h, track.upright_at = height, now
-                    self._upright_h, self._upright_at = height, now
-                    continue
-                ref_h = track.upright_h or self._upright_h
-                ref_at = track.upright_at or self._upright_at
+                ref_h = track.upright_h
+                ref_at = track.upright_at
                 support = bool(person.get("support_surface"))
+                track.support_since = (track.support_since or now) if support else 0.0
+                if aspect <= 0.85 and height >= 0.20:
+                    # A standing sighting refreshes the reference, but only
+                    # when it is at least as tall as what we already know
+                    # standing looks like. A body that fell away from the
+                    # camera is foreshortened and also reads narrow, and
+                    # refreshing from it overwrote the real standing height
+                    # with the fallen one, so the collapse check below then
+                    # compared the body against itself and saw nothing.
+                    if (not ref_h or height >= ref_h * 0.78
+                            or not ref_at or now - ref_at > 10.0):
+                        track.upright_h, track.upright_at = height, now
+                        self._upright_h, self._upright_at = height, now
+                    continue
                 # A fast standing-to-horizontal change is a candidate even over
                 # furniture; the visual gate decides whether it was a normal
                 # lie-down. A body already resting on a bed from the start, or
                 # lying after sitting on it, has no recent standing reference
                 # and stays quiet.
-                settled = (support and self._last_posture in
+                before_lying = track.pre_lie_posture if track.posture == "lying" else track.posture
+                settled = (support and before_lying in
                            ("sitting", "bending", "kneeling", "lying")
-                           and now - self._last_posture_at <= 3.0)
+                            and now - track.posture_at <= 3.0)
+                # Furniture is not a shield. Someone who stood up and came down
+                # again can land on the same bed they got out of, and that is a
+                # real fall. But a body that has been on the bed continuously
+                # since before its standing reference was taken was already
+                # lying there: the reference is stale, not a transition.
+                if (support and track.support_since
+                        and track.support_since <= ref_at):
+                    continue
+                # A body that lost most of its standing height is down, even
+                # when the box is not obviously wide. A fall away from the
+                # camera is foreshortened: measured on the corpus, a real fall
+                # read aspect 1.15 at 31% of standing height, while a person
+                # sitting back on a bed read 53%. A crouch or a sit-down keeps
+                # most of the height, so this does not fire on those.
+                collapsed = height <= ref_h * (0.65 if support else 0.78)
+                very_low = height <= ref_h * 0.45
                 if (not settled and ref_h
                         and now - ref_at <= (3.0 if support else 4.0)
-                        and aspect >= (1.20 if support else 1.15)
+                        and (aspect >= (1.20 if support else 1.15) or very_low)
                         and box[3] >= 0.55
-                        and height <= ref_h * (0.65 if support else 0.78)):
+                        and collapsed):
                     person["geometry_fall"] = True
                     geometry_candidates.append(person)
             if primary is None and geometry_candidates:
@@ -497,48 +674,64 @@ class FeedState:
                 primary["posture"] = "lying"
                 primary["posture_source"] = "box_geometry"
             if primary is not None:
+                primary_id = int(primary["track_id"])
+                if self._lying_track_id != primary_id:
+                    self._lying_since = None
+                    self._lie_samples = 0
+                    self._lying_track_id = primary_id
                 self._last_lie = now
                 self._lie_samples += 1
                 if self._lying_since is None:
                     self._lying_since = now
+                    prior = self.tracks[primary_id]
+                    self._pre_lie_posture = prior.posture
                     self._fall_transition = (
-                        self._last_posture in ("upright", "bending", "sitting", "kneeling")
-                        and now - self._last_posture_at <= 2.5
+                        prior.posture in ("upright", "bending", "sitting", "kneeling")
+                        and now - prior.posture_at <= 2.5
                     )
             elif self._lying_since is not None and now - self._last_lie > POSTURE_GRACE_S:
                 self._lying_since = None
                 self._lie_samples = 0
                 self._fall_transition = False
+                self._pre_lie_posture = "none"
             lying_for = (now - self._lying_since) if self._lying_since is not None else 0.0
             if persons:
                 posture_now = str(max(persons, key=lambda p: _area(p["box"])).get("posture") or "")
                 if posture_now and posture_now != "unknown":
                     self._last_posture = posture_now
                     self._last_posture_at = now
+            for person in persons:
+                track = self.tracks[int(person["track_id"])]
+                posture = person.get("posture", "unknown")
+                if posture not in ("unknown", "none"):
+                    if posture == "lying" and track.posture != "lying":
+                        track.pre_lie_posture = track.posture
+                    track.posture, track.posture_at = posture, now
 
             kind = None
+            # A candidate must be visible for more than one sample. Object
+            # detection flickers: measured on real footage, YOLO drops the bed
+            # or couch under a resting body for a second or more, which makes
+            # `support_surface` momentarily None while the person is lying
+            # exactly where they were. A single-sample trigger turned that
+            # flicker into a fall, so the shortest path is a third of a second
+            # of continuous lying (two samples at the console's ~3 fps).
             sustained = (lying_for >= LYING_ALERT_S
                          and self._lie_samples >= LYING_ALERT_SAMPLES)
             quick_fall = (self._fall_transition and lying_for >= 0.30
                           and self._lie_samples >= LYING_ALERT_SAMPLES)
-            # A high-confidence transition can be visible for less than one
-            # sampling interval on a fast clip. It is still only a candidate;
-            # SAM/Muse decide whether the family is told.
-            high_confidence_fall = (
-                self._fall_transition
-                and self._lie_samples >= 1
-                and float(primary.get("conf") or 0) >= 0.70
-            ) if primary is not None else False
-            geometry_fall = bool(primary is not None and primary.get("geometry_fall"))
-            if primary is not None and (sustained or quick_fall or high_confidence_fall
-                                        or geometry_fall):
+            geometry_fall = bool(primary is not None
+                                 and primary.get("geometry_fall")
+                                 and self._lie_samples >= LYING_ALERT_SAMPLES)
+            if primary is not None and (sustained or quick_fall or geometry_fall):
                 kind = "possible_fall"
 
             active = self.alert
             resolved = None
             triggered = None
             if active is not None:
-                if kind == active.kind and primary is not None:
+                if (kind == active.kind and primary is not None
+                        and primary.get("track_id") == active.evidence.get("track_id")):
                     active.evidence = self._evidence(lying_for, count, primary)
                     active.recovered = False
                     active.recovered_at = None
@@ -606,6 +799,13 @@ class FeedState:
                     "lying_for_s": round(lying_for, 1),
                     "alert_active": bool(self.alert and self.alert.active),
                     "recovered": bool(self.alert and self.alert.recovered),
+                    "processing_ms": round((time.perf_counter() - started) * 1000, 1),
+                    "inference_ms": round(inference_ms, 1),
+                    "queue_ms": round(queue_ms, 1),
+                    "reused_frame": reused,
+                    "rechecks": rechecks,
+                    "confirmed_tracks": sum(t.hits >= 3 for t in self.tracks.values()
+                                             if now - t.last < 0.1),
                 },
                 "alert": ({**active.as_dict(), "feed_id": self.id,
                            "feed_name": self.name} if active is not None else None),

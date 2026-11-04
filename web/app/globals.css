@@ -1,26 +1,75 @@
 @import "tailwindcss";
 
-/* Warm paper, ink, sage accent; amber and red are reserved for wrongness.
-   Serif is used only for editorial numbers, sans for UI, mono for machine facts. */
+/* One theme for setup, monitoring, alerts, and privacy. Color signals state;
+   video itself stays on a dark stage. Layer scale: nav 30, focus 70, dialog 90. */
 @theme {
-  --color-paper: #f6f3ed;
-  --color-paper-2: #fbf9f5;
-  --color-surface: #ffffff;
-  --color-ink: #14181c;
-  --color-ink-2: #4a5259;
-  --color-ink-3: #79838b;
-  --color-line: #e3ddd2;
-  --color-line-2: #d3cbbc;
-  --color-sage: #5f7f6a;
-  --color-sage-soft: #e8ede7;
-  --color-amber: #b8781f;
-  --color-amber-soft: #f7edda;
-  --color-red: #a93b32;
-  --color-red-soft: #f8e6e3;
+  --color-paper: #f7f8f7;
+  --color-paper-2: #f0f3f1;
+  --color-surface: #fdfefd;
+  --color-ink: #202b27;
+  --color-ink-2: #4c5b54;
+  --color-ink-3: #64736b;
+  --color-line: #dfe5e1;
+  --color-line-2: #bbc8c0;
+  --color-sage: #286347;
+  --color-sage-soft: #e5f1e9;
+  --color-amber: #8a570c;
+  --color-amber-soft: #fcf1db;
+  --color-red: #ae3b35;
+  --color-red-soft: #faeae8;
   --color-blue: #3d6c8e;
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
-  --font-serif: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --font-serif: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+  --c-bg: var(--color-paper);
+  --c-panel: var(--color-surface);
+  --c-panel-2: var(--color-paper-2);
+  --c-line: var(--color-line);
+  --c-line-soft: var(--color-line);
+  --c-text: var(--color-ink);
+  --c-muted: var(--color-ink-2);
+  --c-dim: var(--color-ink-3);
+  --c-sage: var(--color-sage);
+  --c-sage-dim: var(--color-sage-soft);
+  --c-amber: var(--color-amber);
+  --c-amber-dim: var(--color-amber-soft);
+  --c-red: var(--color-red);
+  --c-red-dim: var(--color-red-soft);
+  --paper: var(--color-paper);
+  --paper-2: var(--color-surface);
+  --ink: var(--color-ink);
+  --ink-2: var(--color-ink-2);
+  --ink-3: var(--color-ink-3);
+  --line: var(--color-line);
+  --line-2: var(--color-line-2);
+  --green: var(--color-sage);
+  --green-soft: var(--color-sage-soft);
+  --amber: var(--color-amber);
+  --red: var(--color-red);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-paper: #111916;
+    --color-paper-2: #202c26;
+    --color-surface: #18221d;
+    --color-ink: #edf3ef;
+    --color-ink-2: #c0cfc5;
+    --color-ink-3: #a2b5a9;
+    --color-line: #33463a;
+    --color-line-2: #52675a;
+    --color-sage: #8aceaa;
+    --color-sage-soft: #243c2f;
+    --color-amber: #edc482;
+    --color-amber-soft: #3b3020;
+    --color-red: #f39f95;
+    --color-red-soft: #412a27;
+  }
 }
 
 * {
@@ -34,10 +83,7 @@ html {
 
 body {
   margin: 0;
-  background:
-    radial-gradient(1100px 560px at 88% -12%, rgba(95, 127, 106, 0.075), transparent 62%),
-    radial-gradient(900px 500px at -8% 38%, rgba(184, 120, 31, 0.045), transparent 58%),
-    var(--color-paper);
+  background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-sans);
   font-size: 16px;
@@ -45,6 +91,22 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
+
+button, input, select, textarea { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button:disabled { cursor: not-allowed; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 3px solid var(--color-sage);
+  outline-offset: 3px;
+}
+button:active:not(:disabled) { transform: translateY(1px); }
+input, select { color-scheme: inherit; }
+::selection { background: var(--color-sage-soft); color: var(--color-ink); }
+.legacy-page { width: 100%; max-width: 1060px; margin: auto; }
+.legacy-page .card, .legacy-page .card-flat { background: var(--color-surface); box-shadow: none; border-radius: 12px; }
+.legacy-page .alert-actions { display: flex; flex-wrap: wrap; gap: 10px; padding: 20px 0; margin-top: 24px; }
+.legacy-page .alert-actions > button { flex: 1; min-width: 140px; }
+.skeleton-block { min-height: 110px; margin-top: 20px; border: 1px solid var(--color-line); border-radius: 12px; background: var(--color-paper-2); }
 
 
 h1, h2, h3, p {

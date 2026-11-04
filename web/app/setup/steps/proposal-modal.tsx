@@ -1,4 +1,5 @@
 import { MODE_LABEL, type SetupController } from "../controller";
+import { Modal } from "@/components/modal";
 import styles from "../setup.module.css";
 
 export function ProposalModal({ c }: { c: SetupController }) {
@@ -6,10 +7,7 @@ export function ProposalModal({ c }: { c: SetupController }) {
   const { proposal } = setup;
   if (!proposal) return null;
   return (
-    <div className={styles.modalOverlay} role="presentation" onClick={(event) => {
-      if (event.target === event.currentTarget) setShowProposal(false);
-    }}>
-      <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="muse-proposal-title">
+      <Modal className={styles.modal} labelId="muse-proposal-title" onClose={() => setShowProposal(false)}>
         <p className={styles.kicker}>Muse · proposed configuration</p>
         <h2 id="muse-proposal-title">Here is how Aegis would watch.</h2>
         <p className={styles.modalSummary}>{proposal.summary}</p>
@@ -64,7 +62,6 @@ export function ProposalModal({ c }: { c: SetupController }) {
             </>
           )}
         </div>
-      </div>
-    </div>
+      </Modal>
   );
 }

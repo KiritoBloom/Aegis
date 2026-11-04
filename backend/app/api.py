@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -54,20 +54,30 @@ HOUSEHOLD = "hh_demo"
 # running alongside it. Fifteen seconds is long enough to hear the prompt and
 # answer, short enough that silence still reaches a phone before phase 2.
 CHECKIN_TIMEOUT_S = float(os.environ.get("CHECKIN_TIMEOUT_S", "15"))
+# The resident hears the question before the family hears anything. Thirty
+# seconds is long enough to stand up, say "I'm okay", or call out; a fall that
+# nobody answers reaches the family immediately after it.
+CHECKIN_GRACE_S = float(os.environ.get("CHECKIN_GRACE_S", "30"))
 CHECKIN_TTS = os.environ.get("CHECKIN_TTS", "on").lower() != "off"
 # A wall candidate is held as `verifying`, which the enrichment worker does not
 # see. SAM and Muse get this long to answer; after that the local floor wins so
 # a verifier that died cannot leave a real fall with no family contact at all.
-WALL_VERIFICATION_DEADLINE_S = float(os.environ.get("WALL_VERIFICATION_DEADLINE_S", "180"))
+# This must stay comfortably above the sum of the clip wait, the SAM ceiling and
+# the agent ceiling, otherwise the sweep releases a candidate while its verifier
+# is still working and the visual check never gets a chance to reject it.
+WALL_VERIFICATION_DEADLINE_S = float(
+    os.environ.get("WALL_VERIFICATION_DEADLINE_S", "210"))
 WALL_VERIFICATION_SWEEP_S = float(os.environ.get("WALL_VERIFICATION_SWEEP_S", "5"))
 # A release is two durable steps: claim, then write the decision and page. The
 # claim stores a lease so a process that dies between them is retried by the
 # sweep. Long enough that a slow webhook is never raced by its own recovery.
 WALL_RELEASE_LEASE_S = float(os.environ.get("WALL_RELEASE_LEASE_S", "120"))
 # Bounded so a slow model shows a terminal state in the console instead of a
-# spinner that appears stuck. SAM is normally ~10 s; the agent is tool-bounded
-# but makes up to five model round-trips, so it needs more room than SAM.
-WALL_SAM_TIMEOUT_S = float(os.environ.get("WALL_SAM_TIMEOUT_S", "40"))
+# spinner that appears stuck. SAM uploads a clip, tracks it and returns masks,
+# which measured 20-60 s on this hardware, so the ceiling sits well above the
+# normal case rather than clipping it: a timeout here fails open to the local
+# floor, which is the loudest path and the one that skips the visual check.
+WALL_SAM_TIMEOUT_S = float(os.environ.get("WALL_SAM_TIMEOUT_S", "70"))
 WALL_AGENT_TIMEOUT_S = float(os.environ.get("WALL_AGENT_TIMEOUT_S", "65"))
 # The edge heartbeats every 10 s. Three missed beats is a lost camera, not a
 # jittery network. The watchdog waits one interval after boot so an API restart
@@ -326,13 +336,18 @@ def checkin_prompt_for(incident: dict) -> str:
     return f"{name}, it's Aegis. Are you okay? Say I'm okay, or say help."
 
 
-async def start_checkin(incident_id: str) -> dict | None:
+async def start_checkin(incident_id: str, timeout_s: float | None = None) -> dict | None:
     """Ask, then wait. Never blocks phase 1 and never runs after a pause.
 
     The audio is rendered locally first, so the prompt is not waiting on an
     uplink. If TTS is unavailable the text still goes out and the dashboard can
     speak it with the browser's own voice.
+
+    `timeout_s` lets the resident-first gate use a longer window than an
+    ordinary check-in: a verified fall gives the resident thirty seconds to
+    answer before anyone is paged.
     """
+    timeout_s = CHECKIN_TIMEOUT_S if timeout_s is None else max(5.0, timeout_s)
     incident = db.get_incident(incident_id)
     if not incident:
         return None
@@ -357,19 +372,19 @@ async def start_checkin(incident_id: str) -> dict | None:
         if ok:
             audio_url = auth.media_url(incident_id, "checkin_prompt.wav")
 
-    due_at = time.time() + CHECKIN_TIMEOUT_S
-    if not db.start_checkin(incident_id, prompt, due_at, CHECKIN_TIMEOUT_S):
+    due_at = time.time() + timeout_s
+    if not db.start_checkin(incident_id, prompt, due_at, timeout_s):
         if audio_url:
             (MEDIA_ROOT / incident_id / "checkin_prompt.wav").unlink(missing_ok=True)
         return None
     await broadcast({"type": "checkin.started", "id": incident_id, "prompt": prompt,
                      "audio_url": audio_url, "due_at": due_at,
-                     "timeout_s": CHECKIN_TIMEOUT_S})
+                     "timeout_s": timeout_s})
     log.info("checkin %s asking (%s) tts=%s", incident_id,
              "help_call" if incident.get("type") == "help_call" else incident.get("type"),
              bool(audio_url))
     return {"prompt": prompt, "audio_url": audio_url, "due_at": due_at,
-            "timeout_s": CHECKIN_TIMEOUT_S}
+            "timeout_s": timeout_s}
 
 
 def _checkin_alert(incident: dict, severity: str, title: str, body: str) -> dict:
@@ -410,6 +425,20 @@ async def expire_checkin(incident: dict) -> None:
     floor, _ = effective_floor(full)
     current = (full.get("decision") or {}).get("severity") or full.get("severity") or floor.severity
     floor = _floor_not_below(floor, current)
+    if full.get("status") == "resident_check":
+        # The resident was asked first and did not answer. This is the moment
+        # the verified fall becomes a family page: the same decision that was
+        # held, not a template built from silence.
+        sent = await page_resident_check(incident_id)
+        db.record_event(incident_id, full.get("camera_id"), "checkin_no_response",
+                        full.get("zone_id"), db.now(), full.get("severity") or "urgent",
+                        suppressed=False, reason="no_answer", source="checkin")
+        await broadcast({"type": "checkin.no_answer", "id": incident_id,
+                         "severity": full.get("severity"), "escalated": sent,
+                         "title": "No answer to the resident check-in"})
+        log.warning("checkin %s no answer at the resident gate; paged=%s",
+                    incident_id, sent)
+        return
     new = policy.raise_one(policy.max_severity(current, floor.severity))
     name = (PROFILE.display_name or "the resident").split()[0]
     after_fall = str(full.get("type", "")).startswith("fall")
@@ -658,7 +687,8 @@ async def ingest_incident(request: Request,
         return {"ok": True, "id": payload.incident_id, "floor": "info",
                 "paused": True}
 
-    db.upsert_incident(payload.model_dump())
+    if not db.upsert_incident(payload.model_dump()):
+        return {"ok": True, "id": payload.incident_id, "duplicate": True}
 
     # The event stream records everything, including what policy will suppress.
     floor, plan_note = effective_floor(payload.model_dump())
@@ -924,13 +954,9 @@ def with_media(inc: dict) -> dict:
 def list_incidents(limit: int = 50, status: str | None = None,
                    severity: str | None = None, type: str | None = None,
                    since: str | None = None):
-    items = db.list_incidents(limit, status)
-    if severity:
-        items = [i for i in items if i.get("severity") == severity]
-    if type:
-        items = [i for i in items if i.get("type") == type]
-    if since:
-        items = [i for i in items if str(i.get("created_at") or "") >= since]
+    if not 1 <= limit <= 500:
+        raise HTTPException(422, "limit must be between 1 and 500")
+    items = db.list_incidents(limit, status, severity=severity, etype=type, since=since)
     return {"items": [with_media(i) for i in items]}
 
 
@@ -1065,28 +1091,46 @@ async def put_household(body: dict):
     allowed = {"display_name", "age", "cognitive_condition", "wanders",
                "uses_mobility_aid", "anticoagulant", "lives_alone", "conditions"}
     changed = {}
-    for k, v in (body.get("profile") or {}).items():
+    profile = body.get("profile") or {}
+    if not isinstance(profile, dict):
+        raise HTTPException(422, "profile must be an object")
+    for k, v in profile.items():
         if k not in allowed:
             raise HTTPException(422, f"unknown profile field {k}")
-        if k == "age" and not (0 < int(v) < 130):
-            raise HTTPException(422, "age out of range")
+        if k == "age" and (isinstance(v, bool) or not isinstance(v, int) or not 0 < v < 130):
+            raise HTTPException(422, "age must be a whole number between 1 and 129")
         if k in ("wanders", "uses_mobility_aid", "anticoagulant", "lives_alone"):
-            v = bool(v)
+            if not isinstance(v, bool):
+                raise HTTPException(422, f"{k} must be true or false")
+        if k == "display_name":
+            if not isinstance(v, str) or not v.strip() or len(v.strip()) > 80:
+                raise HTTPException(422, "display_name must be a name of at most 80 characters")
+            v = v.strip()
+        if k == "cognitive_condition" and v is not None and not isinstance(v, str):
+            raise HTTPException(422, "cognitive_condition must be text or null")
         if k == "conditions":
             if not isinstance(v, list) or len(v) > 12:
                 raise HTTPException(422, "conditions must be a short list")
-            v = [str(x)[:40] for x in v if str(x).strip()]
-        setattr(PROFILE, k, v)
+            if any(not isinstance(x, str) or len(x) > 40 for x in v):
+                raise HTTPException(422, "conditions must contain text of at most 40 characters")
+            v = [x.strip() for x in v if x.strip()]
         changed[k] = v
     if changed:
-        db.set_household(HOUSEHOLD, {"profile": changed})
+        # Validate the entire patch before changing the live safety profile.
+        for k, v in changed.items():
+            setattr(PROFILE, k, v)
+        db.set_household(HOUSEHOLD, {"profile": {k: getattr(PROFILE, k) for k in allowed}})
         await broadcast({"type": "household.updated", "changed": changed})
     return {"ok": True, "changed": changed}
 
 
 @app.post("/api/setup/scan")
 async def setup_scan(frame: UploadFile = File(...)):
-    """Map one setup frame locally. The frame is never sent to Meta or kept."""
+    """Map one setup frame locally and draw the room map.
+
+    The frame is never stored and never leaves this machine: the detector runs
+    here and the map is drawn here.
+    """
     try:
         data = await frame.read(setup_service.MAX_FRAME_BYTES + 1)
         return await setup_service.map_frame(data)
@@ -1129,10 +1173,12 @@ async def ack(incident_id: str, body: AckIn):
     if body.action not in policy.ALLOWED_ACTIONS:
         raise HTTPException(422, f"unknown action {body.action}")
     inc = db.get_incident(incident_id)
-    if not inc:
+    if not inc or db.hidden_from_family(inc):
         raise HTTPException(404, "not found")
     db.add_ack(incident_id, body.action)
-    db.mark_acked(incident_id)
+    db.record_event(incident_id, inc.get("camera_id"), "family_acknowledged",
+                    inc.get("zone_id"), db.now(), "info", suppressed=True,
+                    reason=body.action, source="family")
     # The ack is the feedback signal: it changes the next decision for this
     # household, and it stops the escalation timer.
     await broadcast({"type": "incident.ack", "id": incident_id, "action": body.action})
@@ -1158,9 +1204,10 @@ def stats():
 def events(limit: int = 100):
     # A held or rejected candidate has no family-facing event yet. Its id and
     # type are internal until verification releases it.
-    hidden = {"verification_pending"}
-    items = [e for e in db.recent_events(limit) if e.get("reason") not in hidden]
-    suppressed = [e for e in db.suppressed_sample(20) if e.get("reason") not in hidden]
+    if not 1 <= limit <= 500:
+        raise HTTPException(422, "limit must be between 1 and 500")
+    items = db.recent_events(limit, family=True)
+    suppressed = [e for e in items if e.get("suppressed")][:20]
     return {"items": items, "suppressed": suppressed}
 
 
@@ -1193,7 +1240,7 @@ def night(date: str | None = None, offset: int = 0):
             stamp = stamp.replace(tzinfo=TZ)
         return start <= stamp.astimezone(TZ) < end
 
-    all_events = [e for e in db.recent_events(500) if inside(e.get("ts"))]
+    all_events = [e for e in db.recent_events(500, family=True) if inside(e.get("ts"))]
     all_incidents = [i for i in db.list_incidents(200)
                      if inside(i.get("local_time") or i.get("created_at"))]
     door = [e for e in all_events if str(e.get("type", "")).startswith("door")]
@@ -1639,7 +1686,62 @@ async def checkin(incident_id: str, request: Request):
                 "resolution": "already_closed", "reason": closed_reason,
                 "read": read, "model": model_used}
 
-    escalated = delta > 0 and new != current
+    # A request for help must open an unpublished gate even at the severity ceiling.
+    escalated = delta > 0 and (new != current or fresh.get("status") == "resident_check")
+    if fresh.get("status") == "resident_check":
+        # The resident-first gate. Nobody has been paged yet, so this answer
+        # decides whether anyone is told at all.
+        if delta < 0:
+            # She answered and the camera agrees she is on her feet. The fall
+            # stays in the audit log and the family is not woken for it.
+            db.set_status(incident_id, "resolved", new)
+            db.mark_phase(incident_id, 3, None)
+            db.settle_verification_event(incident_id, "info", suppressed=True,
+                                         reason="recovered_before_family_alert")
+            db.record_event(incident_id, fresh.get("camera_id"),
+                            "resident_self_recovered", fresh.get("zone_id"), db.now(),
+                            "info", suppressed=True, reason="checkin_answered",
+                            source="checkin")
+            await broadcast({"type": "checkin.answered", "id": incident_id,
+                             "transcript": transcript, "class": cls,
+                             "classifier_class": classifier_class,
+                             "severity": new, "previous": current,
+                             "contradiction": False,
+                             "resolution": "self_recovered",
+                             "reason": verdict["reason"], "read": read,
+                             "model": model_used, "resident_first": True})
+            log.info("checkin %s cleared the resident gate (%s)", incident_id,
+                     verdict["reason"])
+            return {"transcript": transcript, "class": cls,
+                    "classifier_class": classifier_class, "severity": new,
+                    "previous": current, "contradiction": False,
+                    "resolution": "self_recovered", "reason": verdict["reason"],
+                    "read": read, "model": model_used}
+        if not escalated:
+            # "I'm fine" with no evidence she is on her feet is not an answer.
+            # The gate stays open and the short deadline below asks again.
+            db.reopen_checkin(incident_id, time.time() + 5.0)
+            await broadcast({"type": "checkin.reopened", "id": incident_id,
+                             "reason": verdict["reason"], "due_in_s": 5})
+            await broadcast({"type": "checkin.answered", "id": incident_id,
+                             "transcript": transcript, "class": cls,
+                             "classifier_class": classifier_class,
+                             "severity": new, "previous": current,
+                             "contradiction": verdict["contradiction"],
+                             "resolution": verdict["resolution"],
+                             "reason": verdict["reason"], "read": read,
+                             "model": model_used, "resident_first": True})
+            log.info("checkin %s did not clear the resident gate (%s)",
+                     incident_id, verdict["reason"])
+            return {"transcript": transcript, "class": cls,
+                    "classifier_class": classifier_class, "severity": new,
+                    "previous": current, "contradiction": verdict["contradiction"],
+                    "resolution": verdict["resolution"], "reason": verdict["reason"],
+                    "read": read, "model": model_used}
+        # She asked for help. The escalation below pages on the answer itself,
+        # which is stronger evidence than the gate's stored decision.
+        db.set_status(incident_id, "notified", new)
+
     if escalated:
         name = (PROFILE.display_name or "the resident").split()[0]
         title = f"{name} asked for help" if cls == "help" else f"Check-in: {name}"
@@ -1667,12 +1769,18 @@ async def checkin(incident_id: str, request: Request):
         db.set_status(incident_id, "notified", new)
         if (not inc.get("acked_at")
                 and db.claim_notify_phase(incident_id, 3, None)):
+            db.settle_verification_event(incident_id, new, suppressed=False,
+                                         reason="resident_requested_help")
             await notify.dispatch({"incident_id": incident_id, "title": title,
-                                   "body": body[:240], "severity": new}, 3, broadcast)
+                                    "body": body[:240], "severity": new}, 3, broadcast)
+            db.clear_verification_deadline(incident_id)
     elif delta < 0:
         db.set_status(incident_id, "resolved", new)
         # The timer may already be due; a resolved conversation must not page.
         db.mark_phase(incident_id, 3, None)
+        db.record_event(incident_id, fresh.get("camera_id"), "resident_self_recovered",
+                        fresh.get("zone_id"), db.now(), "info", suppressed=True,
+                        reason="checkin_answered", source="checkin")
     elif verdict["resolution"] == "unclear":
         # "I'm fine" with no evidence she is on her feet changes nothing and
         # must not end the conversation silently. Restore a short deadline so
@@ -1686,6 +1794,7 @@ async def checkin(incident_id: str, request: Request):
                      "classifier_class": classifier_class,
                      "severity": new, "previous": current,
                      "contradiction": verdict["contradiction"],
+                     "resolution": verdict["resolution"],
                      "reason": verdict["reason"], "read": read,
                      "model": model_used})
     log.info("checkin %s: %s/%s -> %s (%s) model=%s", incident_id, classifier_class,
@@ -2001,7 +2110,7 @@ def _wall_incident_packet(session: str, feed: dict, alert: dict) -> dict:
             "primary": True,
             "person_count": count,
             "posture": "lying",
-            "support_surface": None,
+            "support_surface": evidence.get("support_surface"),
             "box": evidence.get("box"),
             "distance": evidence.get("distance"),
             "geometry_fall": bool(evidence.get("geometry_fall")),
@@ -2096,6 +2205,118 @@ def _decision_from_row(row: dict) -> policy.Decision | None:
         return None
 
 
+async def release_to_family(incident_id: str, decision, stored: str,
+                            due: float | None = None) -> bool:
+    """Send the verified page. Called when the resident does not clear it.
+
+    Exactly one caller can win the phase-2 claim, so the gate sweep, the
+    check-in answer and a late retry can all reach this function and only one
+    of them will page. Returns whether this call was the one that sent.
+    """
+    sent = any(int(n.get("phase") or 0) == 2
+               for n in db.notifications_for(incident_id))
+    if sent:
+        return False
+    late = db.get_incident(incident_id) or {}
+    if (late.get("status") in ("resolved", "cancelled")
+            or late.get("acked_at")
+            or privacy.paused_state().get("paused")):
+        return False
+    phase = int(late.get("notify_phase") or 0)
+    if phase >= 3:
+        # The family already has a stronger page. A late phase two would read
+        # as a second, quieter alert for the same fall.
+        return False
+    # A crash between the claim and the send leaves `notify_phase` at 2 with no
+    # notification row. That claim is ours: finish it rather than skipping the
+    # page because the claim can no longer be won.
+    if phase < 2 and not db.claim_notify_phase(incident_id, 2, due):
+        return False
+    db.set_status(incident_id, "notified", stored)
+    db.settle_verification_event(incident_id, stored, suppressed=False,
+                                 reason="family_alert_released")
+    await notify.dispatch({
+        "incident_id": incident_id,
+        "title": decision.title,
+        "body": decision.body,
+        "severity": stored,
+    }, 2, broadcast)
+    # notify.dispatch publishes the outcome, including actual delivery channels.
+    log.warning("wall incident %s paged the family after the resident check-in", incident_id)
+    return True
+
+
+async def page_resident_check(incident_id: str) -> bool:
+    """The resident never answered the gate: page on the stored decision.
+
+    The gate wrote the verified decision before it asked, so this is the same
+    page that would have gone out immediately without the gate — only later.
+    A row with no stored decision falls back to the deterministic floor, which
+    is what the verification deadline already does for a held candidate.
+    """
+    incident = db.get_incident(incident_id)
+    if not incident or incident.get("status") != "resident_check":
+        return False
+    if privacy.paused_state().get("paused"):
+        db.set_status(incident_id, "resolved")
+        db.record_event(incident_id, incident.get("camera_id"),
+                        "verification_suppressed", incident.get("zone_id"), db.now(),
+                        "info", suppressed=True, reason="monitoring_paused", source="wall")
+        return False
+    decision = _decision_from_row(incident.get("decision") or {})
+    if decision is None:
+        await phase_one(incident_id, from_gate=True)
+        fresh = db.get_incident(incident_id) or {}
+        if fresh.get("status") not in ("resolved", "cancelled"):
+            db.set_status(incident_id, "notified", fresh.get("severity"))
+        db.clear_verification_deadline(incident_id)
+        log.warning("wall incident %s gate expired with no decision; paged on the floor",
+                    incident_id)
+        return True
+    stored = policy.max_severity(decision.severity,
+                                 str(incident.get("severity") or decision.severity))
+    sent = await release_to_family(incident_id, decision, stored,
+                                  time.time() + decision.follow_up_s
+                                  if decision.escalate_if_no_ack else None)
+    db.clear_verification_deadline(incident_id)
+    log.warning("wall incident %s gate expired without an answer; paged the family",
+                incident_id)
+    return sent
+
+
+async def _ask_before_paging(incident_id: str, decision: policy.Decision,
+                              stored: str, due: float | None) -> bool:
+    """Hold the row, ask the resident, and page only if nobody answers.
+
+    Shared by the verified path and the fail-open path so a fall is never paged
+    while the resident is being asked. Returns whether the gate took ownership
+    of the row; a False result means the caller still has to settle it.
+    """
+    held = db.hold_for_resident(incident_id, stored, time.time() + CHECKIN_GRACE_S)
+    if not held:
+        # Something closed or already released the row between the claim and
+        # here. Nothing to ask, nothing to page.
+        db.clear_verification_deadline(incident_id)
+        return False
+    await broadcast({"type": "incident.decided", "id": incident_id,
+                     "severity": stored, "title": decision.title,
+                     "wall": True, "verified": True, "resident_first": True})
+    asked = await start_checkin(incident_id, CHECKIN_GRACE_S)
+    if asked:
+        # Keep a backstop until the answer or page is settled. A process can
+        # die after claiming a timeout but before publishing the family alert.
+        db.extend_resident_deadline(incident_id, float(asked["due_at"]) + WALL_RELEASE_LEASE_S)
+        return True
+    # Nothing can be asked (paused, closed, or no check-in policy for this
+    # incident). The gate must not swallow the alert.
+    if await release_to_family(incident_id, decision, stored, due):
+        db.clear_verification_deadline(incident_id)
+    # If the page could not be claimed either, the gate deadline stays on the
+    # row and the sweep retries it. A verified fall is never dropped because
+    # two optional paths both declined.
+    return True
+
+
 async def _release_wall_incident(incident_id: str, verification: str,
                                 decision: policy.Decision | None = None,
                                 trace: list[dict] | None = None,
@@ -2173,14 +2394,6 @@ async def _release_wall_incident(incident_id: str, verification: str,
         floor = _floor_not_below(floor, incident.get("severity"))
         due = (time.time() + decision.follow_up_s) if decision.escalate_if_no_ack else None
         can_page = (decision.notify_now or floor.notifies)
-        # The notification row is written before the network call, so "no row
-        # for phase 2" means the page was never attempted. A retry after a
-        # crash can therefore dispatch; a previous attempt is never repeated.
-        sent = any(int(n.get("phase") or 0) == 2
-                   for n in db.notifications_for(incident_id))
-        phase = int((db.get_incident(incident_id) or {}).get("notify_phase") or 0)
-        claimed = (not can_page) or sent or phase >= 2 \
-            or db.claim_notify_phase(incident_id, 2, due)
         if recovered:
             # The decision row is already durable; do not write a second one.
             stored = policy.max_severity(
@@ -2191,18 +2404,18 @@ async def _release_wall_incident(incident_id: str, verification: str,
             stored = db.add_decision(incident_id, 2, floor.severity, floor.reasons,
                                      decision, SPARK_MODEL, PROMPT_VERSION,
                                      violations or [], latency)
-        late = db.get_incident(incident_id) or {}
-        if can_page and claimed and not sent and not (
-                late.get("status") in ("resolved", "cancelled")
-                or late.get("acked_at") or privacy.paused_state().get("paused")):
-            await notify.dispatch({
-                "incident_id": incident_id,
-                "title": decision.title,
-                "body": decision.body,
-                "severity": stored,
-            }, 2, broadcast)
-        # Only now is delivery considered complete. Until this point the row
-        # remains `releasing`, so the lease sweep can retry the stored decision.
+        # The resident hears the question before the family hears anything. A
+        # person who is on the floor but awake can say so, and a page that
+        # arrives while she is answering teaches the family to ignore pages.
+        # The gate is durable: if this process dies mid-question the sweep
+        # pages on the local floor instead of leaving the fall silent.
+        if can_page:
+            await _ask_before_paging(incident_id, decision, stored, due)
+            log.info("wall incident %s verified; resident gate handled (%s)",
+                     incident_id, verification)
+            return True
+        # A decision that does not page still has to settle the row, and the
+        # family-facing copy is written even when nothing is sent.
         db.set_status(incident_id, "notified", stored)
         await broadcast({"type": "incident.decided", "id": incident_id,
                          "severity": stored, "title": decision.title,
@@ -2211,7 +2424,34 @@ async def _release_wall_incident(incident_id: str, verification: str,
         db.clear_verification_deadline(incident_id)
         log.info("wall incident %s released with verified decision (%s)", incident_id, verification)
         return True
-    # Verification unavailable: fall back to the deterministic floor/template.
+    # Verification unavailable: fail open, but the resident still hears the
+    # question first. The floor already says this is urgent, so the gate runs
+    # on a template decision rather than nothing: a person lying on the floor
+    # who answers "I'm okay" should not wake her daughter, and one who does not
+    # answer must still reach the family thirty seconds later.
+    try:
+        floor, _ = effective_floor(incident)
+        floor = _floor_not_below(floor, incident.get("severity"))
+        fallback = policy.template_decision(floor, incident, PROFILE,
+                                            incident_clock(incident))
+        fallback.severity = policy.max_severity(fallback.severity, floor.severity)
+        db.add_decision(incident_id, 2, floor.severity, floor.reasons, fallback,
+                        "template", PROMPT_VERSION, [verification], 0)
+        if fallback.notify_now or floor.notifies:
+            await _ask_before_paging(incident_id, fallback, fallback.severity, None)
+            log.info("wall incident %s released without verification; resident gate "
+                     "handled (%s)", incident_id, verification)
+            return True
+        # The plan says stay quiet: settle the row without paging.
+        db.set_status(incident_id, "notified", fallback.severity)
+        asyncio.create_task(start_checkin(incident_id))
+        db.clear_verification_deadline(incident_id)
+        log.info("wall incident %s released without verification; plan stayed quiet (%s)",
+                 incident_id, verification)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log.exception("wall fallback failed for %s: %s", incident_id, exc)
+    # Last resort: the template path itself failed. Page on the floor.
     try:
         await phase_one(incident_id)
     except Exception as exc:  # noqa: BLE001
@@ -2245,9 +2485,10 @@ async def _reject_wall_incident(incident_id: str, reason: str) -> None:
         log.info("wall incident %s already released; rejection kept for audit: %s",
                  incident_id, reason[:120])
         return
-    db.record_event(incident_id, incident.get("camera_id"), incident.get("type"),
-                    incident.get("zone_id"), db.now(), "info", suppressed=True,
-                    reason=f"verification_rejected:{reason}"[:120], source="wall")
+    db.settle_verification_event(incident_id, "info", suppressed=True,
+                                 reason=f"verification_rejected:{reason}"[:120])
+    await broadcast({"type": "incident.suppressed", "id": incident_id,
+                     "reason": "verification_rejected"})
     log.info("wall incident %s rejected before escalation: %s", incident_id, reason[:120])
 
 
@@ -2265,6 +2506,13 @@ async def sweep_stale_verifications(now_epoch: float | None = None,
     released: list[str] = []
     for incident in db.due_verifications(
             now_epoch, WALL_VERIFICATION_LEGACY_AGE_S, limit):
+        if incident.get("status") == "resident_check":
+            # The gate deadline passed without a spoken check-in ever being
+            # claimed: a process died between "verified" and "asked". Nobody
+            # has been told, so the verified decision pages now.
+            if await page_resident_check(incident["id"]):
+                released.append(incident["id"])
+            continue
         retrying = incident.get("status") == "releasing"
         verification = ("release_lease_expired_local_floor" if retrying
                         else "verification_timeout_local_floor")
@@ -2398,6 +2646,10 @@ async def _collect_wall_evidence(session: str, feed_id: str,
         frames = wall.evidence_frames(session, feed_id, seconds=7.5)
         if frames and frames[-1][0] - frames[0][0] >= target_s:
             break
+        if len(frames) >= 2 and time.time() - frames[-1][0] > 1.6:
+            # A finite recording can end before the target window. Analyse the
+            # evidence we have instead of waiting for frames that cannot arrive.
+            break
         await asyncio.sleep(0.4)
     return wall.evidence_frames(session, feed_id, seconds=7.5)
 
@@ -2432,13 +2684,20 @@ allows. Say "unclear" when the image does not settle it. Question: {question}"""
 
 
 def _still_for_agent(incident_id: str) -> Path | None:
-    """The still Muse may see: raw only for a proven single-person clip."""
+    """The still Muse may see: bodies blurred, room intact.
+
+    Muse has to answer "floor or bed", which needs the furniture and the shape
+    of the body. It never needs a face. The blurred still is therefore the
+    default and the only option: when no blur could be produced the tool is
+    simply not offered, because sending the raw frame instead would trade the
+    resident's privacy for one question.
+    """
     folder = MEDIA_ROOT / incident_id
-    if not db.media_private(incident_id):
-        still = folder / "still.jpg"
-        return still if still.exists() else None
-    redacted = folder / "redacted.jpg"
-    return redacted if redacted.exists() else None
+    for name in ("privacy.jpg", "redacted.jpg"):
+        still = folder / name
+        if still.exists() and still.stat().st_size > 1024:
+            return still
+    return None
 
 
 def _agent_tools(sensors: dict, incident_id: str | None = None,
@@ -2462,14 +2721,32 @@ def _agent_tools(sensors: dict, incident_id: str | None = None,
             return {"available": False, "reason": "no_still"}
         image = await asyncio.to_thread(path.read_bytes)
         prompt = INSPECT_PROMPT.format(question=question or
-                                       "What posture and support surface are visible?")
-        observed, usage = await asyncio.to_thread(
-            meta().vision, image, prompt, INSPECT_SCHEMA, "low")
+                                        "What posture and support surface are visible?")
+        if incident_id:
+            await pipeline_step(incident_id, "muse", "running", "Muse · looking at the protected image",
+                                question or "Checking posture and support surface.", phase="image", question=question,
+                                model=SPARK_MODEL, destination="api.meta.ai", bytes=len(image),
+                                media=_inspection_media(incident_id, path.name),
+                                request={"prompt": prompt, "schema": INSPECT_SCHEMA, "effort": "low",
+                                         "image": path.name, "bytes": len(image)})
+        try:
+            observed, usage = await asyncio.to_thread(
+                meta().vision, image, prompt, INSPECT_SCHEMA, "low")
+        except Exception as exc:  # noqa: BLE001
+            if incident_id:
+                await pipeline_step(incident_id, "muse", "failed", "Muse · image request failed",
+                                    f"{type(exc).__name__}: {str(exc)[:140]}", phase="image", question=question,
+                                    media=_inspection_media(incident_id, path.name))
+            raise
         if incident_id:
             db.add_outbound(incident_id, "api.meta.ai", "agent_frame",
                             len(image), 1, "1h", False,
                             latency_ms=usage.latency_ms, model=SPARK_MODEL,
                             contains_image=True)
+            await pipeline_step(incident_id, "muse", "done", "Muse · protected image reviewed",
+                                observed.get("observation", ""), phase="image", question=question,
+                                model=SPARK_MODEL, duration_ms=usage.latency_ms, response=observed,
+                                media=_inspection_media(incident_id, path.name))
         return {"available": True, **observed}
 
     tools = {
@@ -2490,6 +2767,39 @@ def _agent_logger(incident_id: str):
     return log_call
 
 
+async def pipeline_step(incident_id: str, stage: str, status: str, title: str,
+                        detail: str = "", **metrics) -> None:
+    row = db.add_pipeline_step(incident_id, stage, status, title, detail, metrics)
+    if row:
+        await broadcast({"type": "pipeline.step", "step": row})
+
+
+def _agent_progress(incident_id: str):
+    completed = []
+    names = {"household_memory": "Household memory", "recent_events": "Recent events",
+             "audio_context": "Audio context", "inspect_frame": "Privacy-protected still"}
+
+    async def on_step(step: dict) -> None:
+        if step.get("status") != "running":
+            completed.append(step)
+            db.attach_agent(incident_id, completed)
+        if step.get("step") == "observe":
+            return  # SAM's measured geometry has its own timeline row.
+        phase = step.get("step")
+        title = ("Muse · evidence plan" if phase == "plan" else
+                 "Muse · evidence decision" if phase == "decision" else
+                 f"Muse · {names.get(step.get('tool'), step.get('tool', 'evidence'))}")
+        await pipeline_step(incident_id, "muse", step.get("status", "done"), title,
+                            step.get("summary", ""), tool=step.get("tool"),
+                            question=step.get("question"), tools=step.get("tools"),
+                            duration_ms=step.get("latency_ms"), elapsed_ms=step.get("elapsed_ms"),
+                            verdict=step.get("verdict"), severity=step.get("severity"),
+                            phase=phase, follow_up=step.get("follow_up", False), model=SPARK_MODEL,
+                            destination="api.meta.ai" if phase in ("plan", "decision") else "local",
+                            request=step.get("request"), response=step.get("response"))
+    return on_step
+
+
 async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
                              incident_id: str, packet: dict,
                              clip: tuple[Path, Path, Path] | None = None) -> None:
@@ -2507,13 +2817,31 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
         # feed for the next ten minutes.
         current = db.get_incident(incident_id) or {}
         if (current.get("status") in ("resolved", "cancelled")
-                and status in ("verified", "rejected", "unavailable")):
-            status = "recovered"
-            data["reason"] = "The resident stood up before verification finished."
+                and status in ("verified", "unavailable")):
+            recovered = bool((current.get("sensors") or {}).get("recovered"))
+            status = "recovered" if recovered else "acknowledged" if current.get("acked_at") else "stopped"
+            data["stage"] = status
+            data["reason"] = ("Recovery was confirmed before verification finished." if recovered else
+                              "The incident was already closed; this late result did not reopen it.")
             data["escalated"] = False
         arm = current.get("status") not in ("resolved", "cancelled", "releasing")
         alert = wall.set_verification(session, feed_id, alert_id, status=status,
-                                      arm_cooldown=arm, **data)
+                                      arm_cooldown=arm, timeline=True, **data)
+        stage = data.get("stage", status)
+        if stage != "muse":
+            title = {"clip": "Collecting the event window", "sam": "SAM · tracking the person",
+                     "verified": "Evidence corroborated · ask the resident first",
+                     "rejected": "Candidate dismissed · no family alert",
+                     "recovered": "Recovery observed", "unavailable": "Local safety fallback",
+                     "acknowledged": "Family already responded", "stopped": "Investigation closed",
+                     "paused": "Monitoring paused"}.get(stage, stage)
+            await pipeline_step(incident_id, "muse" if stage in ("verified", "rejected") else stage,
+                                "running" if status == "verifying" else
+                                "failed" if status == "unavailable" else "done",
+                                title, data.get("reason", ""),
+                                 elapsed_ms=round((time.time() - started_at) * 1000),
+                                 clip_seconds=data.get("clip_seconds"), verdict=status,
+                                 phase="upload" if stage == "sam" else "collect" if stage == "clip" else stage)
         if alert is not None:
             await broadcast({"type": "wall.verification", "session": session,
                              "feed_id": feed_id, "alert": alert})
@@ -2541,6 +2869,10 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
         if clip is None:
             raise MetaError("no evidence clip")
         clip_seconds = await asyncio.to_thread(clip_util.duration_s, clip[0])
+        await pipeline_step(incident_id, "clip", "done", "Event recording ready",
+                            "The short event window is ready. Continuous camera footage stays local.",
+                             phase="collect", clip_seconds=clip_seconds,
+                             media=_inspection_media(incident_id, "clip.mp4", "still.jpg"))
         if privacy.paused_state().get("paused"):
             db.set_status(incident_id, "resolved")
             await publish("recovered", stage="paused", escalated=False,
@@ -2554,14 +2886,41 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
         observed_lying = max(float(live_evidence.get("lying_for_s") or 0),
                              float((packet.get("sensors") or {}).get("no_recovery_s") or 0))
         await publish("verifying", stage="sam",
-                      reason="Evidence clip collected. SAM is tracking it; Muse is gathering household evidence before deciding.",
+                      reason="The event window is ready. SAM is tracking the person across the clip; Muse will receive the measured motion next.",
                       clip_seconds=round(float(clip_seconds or 0), 1),
                       escalated=False)
         stage = "sam"
-        features = await asyncio.wait_for(
-            _sam_features_for_clip(incident_id, clip[0], packet.get("track") or {}),
-            timeout=WALL_SAM_TIMEOUT_S,
-        )
+        sam_started = time.perf_counter()
+        try:
+            features = await asyncio.wait_for(
+                _sam_features_for_clip(incident_id, clip[0], packet.get("track") or {}),
+                timeout=WALL_SAM_TIMEOUT_S,
+            )
+            sam_error = None
+        except Exception as exc:  # noqa: BLE001
+            # SAM is one input, not the gate. It is the slowest call in the
+            # chain and it times out on real hardware often enough that
+            # treating that as "verification failed" meant Muse never ran at
+            # all: no model ever judged floor-versus-bed, and every body
+            # resting on a bed fell through to the local floor. Degrade
+            # instead. No masks and no track geometry, but still a blurred
+            # still and still a judgement.
+            sam_error = f"{type(exc).__name__}: {str(exc)[:120]}"
+            log.warning("wall sam failed for %s; asking Muse without masks: %s",
+                        incident_id, sam_error)
+            features = {"track_unavailable": True, "error": sam_error,
+                        "person_count": 0, "frames_present": 0,
+                        "frames_total": 0}
+            await _privacy_still_without_sam(incident_id, clip[0], packet)
+        await pipeline_step(incident_id, "sam", "failed" if sam_error else "done",
+                            "SAM · tracking unavailable" if sam_error else "SAM · motion measured",
+                            sam_error or f"Tracked {features.get('person_count', 0)} person(s) in "
+                            f"{features.get('frames_present', 0)}/{features.get('frames_total', 0)} frames. "
+                            "Geometry is evidence for Muse, not an automatic family alert.",
+                            duration_ms=round((time.perf_counter() - sam_started) * 1000),
+                            **{key: features.get(key) for key in ("person_count", "frames_present", "frames_total",
+                               "vertical_drop", "height_ratio", "aspect_start", "aspect_end", "median_conf",
+                               "trajectory", "start_box", "end_box", "primary_track_id", "target_match_iou")})
         stage = "muse"
         sam_count = int(features.get("person_count") or 0)
         sam_seen = bool(features.get("frames_present") or sam_count)
@@ -2574,10 +2933,12 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
                           reason="Monitoring was paused before Muse was called.")
             return
         await publish("verifying", stage="muse",
-                      reason="SAM tracked the clip. Muse is gathering household evidence before deciding whether any family alert is allowed.",
+                      reason=("Muse is gathering household evidence before deciding whether any family alert is allowed."
+                              if not sam_error else
+                              "SAM could not finish, so Muse is checking a blurred still of the room before deciding."),
                       clip_seconds=round(float(clip_seconds or 0), 1),
                       sam_person_count=sam_count, sam_seen=sam_seen,
-                      escalated=False)
+                      sam_error=sam_error, escalated=False)
         verify_packet = {
             "incident": {"type": "fall_suspected", "source": "wall", "zone": None},
             "feed": (sensors.get("wall_feed") or {}),
@@ -2609,6 +2970,7 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
                 "median_conf": features.get("median_conf"),
                 "start_box": features.get("start_box"),
                 "end_box": features.get("end_box"),
+                "target_match_iou": features.get("target_match_iou"),
             },
             "memory": [m["fact"] for m in db.memory(HOUSEHOLD)][:5],
             "history": db.recent_events(8),
@@ -2626,6 +2988,7 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
                 verify=True,
                 floor=floor.severity,
                 log_call=_agent_logger(incident_id),
+                on_step=_agent_progress(incident_id),
                 effort="low",
             ),
             timeout=WALL_AGENT_TIMEOUT_S,
@@ -2636,12 +2999,17 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
         # A reject is allowed only when there is positive evidence against the
         # candidate: SAM saw no person, or the bounded visual tool saw a
         # non-fall posture. A bare "not enough evidence" reject must fail open.
+        # When SAM failed we do not know what it saw, so the local detector's
+        # person count stands in for it: Muse must have actually looked before
+        # it may dismiss a body the tracker is watching.
         sight = any(step.get("step") == "tool"
                     and step.get("tool") == "inspect_frame"
                     and step.get("ok") for step in trace)
-        if (str(raw.get("verdict")) == "reject" and sam_seen and not sight):
+        local_seen = bool(sensors.get("person_count"))
+        if (str(raw.get("verdict")) == "reject"
+                and (sam_seen or local_seen) and not sight):
             raise MetaError("verifier rejected a visible person without sight evidence")
-        reason = str(raw.get("rationale") or raw.get("title") or "")[:180]
+        reason = str(raw.get("rationale") or raw.get("title") or "")[:300]
         confidence = max(0.0, min(1.0, float(raw.get("confidence") or 0.0)))
         if raw.get("verdict") == "escalate":
             decision = policy.Decision(
@@ -2667,7 +3035,7 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
                           confidence=confidence, sam_person_count=sam_count,
                           sam_seen=True, clip_seconds=round(float(clip_seconds or 0), 1),
                           severity=decision.severity, trace=trace,
-                          escalated=released)
+                           escalated=bool((db.get_incident(incident_id) or {}).get("notify_phase")))
         else:
             await _reject_wall_incident(incident_id, reason or "agent rejected the candidate")
             await publish("rejected", stage="rejected",
@@ -2682,7 +3050,7 @@ async def _verify_wall_alert(session: str, feed_id: str, alert_id: str,
         released = await _release_wall_incident(
             incident_id, "verification_unavailable_local_floor")
         await publish("unavailable", stage="unavailable", reason=reason,
-                      escalated=released,
+                      escalated=bool((db.get_incident(incident_id) or {}).get("notify_phase")),
                       trace=trace if "trace" in locals() else [])
         log.warning("wall verification unavailable for %s; escalated on local floor: %s",
                     incident_id, reason)
@@ -2694,9 +3062,11 @@ def apply_resident_recovery(incident_id: str, source: str = "edge") -> dict:
     if not out.get("changed"):
         return out
     incident = db.get_incident(incident_id) or {}
+    db.settle_verification_event(incident_id, "info", suppressed=True,
+                                 reason="recovered_before_family_alert")
     db.record_event(incident_id, incident.get("camera_id"), "resident_recovered",
                     incident.get("zone_id"), db.now(),
-                    incident.get("severity") or "info", suppressed=False,
+                    "info", suppressed=False,
                     reason="feed_recovered", source=source)
     log.info("%s recovery closed %s", source, incident_id)
     return {**out, "incident": incident}
@@ -2768,6 +3138,9 @@ async def wall_frame(session: str = Form(...), feed: str = Form(...),
         packet = _wall_incident_packet(session, feed_meta, trigger)
         try:
             incident_id = await _create_wall_incident(packet, None)
+            await pipeline_step(incident_id, "local", "done", "Local candidate · sustained posture change",
+                                "The same track stayed down across multiple observations. Family notification is held for verification.",
+                                **(trigger.get("evidence") or {}))
         except Exception as exc:  # noqa: BLE001
             log.exception("wall verification incident failed: %s", exc)
             result["escalation_error"] = "the local finding stands, but its evidence record could not be created"
@@ -2776,6 +3149,7 @@ async def wall_frame(session: str = Form(...), feed: str = Form(...),
             pending = wall.set_verification(
                 session, result["feed_id"], trigger["id"],
                 status="pending", escalated=False,
+                timeline=True,
                 reason="Collecting a 5–7 second evidence clip. SAM and Muse verify it before any family alert.",
             )
             result["alert"]["incident_id"] = incident_id
@@ -2832,6 +3206,64 @@ def wall_close(body: WallCloseIn):
 # --------------------------------------------------------------------------
 # SSE
 # --------------------------------------------------------------------------
+@app.get("/api/diagnostics")
+def diagnostics(limit: int = Query(200, ge=1, le=500), feed_id: str | None = None,
+                incident_id: str | None = None):
+    return {"items": db.pipeline_steps(limit, feed_id, incident_id)}
+
+
+# Privileged demo inspection is deliberately separate from family media routes:
+# those must continue to hide held/rejected candidates and seal private raw clips.
+# These /api routes inherit the household-session middleware, never signed links.
+INSPECTION_MEDIA = {
+    "clip.mp4": ("video", "Event recording", "Local event window", "raw"),
+    "still.jpg": ("image", "Local evidence frame", "Not sent to Muse", "raw"),
+    "sam_input.mp4": ("video", "Video sent to SAM", "Exact prepared SAM input; audio removed", "raw"),
+    "sam_response.txt": ("text", "SAM mask response", "Original returned mask and box data", "data"),
+    "annotated.mp4": ("video", "SAM segmentation", "Returned masks rendered locally over the event video", "segmented"),
+    "privacy.mp4": ("video", "Blurred preview", "SAM-tracked silhouettes blurred; untracked frames fully blurred. Not sent to Muse.", "blurred"),
+    "privacy.jpg": ("image", "Protected image for Muse", "The image available to Muse's visual tool", "blurred"),
+    "redacted.jpg": ("image", "Redacted image", "Alternate protected image available to Muse", "blurred"),
+    "redacted.mp4": ("video", "Visitor-redacted video", "Non-resident tracks blurred; resident remains visible", "segmented"),
+}
+
+
+def _inspection_media(incident_id: str, *names: str) -> list[dict]:
+    out = []
+    for name in names or INSPECTION_MEDIA:
+        if name not in INSPECTION_MEDIA:
+            continue
+        kind, label, description, privacy_label = INSPECTION_MEDIA[name]
+        path = MEDIA_ROOT / incident_id / name
+        if path.is_file() and path.stat().st_size > (0 if kind == "text" else 1024):
+            out.append({"name": name, "kind": kind, "label": label, "description": description,
+                        "privacy": privacy_label, "bytes": path.stat().st_size,
+                        "url": f"/api/diagnostics/{incident_id}/media/{name}"})
+    return out
+
+
+@app.get("/api/diagnostics/{incident_id}")
+def inspection(incident_id: str):
+    incident_id = valid_incident_id(incident_id)
+    if not db.get_incident(incident_id):
+        raise HTTPException(404, "investigation not found")
+    return JSONResponse({"items": db.pipeline_steps(500, incident_id=incident_id),
+                         "media": _inspection_media(incident_id)},
+                        headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/diagnostics/{incident_id}/media/{name}")
+def inspection_media(incident_id: str, name: str):
+    incident_id = valid_incident_id(incident_id)
+    if name not in INSPECTION_MEDIA or not db.get_incident(incident_id):
+        raise HTTPException(404, "not found")
+    path = MEDIA_ROOT / incident_id / name
+    if not path.is_file():
+        raise HTTPException(404, "artifact is not available or has expired")
+    return FileResponse(path, media_type="text/plain" if name.endswith(".txt") else None,
+                        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
 @app.get("/api/events/stream")
 async def stream():
     q: asyncio.Queue = asyncio.Queue(maxsize=64)
@@ -2839,7 +3271,7 @@ async def stream():
 
     async def gen():
         try:
-            yield f"event: snapshot\ndata: {json.dumps({'items': db.list_incidents(20)})}\n\n"
+            yield f"event: snapshot\ndata: {json.dumps({'items': db.list_incidents(20), 'pause': privacy.paused_state(), 'pipeline': db.pipeline_steps(200)})}\n\n"
             while True:
                 try:
                     item = await asyncio.wait_for(q.get(), timeout=15.0)
@@ -2854,6 +3286,42 @@ async def stream():
 
 
 async def broadcast(event: dict) -> None:
+    kind = event.get("type")
+    if kind in {"checkin.started", "checkin.answered", "checkin.no_answer", "checkin.reopened",
+                "checkin.cancelled", "incident.notified", "incident.ack", "incident.recovered"}:
+        incident_id = event.get("id")
+        if incident_id:
+            stage = "checkin"
+            status = "done"
+            metrics = {key: event[key] for key in ("due_at", "timeout_s", "audio_url", "resolution",
+                       "escalated", "severity", "channels", "failed", "phase") if key in event}
+            detail = str(event.get("reason") or event.get("resolution") or "")
+            if kind == "checkin.started":
+                title, detail, status = "Resident check-in · waiting for an answer", event.get("prompt", ""), "running"
+                metrics["resident_url"] = auth.checkin_url(incident_id)
+            elif kind == "checkin.reopened":
+                title, status = "Answer unclear · listening again", "running"
+            elif kind == "checkin.answered":
+                title = "Resident answer · " + str(event.get("resolution") or "recorded").replace("_", " ")
+                current = db.get_incident(incident_id) or {}
+                if current.get("checkin_status") == "asking":
+                    status = "running"
+                    metrics["due_at"] = current.get("checkin_due_at")
+            elif kind == "checkin.no_answer":
+                title = "Check-in expired · no answer"
+                detail = "Released to the family response path." if event.get("escalated") else "No additional notification was sent."
+            elif kind == "checkin.cancelled":
+                title = "Check-in cancelled"
+            elif kind == "incident.notified":
+                stage, title = "delivery", "Family alert · delivery result"
+                channels = event.get("channels") or []
+                detail = "Accepted by: " + ", ".join(channels) if channels else "No delivery channel accepted this attempt."
+                status = "done" if channels else "failed"
+            else:
+                stage = "recovery" if kind == "incident.recovered" else "response"
+                title = "Resident recovered" if stage == "recovery" else "Family responded"
+                detail = str(event.get("action") or event.get("reason") or "").replace("_", " ")
+            await pipeline_step(incident_id, stage, status, title, detail, **metrics)
     for q in list(_subscribers):
         try:
             q.put_nowait(event)
@@ -2864,11 +3332,15 @@ async def broadcast(event: dict) -> None:
 # --------------------------------------------------------------------------
 # phase 1: the fast alert
 # --------------------------------------------------------------------------
-async def phase_one(incident_id: str) -> None:
+async def phase_one(incident_id: str, from_gate: bool = False) -> None:
     """Notify within a second of ingest, from the floor and a template.
 
     This is the path that saves the minutes. It knows nothing about the clip and
     that is the point: it cannot be blocked by a slow upload or a slow model.
+
+    `from_gate` is set by the resident-first gate when its window expired with
+    nothing to page on. The gate owns that row, so it is the one caller allowed
+    to page a `resident_check` incident; every background path is refused.
     """
     incident = db.get_incident(incident_id)
     if not incident:
@@ -2881,7 +3353,10 @@ async def phase_one(incident_id: str) -> None:
     # A phase-1 claim with no notification row is a crash between claim and
     # dispatch, not a finished page. Finish it; do not claim again.
     redispatch = prior == 1
+    # `resident_check` is an open incident: the resident is being asked and the
+    # page is already written. Only the gate may page underneath it.
     if (incident.get("status") in ("resolved", "cancelled")
+            or (incident.get("status") == "resident_check" and not from_gate)
             or incident.get("acked_at")
             or privacy.paused_state().get("paused")):
         return
@@ -2892,6 +3367,8 @@ async def phase_one(incident_id: str) -> None:
     decision.severity = policy.max_severity(decision.severity, floor.severity)
 
     if not decision.notify_now and not floor.notifies:
+        db.add_decision(incident_id, 1, floor.severity, floor.reasons, decision,
+                        "template", PROMPT_VERSION, [], 0)
         db.mark_phase(incident_id, 1)
         log.info("phase1 %s stayed home (floor %s%s)", incident_id, floor.severity,
                  f", {plan_note}" if plan_note else "")
@@ -2927,6 +3404,8 @@ async def phase_one(incident_id: str) -> None:
             incident_id, 1, due if decision.escalate_if_no_ack else None):
         log.info("phase1 %s skipped: a later phase or closure won", incident_id)
         return
+    db.add_decision(incident_id, 1, floor.severity, floor.reasons, decision,
+                    "template", PROMPT_VERSION, [], 0)
     results = await notify.dispatch(alert, 1, broadcast)
     log.info("phase1 %s -> %s (%s) channels=%s", incident_id, decision.severity,
              action, [r["channel"] for r in results if r["ok"]])
@@ -2935,6 +3414,34 @@ async def phase_one(incident_id: str) -> None:
 # --------------------------------------------------------------------------
 # phase 2: the enriched alert
 # --------------------------------------------------------------------------
+async def _privacy_still_without_sam(incident_id: str, clip: str | Path,
+                                     packet: dict) -> None:
+    """Build the blurred still from the detector's person box when SAM is down.
+
+    Muse's one job here is to say whether the body is on the floor or on
+    furniture. That is answerable from a frame where the person is a blurred
+    body shape and the bed, couch or chair is intact, so a SAM timeout must not
+    cost the household its only visual check.
+    """
+    box = ((packet.get("track") or {}).get("box")
+           or (packet.get("sensors") or {}).get("person_box"))
+    if not box:
+        return
+    try:
+        manifest = await asyncio.to_thread(
+            render.privacy_still_from_boxes, Path(clip),
+            MEDIA_ROOT / incident_id / "privacy.jpg", [box],
+        )
+        log.info("wall privacy still built without SAM for %s: %s",
+                  incident_id, manifest.get("written"))
+        await pipeline_step(incident_id, "privacy", "done" if manifest.get("written") else "failed",
+                            "Protected image · detector fallback",
+                            "SAM was unavailable. Local detector boxes were used to blur the person for Muse.",
+                            phase="still", response=manifest, media=_inspection_media(incident_id, "privacy.jpg"))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("privacy still without SAM failed for %s: %s", incident_id, exc)
+
+
 async def _sam_features_for_clip(incident_id: str, clip: str | Path,
                                  track: dict | None = None) -> dict:
     """Run SAM on one short clip and persist the result.
@@ -2948,14 +3455,34 @@ async def _sam_features_for_clip(incident_id: str, clip: str | Path,
     small = await asyncio.to_thread(
         clip_util.sam_ready, clip, MEDIA_ROOT / incident_id / "sam_input.mp4",
     )
+    input_path = Path(small or clip)
+    await pipeline_step(incident_id, "sam", "running", "SAM · sending the event video",
+                        "SAM receives this short video to find and follow person silhouettes.",
+                        phase="upload", model=SAM_MODEL, destination="api.meta.ai",
+                        bytes=input_path.stat().st_size, media=_inspection_media(incident_id, input_path.name),
+                        request={"prompt": "person", "video": input_path.name,
+                                 "bytes": input_path.stat().st_size, "prepared": bool(small),
+                                 "mask_encoding": "one_bit", "propagation_direction": "forward",
+                                 "upload_retention_s": 3600, "delete_after_response": True})
     text, sam_usage, nbytes = await asyncio.to_thread(
         meta().sam_video, small or clip, "person"
     )
+    response_path = MEDIA_ROOT / incident_id / "sam_response.txt"
+    response_path.parent.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(response_path.write_text, text, encoding="utf-8")
     objects = parse_sam(text)
-    features = track_features(objects)
+    features = track_features(objects, (track or {}).get("box"))
     features["edge"] = track or {}
     resident_box = (track or {}).get("box")
+    await pipeline_step(incident_id, "sam", "done", "SAM · masks returned",
+                        "Segmentation data arrived. Preparing playable footage locally.", phase="upload",
+                        model=SAM_MODEL, duration_ms=sam_usage.latency_ms,
+                        response={**features, "objects_returned": len(objects),
+                                  "mask_bytes": sum(o.mask_bytes for o in objects)},
+                        media=_inspection_media(incident_id, "sam_response.txt"))
     if objects:
+        await pipeline_step(incident_id, "sam", "running", "SAM · preparing segmentation playback",
+                            "Rendering the returned masks over the same video SAM received.", phase="render")
         try:
             manifest = await asyncio.to_thread(
                 render.render, Path(small or clip),
@@ -2967,6 +3494,30 @@ async def _sam_features_for_clip(incident_id: str, clip: str | Path,
         except Exception as exc:  # noqa: BLE001
             log.warning("annotated render failed for %s: %s", incident_id, exc)
             features["overlay"] = {"rendered": False, "error": str(exc)[:120]}
+        await pipeline_step(incident_id, "sam", "done" if features["overlay"].get("rendered") else "failed",
+                            "SAM · segmentation playback ready" if features["overlay"].get("rendered") else "SAM · playback unavailable",
+                            "This overlay visualizes SAM's returned masks; it is not another model call.",
+                            phase="render", response=features["overlay"], media=_inspection_media(incident_id, "annotated.mp4"))
+        # The still a cloud model may see. Muse has to judge floor-versus-bed,
+        # which needs the room and the shape of the body, and never needs a
+        # face. Built for every clip, not only multi-person ones, so the
+        # privacy still is the default view rather than an exception.
+        try:
+            privacy = await asyncio.to_thread(
+                render.privacy_still, Path(small or clip),
+                MEDIA_ROOT / incident_id / "privacy.jpg", objects,
+                resident_box,
+            )
+            features["privacy"] = privacy
+        except Exception as exc:  # noqa: BLE001
+            log.warning("privacy still failed for %s: %s", incident_id, exc)
+            features["privacy"] = {"written": False, "error": str(exc)[:120]}
+        await pipeline_step(incident_id, "privacy", "done" if features["privacy"].get("written") else "failed",
+                            "Protected image ready for Muse", "Person silhouettes blurred locally; room context retained.",
+                            phase="still", response=features["privacy"], media=_inspection_media(incident_id, "privacy.jpg"))
+        # A demo-only render must not consume the SAM deadline or hold up Muse.
+        # The existing protected still remains the authoritative visual input.
+        asyncio.create_task(_render_inspection_preview(incident_id, input_path, objects, resident_box))
         if int(features.get("person_count") or 0) > 1:
             try:
                 redacted = await asyncio.to_thread(
@@ -2984,6 +3535,22 @@ async def _sam_features_for_clip(incident_id: str, clip: str | Path,
                     latency_ms=sam_usage.latency_ms, model=SAM_MODEL)
     db.attach_sam(incident_id, features)
     return features
+
+
+async def _render_inspection_preview(incident_id: str, src: Path, objects, resident_box) -> None:
+    try:
+        await pipeline_step(incident_id, "privacy", "running", "Preparing the blurred video",
+                            "Local demo preview; Muse receives a still only if its visual tool is called.", phase="video")
+        protected = await asyncio.to_thread(
+            render.render, src, MEDIA_ROOT / incident_id / "privacy.mp4", objects,
+            trail=False, annotate=False, resident_box=resident_box, blur_all=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        protected = {"rendered": False, "error": str(exc)[:120]}
+    await pipeline_step(incident_id, "privacy", "done" if protected.get("rendered") else "failed",
+                        "Blurred video ready" if protected.get("rendered") else "Blurred video unavailable",
+                        "SAM-tracked silhouettes are blurred. Frames without SAM observations are fully blurred.",
+                        phase="video", response=protected, media=_inspection_media(incident_id, "privacy.mp4"))
 
 
 async def enrich(incident: dict) -> None:
@@ -3231,6 +3798,9 @@ async def fail_open(incident: dict, exc: Exception) -> None:
     # buried under a template: an incident was once found `notified` with
     # attempts=4 and a phase-9 row on top of a phase-2 row that had succeeded.
     current = db.get_incident(incident["id"]) or {}
+    if (current.get("status") in ("resolved", "cancelled", "resident_check")
+            or current.get("acked_at") or privacy.paused_state().get("paused")):
+        return
     if (current.get("decision") or {}).get("model") not in (None, "", "template"):
         db.set_status(incident["id"], "notified", current.get("severity"))
         db.record_failure(incident["id"], f"{type(exc).__name__}:already_decided")
@@ -3239,15 +3809,18 @@ async def fail_open(incident: dict, exc: Exception) -> None:
     floor, _ = effective_floor(incident)
     decision = policy.template_decision(floor, incident, PROFILE,
                                         incident_clock(incident))
-    stored = db.add_decision(incident["id"], 9, floor.severity, floor.reasons, decision,
+    stored = db.add_decision(incident["id"], 2, floor.severity, floor.reasons, decision,
                              "template", PROMPT_VERSION,
                              [f"enrich_failed:{type(exc).__name__}"], 0)
     db.set_status(incident["id"], "notified", stored)
     db.record_failure(incident["id"], type(exc).__name__)
-    if (decision.notify_now or floor.notifies) and stored == decision.severity:
+    if ((decision.notify_now or floor.notifies) and stored == decision.severity
+            and db.claim_notify_phase(incident["id"], 2,
+                                      time.time() + decision.follow_up_s
+                                      if decision.escalate_if_no_ack else None)):
         await notify.dispatch({"incident_id": incident["id"],
                                "title": decision.title, "body": decision.body,
-                               "severity": decision.severity}, 9, broadcast)
+                               "severity": decision.severity}, 2, broadcast)
     await broadcast({"type": "incident.decided", "id": incident["id"],
                      "severity": stored, "title": decision.title,
                      "degraded": True})

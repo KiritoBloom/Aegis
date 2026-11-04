@@ -52,9 +52,12 @@ history; request those tools when they could change the decision. For a fall, he
 night presence or repeated movement, request both memory and recent events. For a
 possible fall whose support surface is unknown, disputed or reported as furniture, add
 inspect_frame with a floor-versus-furniture question; resolve ambiguity with sight
-instead of guessing. Do not request a frame merely to confirm what the packet already
-proves. A prior fall, a repeat count, an unusual hour or a known routine is never a
-reason to skip a new candidate fall. Prior emergencies never make a current fall normal."""
+instead of guessing. When SAM tracking is unavailable or failed, inspect_frame is not
+optional: it is the only evidence about where the body is, so ask it whether the person
+is on the floor or on a bed, couch or chair. Do not request a frame merely to confirm
+what the packet already proves. A prior fall, a repeat count, an unusual hour or a known
+routine is never a reason to skip a new candidate fall. Prior emergencies never make a
+current fall normal."""
 
 PLAN_SCHEMA = {
     "type": "object",
@@ -90,6 +93,13 @@ Decide:
   transition, or the clip shows a clear non-fall explanation (bending, kneeling,
   exercise). A support surface alone is NOT a contradiction: a rapid vertical drop or a
   large loss of upright height that ends on a bed or couch is still a fall candidate.
+- When SAM is unavailable or its tracking failed, you have no geometry. Do not treat that
+  as "no contradiction": look at the still and judge where the body is. A body resting on
+  a bed, couch or other furniture, with no sign of a drop to the floor, is a normal
+  lie-down and should be rejected. A body on the floor, or one whose position the still
+  cannot settle, must escalate. This is the case the household most needs you to get
+  right: a person asleep in bed is not a fall, and a page for one teaches a family to
+  ignore the next page.
 - "escalate" when SAM saw a person and the local evidence is a fall transition, including
   a fall onto a bed or couch. A short lying window, a prior fall, a repeat count, an
   unusual hour or a familiar room is NOT a reason to reject. If the evidence is genuinely
@@ -207,6 +217,7 @@ class EvidenceAgent:
         verify: bool,
         floor: str,
         log_call: Callable[[str, int, Usage], Awaitable[None]] | None = None,
+        on_step: Callable[[dict], Awaitable[None]] | None = None,
         effort: str = "low",
         max_tools: int = 3,
     ) -> AgentResult:
@@ -215,9 +226,18 @@ class EvidenceAgent:
         usages: list[Usage] = []
         tool_results: dict[str, Any] = {}
 
+        async def emit(entry: dict, complete: bool = True) -> None:
+            entry = {**entry, "at": time.time(),
+                     "elapsed_ms": int((time.time() - started) * 1000)}
+            if complete:
+                trace.append(entry)
+            if on_step is not None:
+                await on_step({**entry, "status": ("done" if entry.get("ok", True)
+                                                   else "failed") if complete else "running"})
+
         sam = packet.get("sam") or {}
         if sam:
-            trace.append({"step": "observe", "tool": "sam_track_clip",
+            await emit({"step": "observe", "tool": "sam_track_clip",
                           "summary": f"{sam.get('person_count', 0)} person · "
                                      f"{sam.get('frames_present', 0)} frames"})
         candidate = {k: v for k, v in packet.items() if k not in ("memory", "history")}
@@ -230,6 +250,9 @@ class EvidenceAgent:
                             "pixels": "at most one still, from this incident's clip"},
         }
         try:
+            await emit({"step": "plan", "summary": "Choosing which evidence can change this decision.",
+                        "request": {"packet": plan_request, "instructions": PLAN_PROMPT,
+                                    "schema": PLAN_SCHEMA, "effort": "low"}}, False)
             plan, plan_usage = await asyncio.to_thread(
                 self.meta.decide, plan_request, PLAN_PROMPT, PLAN_SCHEMA, "low")
             usages.append(plan_usage)
@@ -244,15 +267,16 @@ class EvidenceAgent:
             for name, _question in calls[:max_tools]:
                 if name not in requested:
                     requested.append(name)
-            trace.append({
+            await emit({
                 "step": "plan",
                 "tools": requested,
                 "calls": [{"tool": n, "question": q} for n, q in calls[:max_tools]],
                 "summary": str(plan.get("why") or "chose evidence tools")[:180],
                 "latency_ms": plan_usage.latency_ms,
+                "response": plan,
             })
         except (MetaError, ValueError, KeyError) as exc:
-            trace.append({"step": "plan", "tools": [], "ok": False,
+            await emit({"step": "plan", "tools": [], "ok": False,
                           "summary": f"plan unavailable: {str(exc)[:140]}"})
             calls = []
 
@@ -261,7 +285,31 @@ class EvidenceAgent:
         counts: dict[str, int] = {}
 
         async def execute(pending: list[tuple[str, str]]) -> bool:
-            visual = False
+            jobs = []
+
+            async def run_tool(name: str, question: str) -> bool:
+                begin = time.perf_counter()
+                await emit({"step": "tool", "tool": name, "question": question,
+                            "summary": question or TOOLS[name],
+                            "request": {"tool": name, "question": question}}, False)
+                try:
+                    result = await tools[name](question)
+                    count = counts.get(name, 0)
+                    key = name if count == 0 else f"{name}_{count + 1}"
+                    counts[name] = count + 1
+                    tool_results[key] = result
+                    await emit({"step": "tool", "tool": name, "ok": True,
+                                "question": question, "summary": _summarise(result),
+                                "response": result,
+                                "latency_ms": int((time.perf_counter() - begin) * 1000)})
+                    return bool(name == "inspect_frame" and isinstance(result, dict) and result.get("available"))
+                except Exception as exc:  # noqa: BLE001
+                    await emit({"step": "tool", "tool": name, "ok": False,
+                                "question": question,
+                                "summary": f"{type(exc).__name__}: {str(exc)[:140]}",
+                                "latency_ms": int((time.perf_counter() - begin) * 1000)})
+                    return False
+
             for name, question in pending:
                 if name not in tools:
                     continue
@@ -273,26 +321,19 @@ class EvidenceAgent:
                 executed.add(pair)
                 if name != "inspect_frame":
                     used_read.add(name)
-                try:
-                    result = await tools[name](question)
-                    count = counts.get(name, 0)
-                    key = name if count == 0 else f"{name}_{count + 1}"
-                    counts[name] = count + 1
-                    tool_results[key] = result
-                    if (name == "inspect_frame" and isinstance(result, dict)
-                            and result.get("available")):
-                        visual = True
-                    trace.append({"step": "tool", "tool": name, "ok": True,
-                                  "question": question[:160],
-                                  "summary": _summarise(result)})
-                except Exception as exc:  # noqa: BLE001
-                    trace.append({"step": "tool", "tool": name, "ok": False,
-                                  "question": question[:160],
-                                  "summary": f"{type(exc).__name__}: {str(exc)[:140]}"})
-            return visual
+                jobs.append(run_tool(name, question))
+            # Read-only evidence sources are independent; a slow visual call
+            # must not serialize the household/history reads behind it.
+            return any(await asyncio.gather(*jobs))
 
         visual_seen = await execute(calls[:max_tools])
-        if visual_seen:
+        visual_unclear = any(
+            key.startswith("inspect_frame") and isinstance(value, dict)
+            and (value.get("posture") in (None, "unclear")
+                 or value.get("support_surface") in (None, "unclear")
+                 or float(value.get("confidence") or 0) < 0.75)
+            for key, value in tool_results.items())
+        if visual_seen and visual_unclear:
             follow_request = {
                 "candidate": candidate,
                 "policy_floor": floor,
@@ -303,6 +344,10 @@ class EvidenceAgent:
                                 "pixels": "the same still; a different question only"},
             }
             try:
+                await emit({"step": "plan", "follow_up": True,
+                            "summary": "The still is ambiguous; choosing one narrower question.",
+                            "request": {"packet": follow_request, "instructions": FOLLOWUP_PROMPT,
+                                        "schema": FOLLOWUP_SCHEMA, "effort": "low"}}, False)
                 follow, follow_usage = await asyncio.to_thread(
                     self.meta.decide, follow_request, FOLLOWUP_PROMPT,
                     FOLLOWUP_SCHEMA, "low")
@@ -315,16 +360,17 @@ class EvidenceAgent:
                     name = str(call.get("tool") or "")
                     if name in tools:
                         follow_calls.append((name, str(call.get("question") or "")[:160]))
-                trace.append({
+                await emit({
                     "step": "plan", "follow_up": True,
                     "tools": [n for n, _q in follow_calls],
                     "calls": [{"tool": n, "question": q} for n, q in follow_calls],
                     "summary": str(follow.get("why") or "no further evidence needed")[:180],
                     "latency_ms": follow_usage.latency_ms,
+                    "response": follow,
                 })
                 await execute(follow_calls)
             except (MetaError, ValueError, KeyError) as exc:
-                trace.append({"step": "plan", "follow_up": True, "tools": [],
+                await emit({"step": "plan", "follow_up": True, "tools": [],
                               "ok": False,
                               "summary": f"follow-up unavailable: {str(exc)[:140]}"})
 
@@ -335,18 +381,27 @@ class EvidenceAgent:
         }
         system = VERIFY_PROMPT if verify else DECISION_PROMPT
         schema = VERIFY_SCHEMA if verify else DECISION_SCHEMA
-        raw, usage = await asyncio.to_thread(
-            self.meta.decide, final_packet, system, schema, effort)
+        await emit({"step": "decision", "summary": "Reconciling visual evidence, household context and the local safety floor.",
+                    "request": {"packet": final_packet, "instructions": system,
+                                "schema": schema, "effort": effort}}, False)
+        try:
+            raw, usage = await asyncio.to_thread(
+                self.meta.decide, final_packet, system, schema, effort)
+        except Exception as exc:  # noqa: BLE001
+            await emit({"step": "decision", "ok": False,
+                        "summary": f"{type(exc).__name__}: {str(exc)[:140]}"})
+            raise
         usages.append(usage)
         if log_call is not None:
             await log_call("agent_verify" if verify else "agent_decision",
                            len(json.dumps(final_packet)), usage)
-        trace.append({
+        await emit({
             "step": "decision",
             "verdict": raw.get("verdict") if verify else None,
             "severity": raw.get("severity"),
-            "summary": str(raw.get("rationale") or raw.get("title") or "")[:180],
+            "summary": str(raw.get("rationale") or raw.get("title") or "")[:300],
             "latency_ms": usage.latency_ms,
+            "response": raw,
         })
         return AgentResult(raw=raw, trace=trace, usage=usages,
                            final_packet=final_packet,

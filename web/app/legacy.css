@@ -621,7 +621,7 @@
   font-size: clamp(30px, 4.2vw, 42px);
   line-height: 1.12;
   letter-spacing: -0.025em;
-  font-weight: 400;
+  font-weight: 650;
 }
 
 .h2 {
@@ -692,27 +692,27 @@
 }
 
 .chip-sage {
-  border-color: #c6d4c6;
+  border-color: var(--color-line-2);
   background: var(--color-sage-soft);
-  color: #3f5c48;
+  color: var(--color-sage);
 }
 
 .chip-amber {
-  border-color: #e6d2ac;
+  border-color: var(--color-line-2);
   background: var(--color-amber-soft);
-  color: #7d5110;
+  color: var(--color-amber);
 }
 
 .chip-red {
-  border-color: #eccbc6;
+  border-color: var(--color-line-2);
   background: var(--color-red-soft);
-  color: #8a2c24;
+  color: var(--color-red);
 }
 
 .chip-sim {
-  border-color: #e6d2ac;
-  background: #fff8ea;
-  color: #7d5110;
+  border-color: var(--color-line-2);
+  background: var(--color-amber-soft);
+  color: var(--color-amber);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-family: var(--font-mono);
@@ -777,12 +777,13 @@
 .btn-primary {
   background: var(--color-ink);
   border-color: var(--color-ink);
-  color: #fbf9f5;
+  color: var(--color-paper);
 }
 
 .btn-primary:hover {
-  background: #232a30;
-  border-color: #232a30;
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  opacity: 0.85;
 }
 
 .btn-quiet {

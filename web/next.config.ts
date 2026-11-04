@@ -37,6 +37,20 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
   poweredByHeader: false,
+  /**
+   * Compression has to stay off.
+   *
+   * Next wraps every response in the `compression` middleware, and that
+   * middleware buffers until it has a flush point. `/api/events/stream` is an
+   * infinite `text/event-stream`, so it never gets one: the browser opens the
+   * connection, reads nothing, and every live update - verification stages,
+   * alert verdicts, check-ins - is silently lost. The console then freezes on
+   * whatever the last `/api/wall/frame` response said.
+   *
+   * The service is local-first and its payloads are small JSON frames, so
+   * gzip buys nothing worth trading the live channel for.
+   */
+  compress: false,
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${backend}/api/:path*` },

@@ -67,7 +67,7 @@ export type Decision = {
   body?: string;
   severity?: Severity;
   evidence?: string[];
-  actions?: string[];
+  actions?: { id: string; label: string }[];
   rationale?: string;
   confidence?: number;
   follow_up_s?: number;
@@ -229,6 +229,7 @@ export type AegisEvent = {
   suppressed: number;
   reason?: string | null;
   source?: string;
+  incident_available?: number;
 };
 
 export type NightSummary = {
@@ -328,14 +329,17 @@ export type Camera = {
 
 const BASE = "";
 
-export async function get<T>(path: string): Promise<T> {
+export async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { accept: "application/json" },
     cache: "no-store",
+    signal,
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${res.statusText}${text ? ` — ${text.slice(0, 200)}` : ""}`);
+    let detail = `${res.status} ${res.statusText}`;
+    try { detail = JSON.parse(text).detail || detail; } catch { /* use status */ }
+    throw new Error(typeof detail === "string" ? detail : "The request could not be completed.");
   }
   return (await res.json()) as T;
 }
@@ -392,6 +396,11 @@ const TYPE_LABEL: Record<string, string> = {
   help_call: "Call for help",
   unexpected_presence: "Someone else at night",
   restlessness: "Repeated pacing",
+  resident_recovered: "Resident got back up",
+  camera_online: "Camera reconnected",
+  family_acknowledged: "Family responded",
+  no_acknowledgement: "Family response overdue",
+  verification_suppressed: "Verification stopped",
 };
 
 export function typeLabel(t: string | null | undefined): string {

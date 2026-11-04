@@ -352,7 +352,7 @@ def parse_sam(text: str) -> list[SamObject]:
     return out
 
 
-def track_features(objects: list[SamObject]) -> dict:
+def track_features(objects: list[SamObject], resident_box: list[float] | None = None) -> dict:
     """Collapse per-frame boxes into one primary track plus its trajectory."""
     if not objects:
         return {"track_unavailable": True, "frames_present": 0}
@@ -365,6 +365,21 @@ def track_features(objects: list[SamObject]) -> dict:
         per_id,
         key=lambda k: (len(per_id[k]), sum((o.x2 - o.x1) * (o.y2 - o.y1) for o in per_id[k])),
     )
+    match_score = None
+    if resident_box and len(per_id) > 1:
+        def overlap(box):
+            a, b = box, resident_box
+            intersection = max(0, min(a[2], b[2]) - max(a[0], b[0])) * max(0, min(a[3], b[3]) - max(a[1], b[1]))
+            union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - intersection
+            return intersection / union if union > 0 else 0
+        # The local candidate box describes the person near the END of this
+        # evidence window. A larger bystander must not supply their trajectory.
+        scores = {tid: max(overlap(o.box_norm) for o in sorted(track, key=lambda item: item.frame)[-5:])
+                  for tid, track in per_id.items()}
+        matched = max(scores, key=scores.get)
+        match_score = round(scores[matched], 3)
+        if match_score >= 0.15:
+            primary_id = matched
     track = sorted(per_id[primary_id], key=lambda o: o.frame)
     feet = [o.foot for o in track]
     path = sum(
@@ -377,6 +392,7 @@ def track_features(objects: list[SamObject]) -> dict:
     return {
         "track_unavailable": False,
         "primary_track_id": primary_id,
+        "target_match_iou": match_score,
         "track_ids": sorted(per_id),
         "person_count": len(per_id),
         "frames_present": len(track),
@@ -395,4 +411,6 @@ def track_features(objects: list[SamObject]) -> dict:
         "end_box": [round(v, 4) for v in end],
         "median_conf": round(sorted(o.conf for o in track)[len(track) // 2], 3),
         "boxes": [[round(v, 4) for v in o.box_norm] for o in track[:60]],
+        "trajectory": [[o.frame, round((o.box_norm[0] + o.box_norm[2]) / 2, 4),
+                        round((o.box_norm[1] + o.box_norm[3]) / 2, 4)] for o in track[:60]],
     }

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { send, type WatchState } from "@/lib/api";
 import {
   defaultSetup,
+  configurationKey,
   getFeedMedia,
   loadSetup,
   newOccupant,
@@ -38,6 +39,8 @@ type ScanResult = {
   objects: { label: string; conf: number; box: number[] }[];
   flags: string[];
   status: string;
+  map?: string;
+  sam?: { mapped: boolean; objects_drawn?: number; sam_matched?: number; sam_contours?: boolean };
 };
 
 type ProposalResponse = {
@@ -81,6 +84,7 @@ export default function SetupPage() {
   const [scanning, setScanning] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [maps, setMaps] = useState<Record<string, string>>({});
   const [proposing, setProposing] = useState(false);
   const [museError, setMuseError] = useState<string | null>(null);
   const [showProposal, setShowProposal] = useState(false);
@@ -92,11 +96,19 @@ export default function SetupPage() {
   const seededPlan = useRef(false);
   const proposalKey = useRef("");
   const videoUrls = useRef<Record<string, string>>({});
+  const savingRef = useRef(false);
+  const scanningRef = useRef(false);
+  const proposingRef = useRef(false);
 
   const mutate = useCallback((change: (current: ConsoleSetup) => ConsoleSetup) => {
     setSetup((current) => {
       if (!current) return current;
-      const next = change(current);
+      let next = change(current);
+      if (configurationKey(next) !== configurationKey(current)
+          && next.configApprovedAt === current.configApprovedAt) {
+        next = { ...next, proposal: null, configApproved: false, configApprovedAt: null };
+        proposalKey.current = "";
+      }
       setupRef.current = next;
       saveSetup(next);
       return next;
@@ -132,7 +144,7 @@ export default function SetupPage() {
   }, [setup]);
 
   useEffect(() => {
-    if (!watch.data || seededPlan.current) return;
+    if (!watch.data || !setup || seededPlan.current) return;
     seededPlan.current = true;
     mutate((current) => {
       if (Object.keys(current.watchModes).length) return current;
@@ -143,7 +155,7 @@ export default function SetupPage() {
         doorHours: watch.data!.plan.door_hours,
       };
     });
-  }, [watch.data, mutate]);
+  }, [watch.data, Boolean(setup), mutate]);
 
   useEffect(() => () => {
     Object.values(videoUrls.current).forEach((url) => URL.revokeObjectURL(url));
@@ -247,13 +259,15 @@ export default function SetupPage() {
   }, [resolveFeedUrl]);
 
   const mapFeed = useCallback(async (feed: ConsoleFeed) => {
+    if (scanningRef.current) return;
+    scanningRef.current = true;
     setScanning(feed.id);
     setMapError(null);
     try {
       const frame = await captureFrame(feed);
       const form = new FormData();
       form.append("frame", frame.blob, `${feed.id}.jpg`);
-      const response = await fetch("/api/setup/scan", { method: "POST", body: form });
+      const response = await fetch("/api/setup/scan", { method: "POST", body: form, signal: AbortSignal.timeout(90000) });
       const text = await response.text();
       if (!response.ok) {
         let detail = `Local mapping failed (${response.status})`;
@@ -275,25 +289,33 @@ export default function SetupPage() {
         local: true,
       };
       setPreviews((prev) => ({ ...prev, [feed.id]: frame.preview }));
-      mutate((current) => ({
+      setMaps((prev) => {
+        const next = { ...prev };
+        if (result.map) next[feed.id] = result.map;
+        else delete next[feed.id];
+        return next;
+      });
+      mutate((current) => current.feeds.some((item) => item.id === feed.id) ? ({
         ...current,
         mapping: { ...current.mapping, [feed.id]: mapping },
         proposal: null,
         configApproved: false,
         configApprovedAt: null,
-      }));
+      }) : current);
       proposalKey.current = "";
       setRejectedMuse(false);
       setMuseError(null);
     } catch (err) {
       setMapError(err instanceof Error ? err.message : "Could not map that camera.");
     } finally {
+      scanningRef.current = false;
       setScanning(null);
     }
   }, [captureFrame, mutate]);
 
   const propose = useCallback(async (force = false): Promise<boolean> => {
     const current = setupRef.current;
+    if (proposingRef.current) return false;
     if (!current || !current.museConsent) return false;
     if (!current.feeds.length || current.feeds.some((feed) => !current.mapping[feed.id])) return false;
     const payload = {
@@ -320,10 +342,13 @@ export default function SetupPage() {
     const key = JSON.stringify(payload);
     if (!force && proposalKey.current === key) return false;
     proposalKey.current = key;
+    const contextKey = configurationKey(current);
+    proposingRef.current = true;
     setProposing(true);
     setMuseError(null);
     try {
       const data = await send<ProposalResponse>("/api/setup/propose", payload);
+      if (!setupRef.current || configurationKey(setupRef.current) !== contextKey) return false;
       const proposal: SetupProposal = {
         summary: data.summary,
         modes: data.modes,
@@ -340,6 +365,7 @@ export default function SetupPage() {
       setMuseError(err instanceof Error ? err.message : "Muse could not configure the plan right now.");
       return false;
     } finally {
+      proposingRef.current = false;
       setProposing(false);
     }
   }, [mutate]);
@@ -452,20 +478,7 @@ export default function SetupPage() {
     setShowProposal(false);
     setRejectedMuse(false);
     setStep("finish");
-    try {
-      await send("/api/watch", {
-        modes: proposal.modes,
-        door_hours: setup?.doorHours ?? "night",
-        quiet: setup?.quiet,
-        complete: true,
-      }, "PUT");
-    } catch (err) {
-      setFinishError(
-        err instanceof Error
-          ? `${err.message}. The plan is approved on this device; finish setup to retry the household sync.`
-          : "The household did not accept the plan. Finish setup to retry.",
-      );
-    }
+    // Draft approval stays local. Finish commits the plan with resident consent.
   };
 
   const rejectProposal = () => {
@@ -514,6 +527,7 @@ export default function SetupPage() {
 
   const go = (id: StepId) => {
     setStep(id);
+    window.history.replaceState(null, "", `/setup?step=${id}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -539,8 +553,10 @@ export default function SetupPage() {
   };
 
   const finish = async () => {
+    if (savingRef.current) return;
     const current = setupRef.current;
     if (!current || !primary) return;
+    if (!current.occupants[0]?.name.trim()) { setFinishError("Add the resident's name before finishing."); return; }
     if (!current.feeds.length || !current.feeds.every((feed) => current.mapping[feed.id])) {
       setFinishError("Map every camera before finishing.");
       return;
@@ -554,6 +570,7 @@ export default function SetupPage() {
       return;
     }
     setSaving(true);
+    savingRef.current = true;
     setFinishError(null);
     const now = new Date().toISOString();
     const pending: ConsoleSetup = {
@@ -566,7 +583,8 @@ export default function SetupPage() {
     setSetup(pending);
     setupRef.current = pending;
     try {
-      await send("/api/household", { profile: profilePayload(primary, primary.livesAlone) }, "PUT");
+      const person = current.occupants[0];
+      await send("/api/household", { profile: profilePayload(person, person.livesAlone) }, "PUT");
       await send(
         "/api/watch",
         {
@@ -596,6 +614,7 @@ export default function SetupPage() {
           : "The house could not be reached. Nothing was activated.",
       );
       setSaving(false);
+      savingRef.current = false;
     }
   };
 
@@ -631,7 +650,7 @@ export default function SetupPage() {
 
   const controller: SetupController = {
     setup, step, watch, classes, counts, allMapped, museApplied, primary, consentName,
-    agreed, setAgreed, saving, finishError, scanning, mapError, previews, proposing,
+    agreed, setAgreed, saving, finishError, scanning, mapError, previews, maps, proposing,
     museError, rejectedMuse, showProposal, setShowProposal, customCondition,
     setCustomCondition, continueDisabled, missingMap, mutate, go, back, next, finish,
     setFeeds, setOccupant, toggleCondition, addCustomCondition, addOccupant,
@@ -641,12 +660,13 @@ export default function SetupPage() {
 
   return (
     <div className={styles.page}>
+      <a className="skip-link" href="#setup-main">Skip to setup</a>
       <div className={styles.shell}>
         <aside className={styles.rail}>
-          <Link href={setup.completed ? "/" : "#"} className={styles.brand}
-            onClick={(event) => { if (!setup.completed) event.preventDefault(); }}>
+          <Link href={setup.completed ? "/" : "/setup?step=start"} className={styles.brand}
+            onClick={(event) => { if (!setup.completed) { event.preventDefault(); go("start"); } }}>
             <span className={styles.wordmark}>Aegis</span>
-            <span className={styles.brandNote}>household install</span>
+            <span className={styles.brandNote}>Care console</span>
           </Link>
           <div className={styles.railRule} />
           <ol className={styles.steps}>
@@ -680,7 +700,7 @@ export default function SetupPage() {
           </div>
         </aside>
 
-        <main className={styles.content}>
+        <main id="setup-main" className={styles.content}>
           <div className={styles.kicker}>
             <span className={styles.kickerLine} />
             Step {String(index + 1).padStart(2, "0")} of {String(STEPS.length).padStart(2, "0")}
@@ -714,7 +734,7 @@ export default function SetupPage() {
                   type="button"
                   className={styles.primary}
                   onClick={() => void finish()}
-                  disabled={saving || !setup.configApproved || !allMapped || consentName.trim().length < 2 || !agreed}
+                  disabled={saving || !primary?.name.trim() || !setup.configApproved || !allMapped || consentName.trim().length < 2 || !agreed}
                 >
                   {saving ? "Saving…" : setup.completed ? "Save and open console" : "Finish and open console"}
                 </button>

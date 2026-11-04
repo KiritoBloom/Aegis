@@ -5,28 +5,26 @@ export function StartStep({ c }: { c: SetupController }) {
   const { setup, go } = c;
   return (
     <section>
-      <h1 className={styles.title}>Watch the rooms you choose, and almost nothing else.</h1>
+      <h1 className={styles.title}>A little preparation.<br />More peace of mind.</h1>
       <p className={styles.lede}>
-        This install decides which cameras Aegis sees, who lives here, and the short list
-        of events that can reach a phone. Most of what a camera sees should never become
-        a notification.
+        Choose your cameras, tell us about your household, and decide when Aegis should ask for your attention.
       </p>
 
       <div className={styles.sectionCard}>
         <div className={styles.sectionHead}>
           <div>
-            <h2 className={styles.sectionTitle}>The shape of it</h2>
+            <h2 className={styles.sectionTitle}>Set up your household</h2>
             <p className={styles.sectionNote}>
               Setup is flexible: add one camera or six, describe as many people as live here,
               and write your own conditions if the list does not fit.
             </p>
           </div>
-          <span className={styles.count}>~ 5 MIN</span>
+          <span className={styles.count}>6 STEPS</span>
         </div>
         <div className={styles.startGrid}>
           {[
             ["01", "Add cameras", "A local recording, a device camera, or a lab clip. Up to six views."],
-            ["02", "Describe the household", "Names, ages, relationships, and the context that changes how quickly we call."],
+            ["02", "Describe the household", "Names, ages, and care needs help Aegis understand what deserves attention."],
             ["03", "Map every view", "One frame per camera is checked on this machine. No image leaves the house."],
             ["04", "Approve the plan", "Muse proposes a configuration from labels and answers. You approve or discard it."],
           ].map(([n, title, body]) => (
@@ -50,9 +48,7 @@ export function StartStep({ c }: { c: SetupController }) {
       <div className={styles.privacyLine}>
         <span aria-hidden="true">◇</span>
         <p>
-          <strong>Privacy is structural.</strong> The mapping scan runs locally. Muse tunes the plan
-          from structured text only. Audio is armed only after an event, and you can pause the
-          whole system from the console at any time.
+          <strong>Your home stays private.</strong> Setup images are processed locally. You can choose whether Muse reviews your answers and pause monitoring at any time.
         </p>
       </div>
     </section>

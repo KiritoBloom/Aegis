@@ -165,7 +165,8 @@ export function setupReadyToWatch(setup: ConsoleSetup | null): { ready: boolean;
       reason: `Map ${unmapped.map((f) => f.name || f.label).join(", ")} before Aegis can watch.`,
     };
   }
-  if (!setup.configApproved) return { ready: false, reason: "Approve the configuration Muse prepared before activation." };
+  if (!primaryOccupant(setup).name.trim()) return { ready: false, reason: "Add the resident's name in setup." };
+  if (!setup.configApproved) return { ready: false, reason: "Review and approve your watch plan before activation." };
   return { ready: true, reason: null };
 }
 
@@ -248,4 +249,14 @@ export function clearLocalConsoleData(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(STORAGE_KEY);
   indexedDB.deleteDatabase(MEDIA_DB);
+}
+
+/** The inputs a saved approval and an in-flight proposal actually describe. */
+export function configurationKey(setup: ConsoleSetup): string {
+  return JSON.stringify({
+    feeds: setup.feeds.map(({ replay: _replay, ...feed }) => feed),
+    occupants: setup.occupants, caregiver: setup.caregiver,
+    modes: setup.watchModes, quiet: setup.quiet, doorHours: setup.doorHours,
+    mapping: setup.mapping, museConsent: setup.museConsent,
+  });
 }

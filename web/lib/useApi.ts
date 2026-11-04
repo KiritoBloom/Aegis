@@ -17,25 +17,28 @@ export function useApi<T>(path: string, poll = 15000): Loadable<T> {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
-  const alive = useRef(true);
 
   const reload = useCallback(() => setTick((n) => n + 1), []);
 
+  useEffect(() => { setData(null); setError(null); }, [path]);
+
   useEffect(() => {
-    alive.current = true;
+    let alive = true;
+    const controller = new AbortController();
+    setLoading(true);
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const run = async () => {
       try {
-        const next = await get<T>(path);
-        if (!alive.current) return;
+        const next = await get<T>(path, controller.signal);
+        if (!alive) return;
         setData(next);
         setError(null);
       } catch (err) {
-        if (!alive.current) return;
+        if (!alive) return;
         setError(err instanceof Error ? err.message : "Could not reach the house");
       } finally {
-        if (alive.current) {
+        if (alive) {
           setLoading(false);
           if (poll > 0) timer = setTimeout(run, poll);
         }
@@ -44,7 +47,8 @@ export function useApi<T>(path: string, poll = 15000): Loadable<T> {
 
     run();
     return () => {
-      alive.current = false;
+      alive = false;
+      controller.abort();
       if (timer) clearTimeout(timer);
     };
   }, [path, poll, tick]);
@@ -71,7 +75,10 @@ const FRAMES = [
   "incident.suppressed",
   "incident.escalated",
   "incident.ack",
+  "incident.recovered",
   "checkin.started",
+  "checkin.reopened",
+  "pipeline.step",
   "checkin.answered",
   "checkin.no_answer",
   "checkin.cancelled",
@@ -87,38 +94,40 @@ const FRAMES = [
   "wall.verification",
 ] as const;
 
+// One stream per browser tab. A stream per component exhausted HTTP/1's six
+// connections and left navigation and frame uploads waiting behind idle SSEs.
+const listeners = new Set<(frame: string, payload: unknown) => void>();
+let sharedStream: EventSource | null = null;
+
+function openStream() {
+  if (sharedStream) return;
+  sharedStream = new EventSource("/api/events/stream");
+  const dispatch = (frame: string) => (event: MessageEvent) => {
+    let payload: unknown;
+    try { payload = JSON.parse(event.data); } catch { return; }
+    for (const listener of listeners) listener(frame, payload);
+  };
+  sharedStream.onmessage = dispatch("message");
+  for (const frame of ["snapshot", ...FRAMES]) {
+    sharedStream.addEventListener(frame, dispatch(frame) as EventListener);
+  }
+  // EventSource owns reconnects and backoff; do not create competing timers.
+}
+
 export function useStream(onEvent: (frame: string, payload: unknown) => void) {
   const handler = useRef(onEvent);
   handler.current = onEvent;
 
   useEffect(() => {
-    let source: EventSource | null = null;
-    let retry: ReturnType<typeof setTimeout> | null = null;
-
-    const connect = () => {
-      source = new EventSource("/api/events/stream");
-      const dispatch = (frame: string) => (ev: MessageEvent) => {
-        try {
-          handler.current(frame, JSON.parse(ev.data));
-        } catch {
-          /* a keepalive comment or a frame we do not understand */
-        }
-      };
-      source.onmessage = dispatch("message");
-      source.addEventListener("snapshot", dispatch("snapshot") as EventListener);
-      for (const frame of FRAMES) {
-        source.addEventListener(frame, dispatch(frame) as EventListener);
-      }
-      source.onerror = () => {
-        source?.close();
-        retry = setTimeout(connect, 5000);
-      };
-    };
-
-    connect();
+    const listener = (frame: string, payload: unknown) => handler.current(frame, payload);
+    listeners.add(listener);
+    openStream();
     return () => {
-      source?.close();
-      if (retry) clearTimeout(retry);
+      listeners.delete(listener);
+      if (!listeners.size) {
+        sharedStream?.close();
+        sharedStream = null;
+      }
     };
   }, []);
 }

@@ -168,9 +168,9 @@ export function Banner({
   action?: React.ReactNode;
 }) {
   const map = {
-    amber: { bg: "var(--color-amber-soft)", bd: "#e6d2ac", fg: "#7d5110" },
-    red: { bg: "var(--color-red-soft)", bd: "#eccbc6", fg: "#8a2c24" },
-    sage: { bg: "var(--color-sage-soft)", bd: "#c6d4c6", fg: "#3f5c48" },
+    amber: { bg: "var(--color-amber-soft)", bd: "var(--color-amber)", fg: "var(--color-amber)" },
+    red: { bg: "var(--color-red-soft)", bd: "var(--color-red)", fg: "var(--color-red)" },
+    sage: { bg: "var(--color-sage-soft)", bd: "var(--color-sage)", fg: "var(--color-sage)" },
   }[tone];
   return (
     <div

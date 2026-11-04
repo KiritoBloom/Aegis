@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+import pytest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
@@ -18,6 +19,12 @@ os.environ["HOUSEHOLD_PIN"] = "482913"
 os.environ["SESSION_SECRET"] = "test-secret-not-the-real-one"
 
 from app import auth  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def configured_pin(monkeypatch):
+    # Other test modules may import the application during collection first.
+    monkeypatch.setattr(auth, "PIN", "482913")
 
 
 def test_a_session_is_only_valid_with_the_right_signature():

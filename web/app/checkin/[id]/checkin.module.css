@@ -161,6 +161,65 @@
   margin-top: 28px;
 }
 
+/* Speaking is the escape hatch, not the main control: two large buttons stay
+   the path that works for someone who cannot reach a microphone. */
+.voiceRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: 760px;
+  margin-top: 14px;
+}
+
+.voiceButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid #b9c6bd;
+  border-radius: 999px;
+  background: #fdfbf7;
+  color: #2c3a32;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.voiceButton:hover:not(:disabled) { border-color: #7d8f84; }
+
+.voiceButton:disabled { opacity: 0.55; cursor: default; }
+
+.voiceDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #b4552f;
+  animation: voicePulse 1.4s ease-in-out infinite;
+}
+
+@keyframes voicePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.voiceCancel {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 11.5px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voiceDot { animation: none; }
+}
+
 .okButton,
 .helpButton {
   display: flex;

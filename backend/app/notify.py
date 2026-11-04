@@ -271,7 +271,7 @@ def readiness() -> dict:
                 "recipients": len(SMS_TO)},
         "inapp": {"configured": True},
         "console": {"configured": True},
-        "remote_ready": bool(devices or WEBHOOK_URLS
+        "remote_ready": bool((devices and VAPID_PUBLIC and VAPID_PRIVATE) or WEBHOOK_URLS
                              or (TWILIO_SID and TWILIO_TOKEN and TWILIO_FROM and SMS_TO)),
     }
 
@@ -326,5 +326,6 @@ async def dispatch(alert: dict, phase: int, broadcast=None) -> list[dict]:
         await broadcast({"type": "incident.notified", "id": alert["incident_id"],
                          "phase": phase, "severity": alert.get("severity"),
                          "channels": [r["channel"] for r in results if r["ok"]],
-                         "failed": [r["channel"] for r in results if not r["ok"]]})
+                          "failed": [r["channel"] for r in results if r["status"] == "failed"],
+                          "skipped": [r["channel"] for r in results if r["status"] == "skipped"]})
     return results

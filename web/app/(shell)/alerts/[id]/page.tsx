@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
+import { Investigation } from "@/components/investigation";
+import type { PipelineStep } from "@/lib/console-types";
 import {
   Banner,
   Fact,
@@ -29,12 +31,16 @@ export default function AlertDetail() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
   const { data: inc, error, loading, reload } = useApi<Incident>(`/api/incidents/${id}`, 8000);
+  const trail = useApi<{ items: PipelineStep[] }>(`/api/diagnostics?incident_id=${encodeURIComponent(id)}&limit=200`, 15000);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [actionError, setActionError] = useState(false);
+  const actionBusy = useRef(false);
   const [view, setView] = useState<"clean" | "boxes" | "mask">("boxes");
   const [showRaw, setShowRaw] = useState(false);
 
   useStream((frame) => {
+    if (frame === "pipeline.step" || frame === "snapshot") trail.reload();
     if (frame === "snapshot" || frame.startsWith("incident.") || frame.startsWith("checkin.") ||
         frame === "context.read") {
       reload();
@@ -43,7 +49,10 @@ export default function AlertDetail() {
 
   const act = useCallback(
     async (action: string) => {
+      if (actionBusy.current) return;
+      actionBusy.current = true;
       setBusy(action);
+      setActionError(false);
       setNote(null);
       try {
         const res = await fetch(`/api/incidents/${id}/ack`, {
@@ -55,8 +64,10 @@ export default function AlertDetail() {
         setNote(actionCopy(action));
         reload();
       } catch (err) {
+        setActionError(true);
         setNote(err instanceof Error ? err.message : "Could not record that");
       } finally {
+        actionBusy.current = false;
         setBusy(null);
       }
     },
@@ -69,12 +80,12 @@ export default function AlertDetail() {
         <Link href="/events" className="mono micro" style={{ textDecoration: "underline" }}>
           ← Events
         </Link>
-        <h1 className="h1" style={{ margin: "14px 0 0" }}>This alert is not here.</h1>
+        <h1 className="h1" style={{ margin: "14px 0 0" }}>This alert could not be loaded.</h1>
         <p className="lede" style={{ marginTop: 10 }}>
-          It may have been deleted under the retention policy, or the link is wrong.
-          Nothing about this alert is stored anywhere else.
+           Check the connection and try again. The alert may also have expired or the link may be incorrect.
         </p>
         <p className="mono micro" style={{ marginTop: 12 }}>{error}</p>
+        <button className="btn" onClick={reload}>Try again</button>
       </div>
     );
   }
@@ -93,16 +104,17 @@ export default function AlertDetail() {
   if (!inc) return null;
 
   const decision = inc.decision;
-  const severity = (decision?.severity || inc.severity || "info") as string;
+  const severity = (inc.severity || decision?.severity || "info") as string;
   const title = decision?.title || inc.title || typeLabel(inc.type);
   const body = decision?.body || inc.body || "";
   const at = inc.local_time || inc.created_at || "";
-  const rawAllowed = !(inc.people_redacted && inc.people_redacted > 0);
+  const rawAllowed = Boolean(inc.clip_url) && !(inc.people_redacted && inc.people_redacted > 0);
   const maskedClip = inc.redacted_url || inc.annotated_url || inc.clip_url;
   const clip = view === "mask" ? maskedClip : view === "clean" && rawAllowed
     ? inc.clip_url : inc.annotated_url || maskedClip;
   const acked = (inc.acks ?? []).length > 0;
   const sim = inc.source === "sim";
+  const closed = acked || ["resolved", "cancelled", "acknowledged"].includes(inc.status);
 
   return (
     <div style={{ maxWidth: 860, paddingBottom: 90 }}>
@@ -136,9 +148,16 @@ export default function AlertDetail() {
 
       {note ? (
         <div style={{ marginBottom: 14 }}>
-          <Banner tone="sage">{note}</Banner>
+           <Banner tone={actionError ? "red" : "sage"}>{note}</Banner>
         </div>
       ) : null}
+
+      <div className="alert-actions">
+        <button className="btn btn-primary" onClick={() => act("im_checking")} disabled={busy !== null || closed}>{busy === "im_checking" ? "Recording…" : "I’m checking"}</button>
+        <button className="btn" onClick={() => act("call_resident")} disabled={busy !== null || closed}>I’m calling the resident</button>
+        <button className="btn btn-quiet" onClick={() => act("false_alarm")} disabled={busy !== null || closed}>Mark false alarm</button>
+      </div>
+      <p className="small" style={{ color: "var(--color-ink-3)", margin: "0 0 20px" }}>{closed ? "This alert is closed or acknowledged. No further response is needed here." : "These buttons record your response; they do not place a phone call. In an emergency, call local emergency services."}</p>
 
       {/* The check-in is the thing happening right now. A night-presence alert
           never speaks in the room: a voice from the device could make that
@@ -173,7 +192,7 @@ export default function AlertDetail() {
                 key={clip}
                 src={clip}
                 controls
-                autoPlay
+               autoPlay={false}
                 muted
                 playsInline
                 loop
@@ -198,7 +217,7 @@ export default function AlertDetail() {
                   fontSize: 12.5,
                   padding: "0 11px",
                   background: view === key ? "var(--color-ink)" : "transparent",
-                  color: view === key ? "#fbf9f5" : "var(--color-ink-2)",
+                  color: view === key ? "var(--color-paper)" : "var(--color-ink-2)",
                   borderColor: view === key ? "var(--color-ink)" : "var(--color-line)",
                 }}
                 onClick={() => setView(key)}
@@ -207,7 +226,7 @@ export default function AlertDetail() {
               </button>
             ))}
           </div>
-          {!rawAllowed ? (
+          {Boolean(inc.people_redacted) ? (
             <p className="micro" style={{ marginTop: 8 }}>
               Raw footage is withheld because another person appears in it. The masked
               view is the family-safe clip.
@@ -233,7 +252,7 @@ export default function AlertDetail() {
 
       <WhatChecked inc={inc} />
 
-      <ModelJobs inc={inc} />
+      {trail.data?.items.length ? <div style={{ margin: "24px 0" }}><Investigation steps={trail.data.items} /></div> : <ModelJobs inc={inc} />}
 
       {/* why */}
       <section className="card" style={{ padding: 20, marginTop: 18 }}>
@@ -341,38 +360,8 @@ export default function AlertDetail() {
         </Link>
       </section>
 
-      {/* actions — sticky on a phone */}
-      <div
-        style={{
-          position: "sticky",
-          bottom: 0,
-          marginTop: 22,
-          padding: "12px 0 calc(12px + env(safe-area-inset-bottom))",
-          background: "linear-gradient(to top, var(--color-paper) 70%, transparent)",
-          display: "grid",
-          gridTemplateColumns: "1.2fr 1fr 1fr",
-          gap: 8,
-        }}
-        className="max-sm:grid-cols-1"
-      >
-        <button
-          className="btn btn-primary"
-          style={{ minHeight: 48 }}
-          onClick={() => act("im_checking")}
-          disabled={busy !== null}
-        >
-          <Icon name="check" size={17} />
-          {busy === "im_checking" ? "Recording…" : "I'm checking"}
-        </button>
-        <button className="btn" style={{ minHeight: 48 }} onClick={() => act("call_resident")} disabled={busy !== null}>
-          Call her
-        </button>
-        <button className="btn btn-quiet" style={{ minHeight: 48 }} onClick={() => act("false_alarm")} disabled={busy !== null}>
-          False alarm
-        </button>
-      </div>
       <p className="micro" style={{ margin: "4px 0 0" }}>
-        Aegis does not call an ambulance. If she is hurt, ring one.
+        Aegis does not dispatch emergency services. If someone is hurt, call for help directly.
       </p>
     </div>
   );
@@ -445,7 +434,8 @@ function Timeline({ inc }: { inc: Incident }) {
 }
 
 function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void }) {
-  const [rec, setRec] = useState<Recorder | null>(null);
+  const recorderRef = useRef<Recorder | null>(null);
+  const mounted = useRef(true);
   const [seconds, setSeconds] = useState(0);
   const [state, setState] = useState<"idle" | "recording" | "sending" | "done">("idle");
   const [result, setResult] = useState<CheckinResult | null>(null);
@@ -456,14 +446,13 @@ function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void 
 
   // The check-in is only meaningful after an alert has gone out, or while the
   // spoken check-in is pending / has produced a record of its own.
-  const alerted = (incident.notifications ?? []).some((n) => n.status !== "failed");
   const status = incident.checkin_status ?? null;
   const pending = status === "asking";
   const timedOut = status === "no_answer";
   const answered = status === "answered";
   const cancelled = status === "cancelled";
   const latest = incident.checkin ?? null;
-  const visible = alerted || Boolean(status);
+  const visible = Boolean(status);
 
   useEffect(() => {
     if (!pending) return;
@@ -471,9 +460,22 @@ function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void 
     return () => window.clearInterval(t);
   }, [pending]);
 
-  useEffect(() => () => {
-    if (timer.current) window.clearInterval(timer.current);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      if (timer.current) window.clearTimeout(timer.current);
+      recorderRef.current?.cancel();
+      mounted.current = false;
+    };
   }, []);
+  useEffect(() => {
+    if (!["resolved", "cancelled", "acknowledged"].includes(incident.status)) return;
+    recorderRef.current?.cancel();
+    recorderRef.current = null;
+    if (timer.current) window.clearTimeout(timer.current);
+    audioRef.current?.pause();
+    setState("idle");
+  }, [incident.status]);
 
   if (!visible) {
     return null;
@@ -500,29 +502,24 @@ function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void 
     try {
       audioRef.current?.pause();
       const r = await startRecording(setSeconds);
-      setRec(r);
+      if (!mounted.current) { r.cancel(); return; }
+      recorderRef.current = r;
       setState("recording");
-      timer.current = window.setInterval(() => {
-        setSeconds((s) => {
-          if (s >= 30) {
-            void finish();
-            return s;
-          }
-          return s;
-        });
-      }, 1000);
+      timer.current = window.setTimeout(() => void finish(), 30000);
     } catch {
       setError("The microphone is not available. Check the browser's permission for this site.");
     }
   };
 
   const finish = async () => {
-    if (!rec) return;
-    if (timer.current) window.clearInterval(timer.current);
+    const recording = recorderRef.current;
+    if (!recording) return;
+    recorderRef.current = null;
+    if (timer.current) window.clearTimeout(timer.current);
     setState("sending");
     try {
-      const wav = await rec.stop();
-      setRec(null);
+      const wav = await recording.stop();
+      if (!mounted.current) return;
       const res = await fetch(`/api/incidents/${incident.id}/checkin`, {
         method: "POST",
         headers: { "content-type": "audio/wav" },
@@ -544,7 +541,6 @@ function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void 
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send the answer");
       setState("idle");
-      setRec(null);
     }
   };
 
@@ -553,7 +549,7 @@ function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void 
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start", flexWrap: "wrap" }}>
         <div>
           <p className="eyebrow" style={{ margin: 0 }}>
-            {pending ? "Aegis is asking her now" : "Check-in"}
+            {pending ? "Resident check-in in progress" : "Check-in"}
           </p>
           <p className="h3" style={{ margin: "6px 0 0" }}>
             {pending
@@ -561,7 +557,7 @@ function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void 
               : timedOut
                 ? "No answer"
                 : answered
-                  ? "She answered"
+                  ? "Resident answered"
                   : cancelled
                     ? "Check-in paused"
                     : "Can she answer?"}
@@ -594,7 +590,7 @@ function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void 
               ref={audioRef}
               src={incident.checkin_audio_url}
               controls
-              autoPlay
+               autoPlay={false}
               style={{ width: "100%", marginTop: 10, height: 38 }}
             />
           ) : (
@@ -619,8 +615,7 @@ function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void 
       {timedOut ? (
         <div style={{ marginTop: 14 }}>
           <Banner tone="red">
-            No answer within {Math.round(incident.checkin_timeout_s ?? 15)} seconds. The alert was
-            escalated one step automatically. If this was a mistake, call her.
+              No answer within {Math.round(incident.checkin_timeout_s ?? 15)} seconds. Review the current alert and contact the resident if needed.
           </Banner>
           {latest ? <CheckinRecordBlock record={latest} /> : null}
         </div>
@@ -637,7 +632,7 @@ function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void 
         </div>
       ) : null}
 
-      {!answered && !cancelled ? (
+      {!answered && !cancelled && !["resolved", "cancelled", "acknowledged"].includes(incident.status) ? (
         <>
           <p className="small" style={{ margin: "10px 0 0", maxWidth: 640 }}>
             {pending
@@ -660,9 +655,9 @@ function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void 
                 className="btn btn-quiet"
                 style={{ minHeight: 40 }}
                 onClick={() => {
-                  rec?.cancel();
-                  if (timer.current) window.clearInterval(timer.current);
-                  setRec(null);
+                    recorderRef.current?.cancel();
+                    recorderRef.current = null;
+                    if (timer.current) window.clearTimeout(timer.current);
                   setState("idle");
                 }}
               >
@@ -677,9 +672,9 @@ function Checkin({ incident, onDone }: { incident: Incident; onDone: () => void 
               disabled={state === "sending" || !canRecord()}
             >
               <Icon name="live" size={17} />
-              {state === "sending"
-                ? "Muse is reading her answer…"
-                : "Record her answer"}
+                {state === "sending"
+                  ? "Reading the answer…"
+                  : "Record the resident’s answer"}
             </button>
           )}
 
@@ -897,8 +892,7 @@ function ModelJobs({ inc }: { inc: Incident }) {
         ))}
       </div>
       <p className="micro" style={{ margin: "6px 0 0" }}>
-        Raw pixels never reach the language model. SAM reads the clip; Muse reads the structured
-        evidence; the check-in question is spoken by the house itself so it works offline.
+         SAM reads the short event clip. Muse reads structured evidence and may inspect a privacy-protected still. The spoken prompt is generated locally.
       </p>
     </section>
   );
@@ -947,9 +941,9 @@ function actionCopy(action: string): string {
     case "im_checking":
       return "Recorded. Aegis will stop escalating this alert.";
     case "call_resident":
-      return "Recorded that you are calling her.";
+      return "Recorded that you are calling the resident. This button did not place a call.";
     case "false_alarm":
-      return "Marked as a false alarm. The same thing will not wake you again for 30 minutes.";
+      return "Marked as a false alarm. This alert is closed and its escalation is stopped.";
     default:
       return "Recorded.";
   }
@@ -971,9 +965,9 @@ function clipBytes(inc: Incident): number {
   // The backend does not ship a byte count per clip in the incident payload; the
   // ledger has it. Showing an estimate here would be a small lie in a page that
   // is otherwise entirely about honesty, so it is only shown when known.
-  const ledger = (inc as unknown as { ledger?: { bytes?: number }[] }).ledger;
+   const ledger = (inc as unknown as { ledger?: { bytes?: number; contains_video?: number }[] }).ledger;
   if (Array.isArray(ledger)) {
-    return ledger.filter((r) => r.bytes).reduce((sum, r) => sum + (r.bytes ?? 0), 0);
+    return ledger.filter((r) => r.contains_video && r.bytes).reduce((sum, r) => sum + (r.bytes ?? 0), 0);
   }
   return 0;
 }
