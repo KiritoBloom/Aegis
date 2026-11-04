@@ -43,7 +43,7 @@ def load_env(path: Path) -> None:
 
 def main() -> int:
     load_env(ROOT / ".env")
-    for p in (ROOT / ".vendor", ROOT / "backend"):
+    for p in (ROOT / "backend",):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
     os.environ.setdefault("TMPDIR", str(ROOT / ".tmp"))

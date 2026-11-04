@@ -1,0 +1,1289 @@
+{
+  "generated_at": "2026-11-04T19:00:51.263709+00:00",
+  "provenance": {
+    "generated_at": "2026-11-04T19:00:51.464198+00:00",
+    "base_commit": "96b1ee1b821e669c980da7bde379ff05f1092521",
+    "source_tree_dirty": true,
+    "source_sha256": "6f1101ed5d2382e0e77dec5e836d91164ae337a37f4a04d653020b6e05bb9c96",
+    "source_files": {
+      "backend/app/__init__.py": "69eaa0d4b2c8116d5f789a1929673080debd2382c5e2f364507d313be0d32679",
+      "backend/app/agent.py": "0fc434f4d87b380b4d9914ab08fc55eb332ba8ae55fb64717c64561947145097",
+      "backend/app/api.py": "e9516235e91a00a21a7538a0f7fc94628d784459f2f0aa74f87ecf9275f7b24f",
+      "backend/app/audio.py": "540f627b66b96f80b87eba56eb69360396431de9eb28d07a19868f3b0db8b25c",
+      "backend/app/auth.py": "2f151d0f59f6216b0cbe2edf8ff31ae0d20672c71144defb05dda91a7531e3f7",
+      "backend/app/clip.py": "8064692300db24f2a85aa29a328dd2e9a2e8c999cd1f58b5b58e100783849146",
+      "backend/app/db.py": "20c6543606a4ea4f6460b77044c2df2b0102e427d509a1be1e48ebc0119f822b",
+      "backend/app/demo.py": "27f250fad658a89cf7ab4e29a9808d1d8be13a34ff60fd77eec6249f57060fc9",
+      "backend/app/meta.py": "7956f00bee7faa1a2a1ba83f812d0efa605b0de892f3073d535462de8943c69b",
+      "backend/app/notify.py": "abfeda750b81a859f0269072b543bc461d2ef6bd6ba2ac65c862ccc89ad158ac",
+      "backend/app/policy.py": "29e016d2cff0275ccbf5b995b72c948ddae3cb982c84ce720b767a72ac36bc80",
+      "backend/app/privacy.py": "d8f4f0eda96d0b026f69c0d5f423c8c951b4a853df5e513f03f0fc19b53e2c42",
+      "backend/app/prompt.py": "050a664b1a68ff54c3a5c6b12f4088c851ca9e438e7f30c18d7086e8475371a0",
+      "backend/app/push_routes.py": "67159cf403d8ee430ea667a56a110d8ddd01f43fadb9eb8bc86564d192c6121c",
+      "backend/app/render.py": "6f55e14642101df14fb779c10c0836a6360d4f8ab3f2ab1961ccd0a4e102ef9a",
+      "backend/app/scene.py": "56e10edb12357ba189dd7e412674032827cd6e1cc10f98590863a9cc2b6c4b77",
+      "backend/app/session_routes.py": "6475e8b18dee05e491f360284e4b4198c57605dc6f1b523a2d01864eabc16c30",
+      "backend/app/setup.py": "3350819ed29c3fcc92a9bf5a5339a84840837bbfdb4874ed33d674a7a8a975b2",
+      "backend/app/tts.py": "5d2d1aa6e0141498e3f3a2f4d4030de84b34202a07a464ba33ce886c14dcdc6a",
+      "backend/app/wall.py": "9538edf68d35160f259682f2414b974238959061c25acc0ff63889a905f4276e",
+      "backend/app/watch.py": "759ec5d8e889e61f104a232dc84fa6b0b20fb616bfead00c434c30a62d571e66",
+      "edge/aegis_edge/__init__.py": "27d68b4cc264ec03587c702b8b88186aa082ac820bd6b2e97bf2faad3b7774b9",
+      "edge/aegis_edge/__main__.py": "c0da97f5cb67dbab916d59d98c5a4dbe4915bdf40c8a24550dbbcb59fc201f40",
+      "edge/aegis_edge/audio_monitor.py": "87b097a708f3a12a5494c8da74471876d287edf92487486a4c77e25c8a32ba0c",
+      "edge/aegis_edge/capture.py": "8ebdfabd67a01470fcab99033176f22625a079031d7c3cf498a53b67df714428",
+      "edge/aegis_edge/clip.py": "59180c9303f78b43aeba62ff7766e705edbc4c448da7100edc0788454e001c32",
+      "edge/aegis_edge/config.py": "737fbea38c19ad1b0c257c787083d99babaf8917e61a7c03228ed5ee13c0f9b7",
+      "edge/aegis_edge/geometry.py": "25456a7427397d6d0753fa285eb2a71cd131f5d37dbf904de9d15e133b2a8b66",
+      "edge/aegis_edge/privacy.py": "5e6cd1c7514608f0f13f7c07fb9957d61a16778400fa56211a0369aa836ea65a",
+      "edge/aegis_edge/runner.py": "0e5089e42a24ea3e4fa2de35424a67a3c408929b03ffda79b779bbf0a1fb177f",
+      "edge/aegis_edge/state.py": "419b261d10090bbe8081f0c5d753fe1d04929db62953d1e44ede31b01a0d65f5",
+      "edge/aegis_edge/uploader.py": "75d91485276d8806c61fa36b1fedcaeed064f530be8f98d05e4430081b7bee57",
+      "edge/aegis_edge/vision.py": "f48f4e8fd4f6168516cfcb065aa093f117e041831933601b61147aaa8c519d6c",
+      "scripts/bench_wall.py": "4619005faff3d894416c89be9511def9bb448a532cdb4ac39267a184f6cc8ad1",
+      "scripts/build_fixtures.py": "c3cd58d51944def44c576cf13650414970316bbfddfbcf59fbd95b0369f638e6",
+      "scripts/build_footage.py": "ff87082d7f80dd35232b3c5d2f3eb2778a3bf08bc6b9966fba30c9d772c1a6bc",
+      "scripts/eval_wall_tracking.py": "c57229cb21054f686f7a6c555735ff9ab0ebba886e1cebd5e60bd2411cfbb803",
+      "scripts/evidence_stamp.py": "76127f1f08928d1cf16206a7b365473c99f5dfdc9159d715a41e8b6ad2fed92b",
+      "scripts/fetch_weights.py": "a428bc86a0ac65ed1b5ff9c5c42d8c39519f7f8bec48843da18d292b15912eb6",
+      "scripts/inspect_pose_frames.py": "98b4a505129192680dfc7b0da52443df4e7396a6b01d86f3616652cb8a3d2e7f",
+      "scripts/make_icons.py": "fe3c7f72f7ff4d95f1ec781fd432c1baf6f15c7d7d0fae13f75b4d536c78576e",
+      "scripts/privacy_tests.py": "51adf408f7378a3b7c6be69ad881682d1f010e55401565943f2fbf901ea417fe",
+      "scripts/probe_agent_live.py": "fa4a1b1543aec8b26f332c3043bc99b20d59644cce3167b554d4ea391d683caf",
+      "scripts/probe_api.py": "181b7eb6b095327a060ed08b8430215b3eaa5c5367ea9dba09299ff95b97d711",
+      "scripts/probe_checkin_read.py": "e6cc0dcf897bff0d4fe21e9790458f75cbb475449529bf0fb4208a1267bb0e22",
+      "scripts/probe_door_rule.py": "41942d0a8191034cf2728bf6a5133bf7418d24cdd5c1349a77026c49a5bbfbfb",
+      "scripts/probe_redaction.py": "7f58c66c779e7e0c9d7c19b2f478cd5ee5e33eebbb2b8297c0e8d099ec61ab5a",
+      "scripts/probe_sam.py": "2aaf611425aaf0fcd1bc35d541faa0c3fb147aa7d2ed7aa2ec9587f8caa107ef",
+      "scripts/probe_wall_gate.py": "e8e2426d4d8874ef8133534f7632c2e55a55b5f8bde9220b6d119a46c2d12e88",
+      "scripts/probe_zones.py": "338f7a93a7bdf043503bc5c09b80ab5f92b4007e73f3c79bef26668f5e922d2c",
+      "scripts/replay.py": "61aea13a44976760b41d6f9b278081f721fb21de1bac4c1dca74991ae5b7e8c2",
+      "scripts/run_checkin_evals.py": "2d158cb9fbb9f0a1e40fd9aacde2523dfc26925cf021105d6f9edb037c3da8e7",
+      "scripts/run_evals.py": "3e79629678d4853e80acf6b827b37234a966536a246f4c0713d5b1d85adea58c",
+      "scripts/run_fall_pilot.py": "8d370b2955ede5ffe37b625dca409bf5e4c056e1beab3013449bf61d4b4d859c",
+      "scripts/run_gate_pilot.py": "09f78b7c1edd96675ef62ff7a94c02fa39c579fff42b26b7726c48ba254c0521",
+      "scripts/run_perception.py": "5d5322b1b2896a30cac5ff30578fcd101a2a3b2faaba50e8919c9a4bd3f0530a",
+      "scripts/seed_demo.py": "4b9c91c5af0e71e34c6b0908dc756ccaa691606ca05f1637004f9fc51bf59872",
+      "scripts/serve.py": "a7e3dd09b2e5094f1deb1ebd56f9ed7f93e9d1605d70c0d8d7182323b34c5a7a",
+      "scripts/verify_submission.py": "9cb239ad6c055321e75bc6a054c1f72c7a46eda45ae5bfc1997cba54599fcca1",
+      "scripts/worker.py": "34da06c9ff57feaa8c15d22384439086c720cdffc453e365958a2d749e193f0d",
+      "tests/conftest.py": "a00bd8dd20ab96f8d4c2458b1952d922f163f00ed969611602f9c1bf46178307",
+      "tests/test_activity_consistency.py": "81aea481aec29af5e00c654c6acffc5116bf13a8740c89efd84dd1bff2b468ae",
+      "tests/test_agent.py": "0a57d091161565cc50edaf72f31d55282dbb5f6a5d4476a421ff67e04939e0fc",
+      "tests/test_audio.py": "744af7eeed5213aba8168a608ea2448eecd983cbe9e9092b8405ffd26395b9c6",
+      "tests/test_auth.py": "8c112011aaa049b03c6e8836daeb03e764ccf9bbad1ed2de45db5049b7024eb8",
+      "tests/test_camera_watchdog.py": "df8081bcf6738fc5c74fb4108535fef4b92fa1952bf4a0fdc8757756fefed300",
+      "tests/test_checkin_state.py": "5c1b70a6eeff7a56c5fd343720a73d674cedfa2841966bd1d0b0d91c3170d43b",
+      "tests/test_checkin_text.py": "905bf796538e3f5a944dcc799ecb02e8ed67ba36a1905f6e870aef028a7927b6",
+      "tests/test_edge_recovery.py": "5e8efa3c69712a6b40e4a914285ef6b2fab43e69aab4e9879f796e352e49d228",
+      "tests/test_escalation.py": "6a104ea63ffcf00862e66aa35f10b613e06cd074f7ea11ef5ba5661cfeeaabbf",
+      "tests/test_fixtures_current.py": "c0fe8e9b5c17c47a9d339fc547a30c274ede85f3ca8ab2cab0d2cf934acf933b",
+      "tests/test_inspection.py": "d7b6bc024ae0e34e8b148f0415550cec94948db630f2fae0d34fa2691584ccac",
+      "tests/test_lease.py": "7babc8d4150e588d468fb8aebec9077b24230976a96513b07943d33365777046",
+      "tests/test_night.py": "e5949bd283845430e7009287c49ff969077ec4e4090ed592cac3227a91cb9a41",
+      "tests/test_notify.py": "49ee45051a1219f538a729432880028bfcf3aa0af848a34d48024df5571cd856",
+      "tests/test_perf_guard.py": "0bda99c05d3b1ea5e69147a26ce57c24b022546bf84a47bf39b9b5a95cfdc692",
+      "tests/test_policy.py": "33a65350d3fafd2e14cfa0a85ea4159ab36b33e90a9e4d5889d0fad450861b32",
+      "tests/test_pose_alignment.py": "8860027459e29c6d295b389f83a63102139424d0c773efbb6608d7e3e8f7a0ab",
+      "tests/test_push_unsubscribe.py": "636aeae57e9a558e09af100da900f7e698792d7488fe969b9f8e8567c4d12d8b",
+      "tests/test_render.py": "00d6b457874d930d20365eb8d0d97bdc1d199a26264509f184abd50f0923361f",
+      "tests/test_resident_gate.py": "1b7ea367046376ba1f04b10b6c9796b6f5c749fc362b8a7af7de86794e98fa5a",
+      "tests/test_resident_link.py": "10addd9136d0fcab59783f827383e286ab5ae608bd0ed665ed86bc2ae1dd4b8f",
+      "tests/test_restlessness.py": "c7bd10dee9b0f9c3bf85bc2942b49d11dd09db3862b5a3b930f171ecfcfa6037",
+      "tests/test_sam_masks.py": "635d9f78d9418e7dd1a6ea51d559396b3806b073f9b0b6accf5ae521d8b37577",
+      "tests/test_scene.py": "1c67e7499e358ccd350110a9a861f2b1e564dca4239fdb5169f6f657dee28c4e",
+      "tests/test_security_gates.py": "578ff77dd061fc0b783ff392a7fcf5874c213c4b1177e8296a78c8e709d62f9c",
+      "tests/test_security_headers.py": "5a565959d890d64acaab5856087fdab7a0084b17b5a6b43249ca10bbe23b26e0",
+      "tests/test_session_gate.py": "ba71ca88bd86293fe5ee41a7756548da042f3e762d0089cfc069b7e7822ba87f",
+      "tests/test_severity.py": "06371237d492691c5fc52544d06b76d771315ae7ba9a969adc0097b80878d48a",
+      "tests/test_tracking_pipeline.py": "acc62ede8f99e71571b13b0acd067dc36b23c3b359a81ce02a8230a34f3fceae",
+      "tests/test_upload_signatures.py": "2222fef471177c98d993957079e6f7b3641b9bc69468f5e5a355dccbf99c7e9d",
+      "tests/test_verification_lifecycle.py": "2cae8ad793c4e740d1e8cd1ee650005a474f8b9341c69a69dd5bcdbfaf1e0df3",
+      "tests/test_wall.py": "fb92a67d9f0b55e175588284ad852be311f8c77609d9c7d3be33dcb0f9822b2f",
+      "tests/test_wall_route.py": "1b4a6ddab5fbc1eee12ad9c8527d7cfe7995759a60e535a790f3ff9a68c69fa1",
+      "tests/test_watch.py": "51999df3cd6b3319d47b79eff05be6c535170bcb8723aee057c69f07d414d8c3",
+      "tests/test_zones.py": "69a599938157954146fbcc306431fbe63092a3c41972d78cd998e2b137c99a82",
+      "requirements.txt": "8ecfdd4a9887cb603fd8a6ebd71611e49f02de519d2bbc3276e197aed2b1055c",
+      "pytest.ini": "3e2e1ef3678452eeb6f1bb74db0b218796ef65164526ee83cfe40e775f688b29",
+      "evals/fixtures/01_night_door_dementia.json": "500d37828b249cd0332f38a079db5dce261331488d1038b66b3ab35f9102faa6",
+      "evals/fixtures/02_night_door_no_flag.json": "3deff2c898807b715c4365b0151adc67c7182b4ab656bf5f0ec31f030969f340",
+      "evals/fixtures/03_daytime_door_no_flag.json": "67071525f1d28f0d9035e7e35e9148954d9f02a380306f6ef351005bd81b8398",
+      "evals/fixtures/04_fall_no_recovery.json": "fdd9d8ca3e530230c075d6aaa9858fb161b132046e30388634a5e946204d1d72",
+      "evals/fixtures/05_fall_recovered.json": "7a3149fa2b153caccc8d2a9edab5166fa84457baff6b24be76c64ff18a0d7ded",
+      "evals/fixtures/06_fall_second_person.json": "312f0634b1c61bd36af960efea24276f7cd083051ebd5c572da82e7cbb7b3def",
+      "evals/fixtures/07_prayer_zone_sujud.json": "32c05398013d45dc67ee95f8dc2e7d3fb9148adf436766843c6fbd57410e8b5d",
+      "evals/fixtures/08_stove_6min.json": "f48ad5fa9426af0e23693835e5b09af24bd42cb061552acb8d73e3cf568b28c2",
+      "evals/fixtures/09_stove_12min_smoke.json": "dc7ae42be094082ed9ee7be2407dc733608594236075f74125406e1c832b4274",
+      "evals/fixtures/10_camera_offline.json": "0d29f5592ca2ad98f7a3ff942339013e21a4f5fd44b4bea603fc67f8be875bd1",
+      "evals/fixtures/11_two_at_door_caregiver.json": "747e2d354bc88bde05badfebb091f2f05b88d1694fedec686c888dc0c5a0ef1c",
+      "evals/fixtures/12_track_unavailable_door.json": "d34f07a3a31fc8182ca961fad5777292198ac25615cefc42489bfcf09e6d0848",
+      "evals/fixtures/13_conflicting_signals.json": "94b175ee2530163b546435bcaa0594a5bdb08eb62d91a18cbd18859e80a5b4dc",
+      "evals/fixtures/14_prompt_injection.json": "13b61058ac8db6453ac764978e9c4ede0032ba694391de2244517fc927c6041e",
+      "evals/fixtures/15_missing_profile.json": "bc3e711471ba97d4e8511e21d8168e32796b1e7e18206ed5edabd50820b417fd",
+      "evals/fixtures/16_device_offline.json": "196945499fefc3036ed902b0a6a467e71a75a7835f955d43a82f6d7ac5d63768",
+      "evals/fixtures/17_false_alarm_history.json": "2ecd9f9c18fa965364cc362fec9c41770e7a38a309303490e21a39e6862970a5",
+      "evals/fixtures/18_quiet_hours_watch.json": "65d021f33aeef874f7534d34ca105a2ac88b14eef63e8a1e0a32c3cfe362895e",
+      "evals/fixtures/19_body_near_limit.json": "eff91569e02715e69698d7ef3d21a19a6b65a2e9ea34ee072464c3142fc191f4",
+      "evals/fixtures/20_non_english_name.json": "7cc5cda246e9fb1a2cf841349dd4ebccde921eaa91e32e50ff0b31169b8a95d4",
+      "evals/fixtures/21_mobility_aid_night_door.json": "0aa23fe1506b7b1f261dbf47c2b565227442ac3a2c512b06eb58c19b8896ad80",
+      "evals/fixtures/22_anticoagulant_fall.json": "1dc9b7940e9648711994877bef39dfa8f36e09d373b15ff30e0787c0c518b6f9",
+      "evals/fixtures/23_door_left_open.json": "8262c17c19432f81e554c28b748c80db6f105f83071e39d1f2072b9d0b9493cd",
+      "evals/fixtures/24_pet_motion.json": "b3452e41b10e83300bed985c3ee53d40de3ae15452fed7426b678e6cc2f9b425",
+      "evals/fixtures/25_still_30min.json": "9f32f519da94d489c56f8ab31bcb9d7d9f4730513dade3259b373ec4dd6213cb",
+      "evals/fixtures/26_two_cameras_disagree.json": "bee059e06a746be3883f9b7e13afdd0d56b5539046027c5358499b9030382218",
+      "evals/fixtures/27_sam_zero_matches.json": "7800a9c94c50abd35d8328f29c58822f837dea0ed6a273224e9a2d3209644016",
+      "evals/fixtures/28_api_timeout_degraded.json": "f0d540ac3c432e0069c24734a360c0d3523e774cc0a6b1b41ea9a11d4caec41a",
+      "evals/fixtures/29_door_approach_gentle.json": "b05070351b7552305fb77d0156e02e84253c3f5f10a90e3476207afa11dd3b7b",
+      "evals/fixtures/30_caregiver_present_fall.json": "f06663e978e8bdf83dd06380528c8730c458189c6eefaa1b5fb0a9ef461f0765"
+    },
+    "python": "3.13.3",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "virtual_environment": true,
+    "packages": {
+      "Jinja2": "3.1.6",
+      "MarkupSafe": "3.0.4",
+      "PyYAML": "6.0.3",
+      "aiohappyeyeballs": "2.7.1",
+      "aiohttp": "3.14.5",
+      "aiosignal": "1.4.0",
+      "annotated-doc": "0.0.5",
+      "annotated-types": "0.8.0",
+      "anyio": "4.16.0",
+      "attrs": "26.1.0",
+      "certifi": "2026.10.23",
+      "cffi": "2.1.1",
+      "charset-normalizer": "3.5.2",
+      "click": "8.5.0",
+      "colorama": "0.4.6",
+      "contourpy": "1.4.0",
+      "cryptography": "50.0.2",
+      "cycler": "0.12.1",
+      "fastapi": "0.162.0",
+      "filelock": "4.2.8",
+      "fonttools": "4.68.0",
+      "frozenlist": "1.8.0",
+      "fsspec": "2026.9.0",
+      "h11": "0.16.0",
+      "http_ece": "1.2.1",
+      "httpcore": "1.0.9",
+      "httptools": "0.9.0",
+      "httpx": "0.28.1",
+      "idna": "3.20",
+      "iniconfig": "2.3.1",
+      "kiwisolver": "1.5.1",
+      "matplotlib": "3.11.2",
+      "meta-sam-parser": "0.1.0",
+      "mpmath": "1.3.0",
+      "multidict": "7.2.1",
+      "networkx": "3.7",
+      "numpy": "2.5.4",
+      "nvidia-ml-py": "13.615.71",
+      "opencv-python": "5.0.0.93",
+      "opentelemetry-api": "1.45.2",
+      "packaging": "26.3",
+      "pillow": "13.0.0",
+      "pip": "25.0.1",
+      "pluggy": "1.7.0",
+      "polars": "2.1.0",
+      "polars-runtime-32": "2.1.0",
+      "propcache": "0.5.4",
+      "psutil": "7.2.2",
+      "py-vapid": "1.9.6",
+      "pycparser": "3.12",
+      "pydantic": "2.14.2",
+      "pydantic_core": "2.50.2",
+      "pyparsing": "3.3.3",
+      "pytest": "8.3.5",
+      "pytest-asyncio": "0.24.0",
+      "python-dateutil": "4.0.0",
+      "python-dotenv": "1.2.4",
+      "python-multipart": "0.0.33",
+      "pywebpush": "2.5.0",
+      "requests": "2.34.2",
+      "setuptools": "84.2.1",
+      "sounddevice": "0.5.6",
+      "starlette": "1.10.0",
+      "sympy": "1.14.0",
+      "torch": "2.15.0+cpu",
+      "torchvision": "0.29.2+cpu",
+      "typing-inspection": "0.4.5",
+      "typing_extensions": "4.16.0",
+      "tzdata": "2026.6",
+      "ultralytics": "8.4.202",
+      "ultralytics-platform": "0.1.102",
+      "ultralytics-thop": "2.2.5",
+      "urllib3": "2.8.0",
+      "uvicorn": "0.54.0",
+      "watchfiles": "1.3.0",
+      "websockets": "17.4",
+      "yarl": "1.25.1"
+    }
+  },
+  "experiment_script_sha256": "612d35be595baa2a7ff3aea862c18d581c876e20556b4efd2833ba633875e53d",
+  "scope": "One online LibriSpeech target and one online FLEURS interfering speaker, mixed at two levels. TV speech proxy; no room acoustics, actual TV, distress call or population claim.",
+  "target": {
+    "dataset": "https://huggingface.co/datasets/openslr/librispeech_asr",
+    "metadata_url": "https://datasets-server.huggingface.co/rows?dataset=openslr%2Flibrispeech_asr&config=clean&split=test&offset=1&length=1",
+    "id": "6930-75918-0001",
+    "reference": "THE ENGLISH FORWARDED TO THE FRENCH BASKETS OF FLOWERS OF WHICH THEY HAD MADE A PLENTIFUL PROVISION TO GREET THE ARRIVAL OF THE YOUNG PRINCESS THE FRENCH IN RETURN INVITED THE ENGLISH TO A SUPPER WHICH WAS TO BE GIVEN THE NEXT DAY",
+    "sha256": "3dfad7eb0793eddd5040d04f1f2f3046ceeee39e0ec461794856a350e1bd728e"
+  },
+  "interference": {
+    "url": "https://huggingface.co/datasets/podscripter-project/test-fixtures/resolve/main/en/fleurs_en_test_18066939864018796519.wav",
+    "source": "Google FLEURS, en_us test, female speaker, utterance 18066939864018796519; re-encoded by podscripter-project/test-fixtures",
+    "sha256": "301144a89f2b3dd2d19db16b5aacb7b57332d8c08ce06451cb3b88b4f006f83e"
+  },
+  "license": "Both sources CC-BY-4.0. Modifications: repeat/crop interference, RMS scaling, 2-second delay, mixing, spectrogram masking and reconstruction.",
+  "methods": "SAM generic and Muse-directed masks; Muse chooses masks from mixture only. Direct Muse rectangles, ordinary bandpass, raw mixture, and evaluation-only ideal-ratio-mask control. No transcripts or overlapping clean target supplied to separation models or ASR.",
+  "cases": [
+    {
+      "target_to_interference_db": -6,
+      "duration_s": 14.225,
+      "clean_prefix_s": 2,
+      "spectrogram_time_extent_s": 14.264,
+      "plan": {
+        "request_sha256": "acc9b97f60c2b4bee892f2206a7e195343a7eb3268e7fde48ad84b98df446c6f",
+        "model": "muse-spark-1.3",
+        "response": {
+          "top_logprobs": 0,
+          "temperature": 1.0,
+          "top_p": 1.0,
+          "service_tier": "default",
+          "model": "muse-spark-1.3",
+          "reasoning": {
+            "effort": "low"
+          },
+          "background": false,
+          "text": {
+            "format": {
+              "type": "json_schema",
+              "name": "spectrogram",
+              "schema": {
+                "properties": {
+                  "observation": {
+                    "type": "string"
+                  },
+                  "regions": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "x1": {
+                          "type": "number"
+                        },
+                        "x2": {
+                          "type": "number"
+                        },
+                        "y1": {
+                          "type": "number"
+                        },
+                        "y2": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "x1",
+                        "y1",
+                        "x2",
+                        "y2"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "sam_prompt": {
+                    "type": "string"
+                  },
+                  "separable": {
+                    "type": "boolean"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "separable",
+                  "observation",
+                  "sam_prompt",
+                  "regions"
+                ],
+                "additionalProperties": false
+              },
+              "strict": true
+            }
+          },
+          "tools": [],
+          "tool_choice": "auto",
+          "truncation": "disabled",
+          "id": "resp_6aeb810079cb3cfa65e14f5f",
+          "object": "response",
+          "status": "completed",
+          "created_at": 1793818880.0,
+          "completed_at": 1793818880.0,
+          "error": null,
+          "incomplete_details": null,
+          "output": [
+            {
+              "type": "reasoning",
+              "id": "rs_6aeb810079cb3cfa65e14f5f:rs_11c26fd7-94f0-4661-8458-3ae8f6a865ae",
+              "summary": [],
+              "status": "completed"
+            },
+            {
+              "type": "message",
+              "id": "msg_f458e518-bc23-44af-8c80-559a099de917",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"observation\": \"First 2s shows low-frequency arched harmonics at bottom; after 2s louder broadband vertical energy overlaps same low band and masks continuity; no distinct target-only ridge can be traced visually, so separation not supported.\", \"regions\": [], \"sam_prompt\": \"bright thin low-bottom horizontal harmonic ridges\", \"separable\": false}",
+                  "annotations": [],
+                  "logprobs": []
+                }
+              ],
+              "status": "completed"
+            }
+          ],
+          "instructions": null,
+          "usage": {
+            "input_tokens": 1841,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 1169,
+            "output_tokens_details": {
+              "reasoning_tokens": 1088
+            },
+            "total_tokens": 3010
+          },
+          "parallel_tool_calls": true,
+          "store": true,
+          "max_output_tokens": 3500
+        },
+        "latency_s": 28.93,
+        "prompt": "This is an actual audio magnitude spectrogram, not a photograph. We are TESTING whether visual models can separate overlapping voices. Horizontal axis runs from 0 to 14.264 seconds, vertical from 4000 Hz at top to 0 Hz at bottom. The TARGET voice is the only speaker in the first 2 seconds and continues afterwards; a different, louder voice begins at 2 seconds. No words or source transcript are provided. Follow the target's harmonic spacing and continuity if visible. Describe a short concrete VISUAL noun phrase (max 12 words) for SAM image segmentation to select target-associated ridges; do not assume SAM understands who the resident is. Also identify up to 16 time/frequency rectangles containing target energy that might attenuate the competing voice, using normalized image coordinates x1,y1,x2,y2. Do not include the first 2 seconds in rectangles, as that interval will pass through unchanged. If separating speakers is not visually supported, say so and return no rectangles. No guessing words.",
+        "images": [
+          "minus6db-spectrogram.png"
+        ],
+        "parsed": {
+          "observation": "First 2s shows low-frequency arched harmonics at bottom; after 2s louder broadband vertical energy overlaps same low band and masks continuity; no distinct target-only ridge can be traced visually, so separation not supported.",
+          "regions": [],
+          "sam_prompt": "bright thin low-bottom horizontal harmonic ridges",
+          "separable": false
+        }
+      },
+      "sam": [
+        {
+          "prompt": "harmonic speech bands",
+          "object_count": 0,
+          "decoded_masks": 0,
+          "call": {
+            "request_sha256": "6a49244ae459436a6fb9856bcd899595ac825d71afd6fbb18b58f597b06ac58f",
+            "model": "sam-3.1",
+            "response": {
+              "metadata": {
+                "mask_encoding": "one_bit"
+              },
+              "top_logprobs": 0,
+              "temperature": 1.0,
+              "top_p": 1.0,
+              "service_tier": "default",
+              "model": "sam-3.1",
+              "reasoning": {
+                "effort": "low"
+              },
+              "background": false,
+              "tools": [],
+              "tool_choice": "auto",
+              "truncation": "disabled",
+              "id": "resp_6aeb810f6a3fd2329d96438e",
+              "object": "response",
+              "status": "completed",
+              "created_at": 1793818895.0,
+              "completed_at": 1793818895.0,
+              "error": null,
+              "incomplete_details": null,
+              "output": [
+                {
+                  "type": "message",
+                  "id": "msg_8f98815c-f901-4aa2-9a08-95b541df23e5",
+                  "role": "assistant",
+                  "content": [
+                    {
+                      "type": "output_text",
+                      "text": "",
+                      "annotations": [],
+                      "logprobs": []
+                    }
+                  ],
+                  "status": "completed"
+                }
+              ],
+              "instructions": null,
+              "usage": {
+                "input_tokens": 0,
+                "input_tokens_details": {
+                  "cached_tokens": 0
+                },
+                "output_tokens": 0,
+                "output_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "total_tokens": 0,
+                "images_processed": 1
+              },
+              "parallel_tool_calls": true,
+              "store": true
+            },
+            "latency_s": 13.316
+          },
+          "mask_ids": []
+        },
+        {
+          "prompt": "horizontal bright ridges",
+          "object_count": 0,
+          "decoded_masks": 0,
+          "call": {
+            "request_sha256": "0829f37bfd4e94fa7d7626456e4bc4726ad655ef18874f5e69b6c7c038a95668",
+            "model": "sam-3.1",
+            "response": {
+              "metadata": {
+                "mask_encoding": "one_bit"
+              },
+              "top_logprobs": 0,
+              "temperature": 1.0,
+              "top_p": 1.0,
+              "service_tier": "default",
+              "model": "sam-3.1",
+              "reasoning": {
+                "effort": "low"
+              },
+              "background": false,
+              "tools": [],
+              "tool_choice": "auto",
+              "truncation": "disabled",
+              "id": "resp_6aeb811705a5ca82aa494310",
+              "object": "response",
+              "status": "completed",
+              "created_at": 1793818903.0,
+              "completed_at": 1793818903.0,
+              "error": null,
+              "incomplete_details": null,
+              "output": [
+                {
+                  "type": "message",
+                  "id": "msg_159bbfe3-b3f4-43ad-ba5b-29a7dfd397a4",
+                  "role": "assistant",
+                  "content": [
+                    {
+                      "type": "output_text",
+                      "text": "",
+                      "annotations": [],
+                      "logprobs": []
+                    }
+                  ],
+                  "status": "completed"
+                }
+              ],
+              "instructions": null,
+              "usage": {
+                "input_tokens": 0,
+                "input_tokens_details": {
+                  "cached_tokens": 0
+                },
+                "output_tokens": 0,
+                "output_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "total_tokens": 0,
+                "images_processed": 1
+              },
+              "parallel_tool_calls": true,
+              "store": true
+            },
+            "latency_s": 21.981
+          },
+          "mask_ids": []
+        },
+        {
+          "prompt": "bright thin low-bottom horizontal harmonic ridges",
+          "object_count": 1,
+          "decoded_masks": 1,
+          "call": {
+            "request_sha256": "26f51622e1e8c9ac4a33523055110ab5059f2fe637d7e73d62233f8d95972004",
+            "model": "sam-3.1",
+            "response": {
+              "metadata": {
+                "mask_encoding": "one_bit"
+              },
+              "top_logprobs": 0,
+              "temperature": 1.0,
+              "top_p": 1.0,
+              "service_tier": "default",
+              "model": "sam-3.1",
+              "reasoning": {
+                "effort": "low"
+              },
+              "background": false,
+              "tools": [],
+              "tool_choice": "auto",
+              "truncation": "disabled",
+              "id": "resp_6aeb810fba9bc084bef747cc",
+              "object": "response",
+              "status": "completed",
+              "created_at": 1793818894.0,
+              "completed_at": 1793818895.0,
+              "error": null,
+              "incomplete_details": null,
+              "output": [
+                {
+                  "type": "message",
+                  "id": "msg_352031cf-bd7f-413b-a64b-56b471b6d167",
+                  "role": "assistant",
+                  "content": [
+                    {
+                      "type": "output_text",
+                      "text": "<0f>0<|box;x1=0;y1=0;x2=1599;y2=764;w=1600;h=768|><|mask;x=0;y=0;data=490,1024,!!!!$fy5{'B`DD1{f//=BGjUM=)&Q8`9*[tq^Ial018:$:0x?j01{${]xx3IT6u][exx1kuxx3&sFQ5i5GK:6(ID'HGQ4v5v3&dR'qEyJkQv![se1lnG[X$=Mx@UxT2p?L5OosV*+pz#LW/-w&vZHPEibOXxg%P@_E'jYp##qK{tB-{y#&7yg7&AEx#0Y!x^{J^k5P_5C*+H=ooTJJNxP^t&qsr_rM``GAQ1XGIYx1Hfm@H%`QyIanCG^/pl7VUdU*c-IIA:zIl!%8c=o9psUJUz'B4Z=).Gz'J5_dDKo]|>\n",
+                      "annotations": [],
+                      "logprobs": []
+                    }
+                  ],
+                  "status": "completed"
+                }
+              ],
+              "instructions": null,
+              "usage": {
+                "input_tokens": 0,
+                "input_tokens_details": {
+                  "cached_tokens": 0
+                },
+                "output_tokens": 0,
+                "output_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "total_tokens": 0,
+                "images_processed": 1
+              },
+              "parallel_tool_calls": true,
+              "store": true
+            },
+            "latency_s": 12.846
+          },
+          "mask_ids": [
+            0
+          ]
+        }
+      ],
+      "selection": {
+        "request_sha256": "6ea0cd51bb1a641797073479a2f7a1d723cc0203101bcac59f7b3d2e357ef8f8",
+        "model": "muse-spark-1.3",
+        "response": {
+          "top_logprobs": 0,
+          "temperature": 1.0,
+          "top_p": 1.0,
+          "service_tier": "default",
+          "model": "muse-spark-1.3",
+          "reasoning": {
+            "effort": "low"
+          },
+          "background": false,
+          "text": {
+            "format": {
+              "type": "json_schema",
+              "name": "spectrogram",
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "properties": {
+                  "observation": {
+                    "type": "string"
+                  },
+                  "selected_ids": {
+                    "items": {
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "selected_ids",
+                  "observation"
+                ]
+              },
+              "strict": true
+            }
+          },
+          "tools": [],
+          "tool_choice": "auto",
+          "truncation": "disabled",
+          "id": "resp_6aeb81267a5d3277dde443c7",
+          "object": "response",
+          "status": "completed",
+          "created_at": 1793818918.0,
+          "completed_at": 1793818918.0,
+          "error": null,
+          "incomplete_details": null,
+          "output": [
+            {
+              "type": "reasoning",
+              "id": "rs_6aeb81267a5d3277dde443c7:rs_a47cefe4-f2b9-4e0b-8c73-68241cde2aba",
+              "summary": [],
+              "status": "completed"
+            },
+            {
+              "type": "message",
+              "id": "msg_5745eda0-32d7-496a-a94b-939cfa4904c1",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"observation\": \"MASK 0 is a full-image green wash covering 0-14.264s and 0-4000Hz, including both target and louder interferer after 2s. It does not isolate the TARGET's harmonic structures and is explicitly excluded as separation.\", \"selected_ids\": []}",
+                  "annotations": [],
+                  "logprobs": []
+                }
+              ],
+              "status": "completed"
+            }
+          ],
+          "instructions": null,
+          "usage": {
+            "input_tokens": 2146,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 302,
+            "output_tokens_details": {
+              "reasoning_tokens": 230
+            },
+            "total_tokens": 2448
+          },
+          "parallel_tool_calls": true,
+          "store": true,
+          "max_output_tokens": 3500
+        },
+        "latency_s": 13.829,
+        "prompt": "The first image is a mixed-speech spectrogram: target voice alone 0-2 seconds, then louder interfering voice. Horizontal extent 14.264 seconds; vertical 4000 to 0 Hz. Remaining images show candidate SAM masks in green, labelled MASK id. Select only masks that isolate the TARGET's harmonic structures after 2 seconds. A mask covering the whole image or both speakers is not separation. Select none if none actually separate. Do not select using transcript or expected words; none have been supplied.",
+        "images": [
+          "minus6db-spectrogram.png",
+          "minus6db-masks-0.png"
+        ],
+        "parsed": {
+          "observation": "MASK 0 is a full-image green wash covering 0-14.264s and 0-4000Hz, including both target and louder interferer after 2s. It does not isolate the TARGET's harmonic structures and is explicitly excluded as separation.",
+          "selected_ids": []
+        }
+      },
+      "selected_mask_ids": [],
+      "outputs": {
+        "bandpass": {
+          "audio": "minus6db-bandpass.wav",
+          "si_sdr_overlap_db": -10.775,
+          "oracle_uses_clean_sources": false,
+          "asr": {
+            "audio_sha256": "3360d5bb16801f028b39ac876d590a70f4bb8b46ad60c37d53422103c4e7db95",
+            "model": "muse-voice-transcribe-1.0",
+            "transcript": "The English English forwarded to the French population sports includes football, basketball, volleyball, water polo, fencing, rugby, cycling, ice hockey, roller hockey, and F1 motor racing. Popular sports include...",
+            "latency_s": 4.982
+          },
+          "target_wer": 0.8837
+        },
+        "oracle": {
+          "audio": "minus6db-oracle.wav",
+          "si_sdr_overlap_db": 14.347,
+          "oracle_uses_clean_sources": true,
+          "asr": {
+            "audio_sha256": "58331cd10ccdba2d8edd48215894fad3b0c320ef60a552625aa575f0dc27f16d",
+            "model": "muse-voice-transcribe-1.0",
+            "transcript": "The English forwarded to the French baskets of flowers of which they had made a plentiful plentiful provision to greet the arrival of the young princess. The French in return invited the English to a supper which was to be given the next day.",
+            "latency_s": 4.873
+          },
+          "target_wer": 0.0233
+        },
+        "sam-union": {
+          "audio": "minus6db-sam-union.wav",
+          "si_sdr_overlap_db": -7.811,
+          "oracle_uses_clean_sources": false,
+          "asr": {
+            "audio_sha256": "51c7471cf7342669d5d8ce7b84c97aee389770128056b288126b1f7030a73277",
+            "model": "muse-voice-transcribe-1.0",
+            "transcript": "The English forwarded to the French baskets of flowers of flowers of which they had made a plentiful plentiful provision to greet the arrival of the young princess. The French French in return invited the English to a supper which was to be given the next day.",
+            "latency_s": 4.618
+          },
+          "target_wer": 0.093
+        },
+        "mixture": {
+          "audio": "minus6db-mixture.wav",
+          "si_sdr_overlap_db": -6.103,
+          "asr": {
+            "audio_sha256": "266d51be14403f7f3e1b8a3d08c0cde3cefef4ee667252d354cfa65373ec335a",
+            "model": "muse-voice-transcribe-1.0",
+            "transcript": "The English forwarded to the French baskets of flowers of which they had made a plentiful provision to greet the arrival of the young princess. The French in return invited the English to a supper which was to be given the next day.",
+            "latency_s": 6.42
+          },
+          "target_wer": 0.0
+        }
+      },
+      "stft_identity_max_error": 3.3306690738754696e-16
+    },
+    {
+      "target_to_interference_db": -12,
+      "duration_s": 14.225,
+      "clean_prefix_s": 2,
+      "spectrogram_time_extent_s": 14.264,
+      "plan": {
+        "request_sha256": "acf0d79c24fdeb9472daa4ff9cbb1da66996c2c9465b89fd63a7252dc1cd9807",
+        "model": "muse-spark-1.3",
+        "response": {
+          "top_logprobs": 0,
+          "temperature": 1.0,
+          "top_p": 1.0,
+          "service_tier": "default",
+          "model": "muse-spark-1.3",
+          "reasoning": {
+            "effort": "low"
+          },
+          "background": false,
+          "text": {
+            "format": {
+              "type": "json_schema",
+              "name": "spectrogram",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "separable",
+                  "observation",
+                  "sam_prompt",
+                  "regions"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "observation": {
+                    "type": "string"
+                  },
+                  "regions": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "x1": {
+                          "type": "number"
+                        },
+                        "x2": {
+                          "type": "number"
+                        },
+                        "y1": {
+                          "type": "number"
+                        },
+                        "y2": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "x1",
+                        "y1",
+                        "x2",
+                        "y2"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "sam_prompt": {
+                    "type": "string"
+                  },
+                  "separable": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "strict": true
+            }
+          },
+          "tools": [],
+          "tool_choice": "auto",
+          "truncation": "disabled",
+          "id": "resp_6aeb815314e907eb20544170",
+          "object": "response",
+          "status": "completed",
+          "created_at": 1793818963.0,
+          "completed_at": 1793818963.0,
+          "error": null,
+          "incomplete_details": null,
+          "output": [
+            {
+              "type": "reasoning",
+              "id": "rs_6aeb815314e907eb20544170:rs_16ae49d8-aa64-4848-a784-658cc9bc1e2b",
+              "summary": [],
+              "status": "completed"
+            },
+            {
+              "type": "message",
+              "id": "msg_12247a0e-a211-4530-8018-3cfcd7309047",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"observation\": \"First 2s shows faint low wide-spaced arched harmonics confined to bottom. After 2s louder broadband vertical smearing dominates upper/mid, but similar wide-spaced low wavy horizontal chevron ridges reappear in gaps, distinct from dense narrow interferer stacks, supporting partial visual separation to bottom band.\", \"regions\": [{\"x1\": 0.365, \"x2\": 0.43, \"y1\": 0.65, \"y2\": 0.993}, {\"x1\": 0.43, \"x2\": 0.505, \"y1\": 0.7, \"y2\": 0.993}, {\"x1\": 0.51, \"x2\": 0.585, \"y1\": 0.7, \"y2\": 0.993}, {\"x1\": 0.625, \"x2\": 0.685, \"y1\": 0.68, \"y2\": 0.993}, {\"x1\": 0.685, \"x2\": 0.735, \"y1\": 0.7, \"y2\": 0.993}, {\"x1\": 0.74, \"x2\": 0.81, \"y1\": 0.75, \"y2\": 0.993}, {\"x1\": 0.815, \"x2\": 0.875, \"y1\": 0.75, \"y2\": 0.993}, {\"x1\": 0.93, \"x2\": 0.99, \"y1\": 0.72, \"y2\": 0.993}, {\"x1\": 0.27, \"x2\": 0.335, \"y1\": 0.72, \"y2\": 0.993}, {\"x1\": 0.585, \"x2\": 0.62, \"y1\": 0.75, \"y2\": 0.993}], \"sam_prompt\": \"thin bright low horizontal wavy harmonic ridges\", \"separable\": true}",
+                  "annotations": [],
+                  "logprobs": []
+                }
+              ],
+              "status": "completed"
+            }
+          ],
+          "instructions": null,
+          "usage": {
+            "input_tokens": 1841,
+            "input_tokens_details": {
+              "cached_tokens": 113
+            },
+            "output_tokens": 2516,
+            "output_tokens_details": {
+              "reasoning_tokens": 2054
+            },
+            "total_tokens": 4357
+          },
+          "parallel_tool_calls": true,
+          "store": true,
+          "max_output_tokens": 3500
+        },
+        "latency_s": 38.175,
+        "prompt": "This is an actual audio magnitude spectrogram, not a photograph. We are TESTING whether visual models can separate overlapping voices. Horizontal axis runs from 0 to 14.264 seconds, vertical from 4000 Hz at top to 0 Hz at bottom. The TARGET voice is the only speaker in the first 2 seconds and continues afterwards; a different, louder voice begins at 2 seconds. No words or source transcript are provided. Follow the target's harmonic spacing and continuity if visible. Describe a short concrete VISUAL noun phrase (max 12 words) for SAM image segmentation to select target-associated ridges; do not assume SAM understands who the resident is. Also identify up to 16 time/frequency rectangles containing target energy that might attenuate the competing voice, using normalized image coordinates x1,y1,x2,y2. Do not include the first 2 seconds in rectangles, as that interval will pass through unchanged. If separating speakers is not visually supported, say so and return no rectangles. No guessing words.",
+        "images": [
+          "minus12db-spectrogram.png"
+        ],
+        "parsed": {
+          "observation": "First 2s shows faint low wide-spaced arched harmonics confined to bottom. After 2s louder broadband vertical smearing dominates upper/mid, but similar wide-spaced low wavy horizontal chevron ridges reappear in gaps, distinct from dense narrow interferer stacks, supporting partial visual separation to bottom band.",
+          "regions": [
+            {
+              "x1": 0.365,
+              "x2": 0.43,
+              "y1": 0.65,
+              "y2": 0.993
+            },
+            {
+              "x1": 0.43,
+              "x2": 0.505,
+              "y1": 0.7,
+              "y2": 0.993
+            },
+            {
+              "x1": 0.51,
+              "x2": 0.585,
+              "y1": 0.7,
+              "y2": 0.993
+            },
+            {
+              "x1": 0.625,
+              "x2": 0.685,
+              "y1": 0.68,
+              "y2": 0.993
+            },
+            {
+              "x1": 0.685,
+              "x2": 0.735,
+              "y1": 0.7,
+              "y2": 0.993
+            },
+            {
+              "x1": 0.74,
+              "x2": 0.81,
+              "y1": 0.75,
+              "y2": 0.993
+            },
+            {
+              "x1": 0.815,
+              "x2": 0.875,
+              "y1": 0.75,
+              "y2": 0.993
+            },
+            {
+              "x1": 0.93,
+              "x2": 0.99,
+              "y1": 0.72,
+              "y2": 0.993
+            },
+            {
+              "x1": 0.27,
+              "x2": 0.335,
+              "y1": 0.72,
+              "y2": 0.993
+            },
+            {
+              "x1": 0.585,
+              "x2": 0.62,
+              "y1": 0.75,
+              "y2": 0.993
+            }
+          ],
+          "sam_prompt": "thin bright low horizontal wavy harmonic ridges",
+          "separable": true
+        }
+      },
+      "sam": [
+        {
+          "prompt": "harmonic speech bands",
+          "object_count": 0,
+          "decoded_masks": 0,
+          "call": {
+            "request_sha256": "0d5da1aa6f52040a74b5c5167dd3c7a164bff18c78e0df24f0146aaf18374529",
+            "model": "sam-3.1",
+            "response": {
+              "metadata": {
+                "mask_encoding": "one_bit"
+              },
+              "top_logprobs": 0,
+              "temperature": 1.0,
+              "top_p": 1.0,
+              "service_tier": "default",
+              "model": "sam-3.1",
+              "reasoning": {
+                "effort": "low"
+              },
+              "background": false,
+              "tools": [],
+              "tool_choice": "auto",
+              "truncation": "disabled",
+              "id": "resp_6aeb8161bce2eb63446549ce",
+              "object": "response",
+              "status": "completed",
+              "created_at": 1793818976.0,
+              "completed_at": 1793818977.0,
+              "error": null,
+              "incomplete_details": null,
+              "output": [
+                {
+                  "type": "message",
+                  "id": "msg_f940bf95-3495-4900-a236-f90720c601e4",
+                  "role": "assistant",
+                  "content": [
+                    {
+                      "type": "output_text",
+                      "text": "",
+                      "annotations": [],
+                      "logprobs": []
+                    }
+                  ],
+                  "status": "completed"
+                }
+              ],
+              "instructions": null,
+              "usage": {
+                "input_tokens": 0,
+                "input_tokens_details": {
+                  "cached_tokens": 0
+                },
+                "output_tokens": 0,
+                "output_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "total_tokens": 0,
+                "images_processed": 1
+              },
+              "parallel_tool_calls": true,
+              "store": true
+            },
+            "latency_s": 12.559
+          },
+          "mask_ids": []
+        },
+        {
+          "prompt": "horizontal bright ridges",
+          "object_count": 0,
+          "decoded_masks": 0,
+          "call": {
+            "request_sha256": "81f7d8d6c10c455d19e5dbe56cf381d5935f7b352586889bc114e4adaf2e0eaa",
+            "model": "sam-3.1",
+            "response": {
+              "metadata": {
+                "mask_encoding": "one_bit"
+              },
+              "top_logprobs": 0,
+              "temperature": 1.0,
+              "top_p": 1.0,
+              "service_tier": "default",
+              "model": "sam-3.1",
+              "reasoning": {
+                "effort": "low"
+              },
+              "background": false,
+              "tools": [],
+              "tool_choice": "auto",
+              "truncation": "disabled",
+              "id": "resp_6aeb815b5ba542c5554c4eef",
+              "object": "response",
+              "status": "completed",
+              "created_at": 1793818971.0,
+              "completed_at": 1793818971.0,
+              "error": null,
+              "incomplete_details": null,
+              "output": [
+                {
+                  "type": "message",
+                  "id": "msg_c45ed17d-4e88-4970-9def-208d284b1fc0",
+                  "role": "assistant",
+                  "content": [
+                    {
+                      "type": "output_text",
+                      "text": "",
+                      "annotations": [],
+                      "logprobs": []
+                    }
+                  ],
+                  "status": "completed"
+                }
+              ],
+              "instructions": null,
+              "usage": {
+                "input_tokens": 0,
+                "input_tokens_details": {
+                  "cached_tokens": 0
+                },
+                "output_tokens": 0,
+                "output_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "total_tokens": 0,
+                "images_processed": 1
+              },
+              "parallel_tool_calls": true,
+              "store": true
+            },
+            "latency_s": 8.491
+          },
+          "mask_ids": []
+        },
+        {
+          "prompt": "thin bright low horizontal wavy harmonic ridges",
+          "object_count": 1,
+          "decoded_masks": 1,
+          "call": {
+            "request_sha256": "55568cd4d9acedb7e57a9254aafe22560d7df5a2a113182bd40f5104bea76484",
+            "model": "sam-3.1",
+            "response": {
+              "metadata": {
+                "mask_encoding": "one_bit"
+              },
+              "top_logprobs": 0,
+              "temperature": 1.0,
+              "top_p": 1.0,
+              "service_tier": "default",
+              "model": "sam-3.1",
+              "reasoning": {
+                "effort": "low"
+              },
+              "background": false,
+              "tools": [],
+              "tool_choice": "auto",
+              "truncation": "disabled",
+              "id": "resp_6aeb8160be19c357404449c8",
+              "object": "response",
+              "status": "completed",
+              "created_at": 1793818976.0,
+              "completed_at": 1793818976.0,
+              "error": null,
+              "incomplete_details": null,
+              "output": [
+                {
+                  "type": "message",
+                  "id": "msg_f48b578a-fd27-437b-99ee-5843d1da3630",
+                  "role": "assistant",
+                  "content": [
+                    {
+                      "type": "output_text",
+                      "text": "<0f>0<|box;x1=0;y1=0;x2=1599;y2=765;w=1600;h=768|><|mask;x=0;y=0;data=490,1024,!!!!$Gy5{'I=IQ#u?x/B^9Own)Wxwc2Q^BxkY8-k:9G@Tq7O!Unp8VcU`4^fzLG@^]cBojvZFktTvz.&Wpn{{9xh5VG6z{s#RZD:_8#:mdxkCm6muYPt/Bzwn(92Q-:uSnZ=F!BNkscx![eF5X5lMwjb$F?U-t]!aBn7Dn+5(waj*.qL39yFP]yuQxQn@a_MYajq.uWa?$08v[W'xur48{QYt`'8g`FaO.r14k-K:m+M!!@Lv/-`KTLOuS*mH0d_:.x[|>\n",
+                      "annotations": [],
+                      "logprobs": []
+                    }
+                  ],
+                  "status": "completed"
+                }
+              ],
+              "instructions": null,
+              "usage": {
+                "input_tokens": 0,
+                "input_tokens_details": {
+                  "cached_tokens": 0
+                },
+                "output_tokens": 0,
+                "output_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "total_tokens": 0,
+                "images_processed": 1
+              },
+              "parallel_tool_calls": true,
+              "store": true
+            },
+            "latency_s": 11.977
+          },
+          "mask_ids": [
+            0
+          ]
+        }
+      ],
+      "selection": {
+        "request_sha256": "c03d7eb0259d4ed162f97a9b18f724c3b519b40210864bc32e2ca32900b07ece",
+        "model": "muse-spark-1.3",
+        "response": {
+          "top_logprobs": 0,
+          "temperature": 1.0,
+          "top_p": 1.0,
+          "service_tier": "default",
+          "model": "muse-spark-1.3",
+          "reasoning": {
+            "effort": "low"
+          },
+          "background": false,
+          "text": {
+            "format": {
+              "type": "json_schema",
+              "name": "spectrogram",
+              "schema": {
+                "properties": {
+                  "observation": {
+                    "type": "string"
+                  },
+                  "selected_ids": {
+                    "items": {
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "selected_ids",
+                  "observation"
+                ]
+              },
+              "strict": true
+            }
+          },
+          "tools": [],
+          "tool_choice": "auto",
+          "truncation": "disabled",
+          "id": "resp_6aeb816e276d871dcea2464d",
+          "object": "response",
+          "status": "completed",
+          "created_at": 1793818990.0,
+          "completed_at": 1793818990.0,
+          "error": null,
+          "incomplete_details": null,
+          "output": [
+            {
+              "type": "reasoning",
+              "id": "rs_6aeb816e276d871dcea2464d:rs_ebd4ac1a-a955-433c-8a5f-e7ba881dedfa",
+              "summary": [],
+              "status": "completed"
+            },
+            {
+              "type": "message",
+              "id": "msg_731145bd-816c-4987-822b-5a5bd9851ba4",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "{\"observation\": \"MASK 0 covers the entire spectrogram area in green (whole image), not isolating target harmonic structures after 2s from the louder interferer. It is whole-image coverage, which is explicitly excluded as separation.\", \"selected_ids\": []}",
+                  "annotations": [],
+                  "logprobs": []
+                }
+              ],
+              "status": "completed"
+            }
+          ],
+          "instructions": null,
+          "usage": {
+            "input_tokens": 2146,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 237,
+            "output_tokens_details": {
+              "reasoning_tokens": 174
+            },
+            "total_tokens": 2383
+          },
+          "parallel_tool_calls": true,
+          "store": true,
+          "max_output_tokens": 3500
+        },
+        "latency_s": 9.377,
+        "prompt": "The first image is a mixed-speech spectrogram: target voice alone 0-2 seconds, then louder interfering voice. Horizontal extent 14.264 seconds; vertical 4000 to 0 Hz. Remaining images show candidate SAM masks in green, labelled MASK id. Select only masks that isolate the TARGET's harmonic structures after 2 seconds. A mask covering the whole image or both speakers is not separation. Select none if none actually separate. Do not select using transcript or expected words; none have been supplied.",
+        "images": [
+          "minus12db-spectrogram.png",
+          "minus12db-masks-0.png"
+        ],
+        "parsed": {
+          "observation": "MASK 0 covers the entire spectrogram area in green (whole image), not isolating target harmonic structures after 2s from the louder interferer. It is whole-image coverage, which is explicitly excluded as separation.",
+          "selected_ids": []
+        }
+      },
+      "selected_mask_ids": [],
+      "outputs": {
+        "bandpass": {
+          "audio": "minus12db-bandpass.wav",
+          "si_sdr_overlap_db": -16.749,
+          "oracle_uses_clean_sources": false,
+          "asr": {
+            "audio_sha256": "207854d190e503200a5c8aafc35097a6fa92e98ca8e3e9afbb701ad3d7bbb0ef",
+            "model": "muse-voice-transcribe-1.0",
+            "transcript": "The English forwarded to the French popular sports include football, basketball, volleyball, volleyball, water polo, fencing, rugby, cycling, ice hockey, roller hockey and F1 motor racing. Popular sports include football.",
+            "latency_s": 5.046
+          },
+          "target_wer": 0.8605
+        },
+        "oracle": {
+          "audio": "minus12db-oracle.wav",
+          "si_sdr_overlap_db": 11.983,
+          "oracle_uses_clean_sources": true,
+          "asr": {
+            "audio_sha256": "a254e1a4123488c3caf852d3f94dc32567aa81eb21cbc9b1911ed4981929d6a1",
+            "model": "muse-voice-transcribe-1.0",
+            "transcript": "The English forwarded to the French baskets of flowers of which they had made a plentiful provision to greet the arrival of the young princess. the french in return invited the english to a supper which was to be given the next day.",
+            "latency_s": 5.317
+          },
+          "target_wer": 0.0
+        },
+        "sam-union": {
+          "audio": "minus12db-sam-union.wav",
+          "si_sdr_overlap_db": -13.713,
+          "oracle_uses_clean_sources": false,
+          "asr": {
+            "audio_sha256": "4f1f4adc41020af9071ff16c5606a7d215e07a57234d25c1e682ac90faecf2be",
+            "model": "muse-voice-transcribe-1.0",
+            "transcript": "The English forwarded to the French popular sports include football, basketball, volleyball, water polo, fencing, rugby, cycling, ice hockey, roller hockey, and F1 motor racing. Popular sports include football,",
+            "latency_s": 5.476
+          },
+          "target_wer": 0.8605
+        },
+        "muse-regions": {
+          "audio": "minus12db-muse-regions.wav",
+          "si_sdr_overlap_db": -26.966,
+          "oracle_uses_clean_sources": false,
+          "asr": {
+            "audio_sha256": "4b7b5c73ea5a08ce99ec192ca644264eac16a72defe2d1ce6d0be41f94a50fb7",
+            "model": "muse-voice-transcribe-1.0",
+            "transcript": "The English forwarded to the French",
+            "latency_s": 3.716
+          },
+          "target_wer": 0.8605
+        },
+        "mixture": {
+          "audio": "minus12db-mixture.wav",
+          "si_sdr_overlap_db": -12.207,
+          "asr": {
+            "audio_sha256": "4bbd9744ff55ae1fefaee4202f993dfeba279a965ac7b33ed88b68d697105693",
+            "model": "muse-voice-transcribe-1.0",
+            "transcript": "The English forwarded to the French baskets of flowers flowers of which they had made a plentiful provision to greet the arrival of the young princess. Cycling, ice hockey, roller hockey, and F1 motor racing, which was to be given the next day.",
+            "latency_s": 6.76
+          },
+          "target_wer": 0.2558
+        }
+      },
+      "stft_identity_max_error": 6.661338147750939e-16
+    }
+  ],
+  "clean_asr": {
+    "audio_sha256": "64aecc21b6ddba3e0c6ab11b689753a94d7f46e8389cbd2959371c144166556a",
+    "model": "muse-voice-transcribe-1.0",
+    "transcript": "The English forwarded to the French baskets of flowers of which they had made a plentiful provision to greet the arrival of the young princess. the French in in return invited the English to a supper which was to be given the next day..",
+    "latency_s": 7.086
+  },
+  "clean_target_wer": 0.0233
+}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useNow } from "@/lib/useApi";
+import { MuseComparison } from "./muse-comparison";
 import type { PipelineStep } from "@/lib/console-types";
 import styles from "./investigation.module.css";
 
@@ -17,6 +18,7 @@ function activityTitle(row: PipelineStep) {
   if (row.stage === "clip") return row.status === "running" ? "Collecting a short recording" : "Recording ready to review";
   if (row.stage === "sam") return row.status === "failed" ? "Movement check could not finish" : row.status === "running" ? "Following the person's movement" : "Movement checked";
   if (row.stage === "muse") {
+    if (row.metrics.phase?.startsWith("compare_")) return row.title;
     if (row.metrics.tool) return `${toolLabels[row.metrics.tool] || "Evidence"} ${row.status === "running" ? "being checked" : "checked"}`;
     if (row.metrics.verdict === "verified") return "The resident will be asked if they need help";
     if (row.metrics.verdict === "rejected") return "No fall confirmed";
@@ -86,6 +88,7 @@ export function Investigation({ steps, error }: { steps: PipelineStep[]; error?:
       {outcome ? <div className={styles.outcome} data-alert={outcome.stage === "delivery"}><span>{outcome.title}</span><p>{outcome.detail || "The outcome has been recorded."}</p>
         {["delivery", "response"].includes(outcome.stage) ? <Link href={`/alerts/${encodeURIComponent(id)}`}>Open the family alert →</Link> : null}
       </div> : null}
+      <MuseComparison rows={rows} compact />
       {sam ? <section className={styles.observationSummary} aria-label="What Aegis noticed">
         <p className={styles.eyebrow}>What the recording shows</p>
         <h3>{lower || flatter ? "A change in body position" : "The person's movement was reviewed"}</h3>

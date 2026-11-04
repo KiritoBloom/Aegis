@@ -31,7 +31,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-for entry in (str(ROOT / ".vendor"), str(ROOT / "backend")):
+for entry in (str(ROOT / "backend"),):
     if entry not in sys.path:
         sys.path.insert(0, entry)
 

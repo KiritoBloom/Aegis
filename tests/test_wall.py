@@ -18,7 +18,6 @@ import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / ".vendor"))
 sys.path.insert(0, str(ROOT / "backend"))
 
 from starlette.datastructures import UploadFile  # noqa: E402
@@ -30,7 +29,7 @@ def _det(posture: str, support: str | None = None, count: int = 1) -> dict:
     # A lying body is wider than it is tall, and standing up moves the head,
     # not the feet: the fixture keeps both honest so the wall's aspect check and
     # its track matching are exercised the way real frames behave.
-    box = ([0.32, 0.62, 0.68, 0.95] if posture == "lying"
+    box = ([0.32, 0.65, 0.68, 0.95] if posture == "lying"
            else [0.40, 0.20, 0.60, 0.95])
     return {
         "width": 640, "height": 480, "person_count": count,

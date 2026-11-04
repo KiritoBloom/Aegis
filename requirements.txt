@@ -1,15 +1,87 @@
-# Backend + edge runtime
-fastapi>=0.115
-uvicorn[standard]>=0.30
-python-multipart>=0.0.9
-pydantic>=2.7
-httpx>=0.27
-numpy>=1.26
-opencv-python>=4.9
-ultralytics>=8.2
-pywebpush>=2.0
-cryptography>=42
-sounddevice>=0.4.7
-PyYAML>=6.0
-Pillow>=10
-meta-sam-parser>=0.1.0
+# Reproducible backend, edge, and test environment: CPython 3.13.
+# Direct AND transitive dependencies are exact pins. Re-resolve deliberately,
+# run scripts/verify_submission.py in a new venv, then refresh live evidence.
+# CPU PyTorch keeps Linux installs independent of a CUDA toolkit/GPU.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+python-multipart==0.0.33
+pydantic==2.14.2
+httpx==0.28.1
+numpy==2.5.4
+opencv-python==5.0.0.93
+ultralytics==8.4.202
+pywebpush==2.5.0
+cryptography==50.0.2
+sounddevice==0.5.6
+PyYAML==6.0.3
+pillow==13.0.0
+meta-sam-parser==0.1.0
+pytest==8.3.5
+pytest-asyncio==0.24.0
+
+# Resolved transitive dependencies.
+aiohappyeyeballs==2.7.1
+aiohttp==3.14.5
+aiosignal==1.4.0
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.16.0
+attrs==26.1.0
+certifi==2026.10.23
+cffi==2.1.1
+charset-normalizer==3.5.2
+click==8.5.0
+colorama==0.4.6
+contourpy==1.4.0
+cycler==0.12.1
+filelock==4.2.8
+fonttools==4.68.0
+frozenlist==1.8.0
+fsspec==2026.9.0
+h11==0.16.0
+http_ece==1.2.1
+httpcore==1.0.9
+httptools==0.9.0
+idna==3.20
+iniconfig==2.3.1
+Jinja2==3.1.6
+kiwisolver==1.5.1
+MarkupSafe==3.0.4
+matplotlib==3.11.2
+mpmath==1.3.0
+multidict==7.2.1
+networkx==3.7
+nvidia-ml-py==13.615.71
+opentelemetry-api==1.45.2
+packaging==26.3
+pluggy==1.7.0
+polars==2.1.0
+polars-runtime-32==2.1.0
+propcache==0.5.4
+psutil==7.2.2
+py-vapid==1.9.6
+pycparser==3.12
+pydantic_core==2.50.2
+pyparsing==3.3.3
+python-dateutil==4.0.0
+python-dotenv==1.2.4
+requests==2.34.2
+setuptools==84.2.1
+starlette==1.10.0
+sympy==1.14.0
+torch==2.15.0+cpu ; sys_platform != 'darwin'
+torchvision==0.29.2+cpu ; sys_platform != 'darwin'
+torch==2.15.0 ; sys_platform == 'darwin'
+torchvision==0.29.2 ; sys_platform == 'darwin'
+typing-inspection==0.4.5
+typing_extensions==4.16.0
+tzdata==2026.6
+ultralytics-platform==0.1.102
+ultralytics-thop==2.2.5
+urllib3==2.8.0
+uvloop==0.23.0 ; sys_platform != 'win32' and sys_platform != 'cygwin'
+watchfiles==1.3.0
+websockets==17.4
+yarl==1.25.1

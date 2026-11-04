@@ -7,7 +7,6 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / ".vendor"))
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app import api, db  # noqa: E402
@@ -146,6 +145,9 @@ def test_enrichment_does_not_page_after_the_resident_recovers(monkeypatch, tmp_p
             )
 
     monkeypatch.setenv("META_API_KEY", "test-key")
+    # The fake agent must not instantiate a real client or parse host proxy settings.
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy:bad-port")
+    monkeypatch.setattr(api, "meta", lambda: object())
     monkeypatch.setattr(api.notify, "dispatch", fake_dispatch)
     monkeypatch.setattr(api, "EvidenceAgent", FakeAgent)
     incident = db.get_incident("inc_race")
@@ -241,6 +243,8 @@ def test_a_late_phase_two_never_pages_after_phase_three(monkeypatch, tmp_path):
             )
 
     monkeypatch.setenv("META_API_KEY", "test-key")
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy:bad-port")
+    monkeypatch.setattr(api, "meta", lambda: object())
     monkeypatch.setattr(api.notify, "dispatch", fail_dispatch)
     monkeypatch.setattr(api, "EvidenceAgent", FakeAgent)
     asyncio.run(api.enrich(db.get_incident("inc_late")))

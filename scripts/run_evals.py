@@ -29,8 +29,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from evidence_stamp import stamp
+
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / ".vendor"))
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app import policy  # noqa: E402
@@ -167,6 +168,9 @@ def main() -> int:
     ap.add_argument("--only", default="")
     ap.add_argument("--sleep", type=float, default=0.4)
     args = ap.parse_args()
+    if args.runs < 1:
+        ap.error("--runs must be at least 1")
+    provenance = stamp()
     load_env()
 
     import os
@@ -202,7 +206,8 @@ def main() -> int:
                         "floor": fixture["policy_floor"], "runs": runs,
                         "pass_rate": passed / len(runs)})
 
-    write_report(results, args.runs)
+    client.close()
+    write_report(results, args.runs, provenance)
     total = sum(r["pass_rate"] for r in results)
     full = sum(1 for r in results if r["pass_rate"] == 1.0)
     print(f"\n{full}/{len(results)} fixtures passed every run "
@@ -211,7 +216,7 @@ def main() -> int:
     return 0 if full == len(results) else 1
 
 
-def write_report(results: list[dict], runs_per: int) -> None:
+def write_report(results: list[dict], runs_per: int, provenance: dict) -> None:
     flat = [r for f in results for r in f["runs"] if r.get("ok") is not None]
     lat = sorted(r["latency_ms"] for r in flat if r.get("latency_ms"))
     p50 = statistics.median(lat) if lat else 0
@@ -232,6 +237,11 @@ def write_report(results: list[dict], runs_per: int) -> None:
         "",
         f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} "
         f"against `muse-spark-1.3`, {runs_per} run(s) per fixture.",
+        "",
+        f"Base revision: `{provenance['base_commit']}`. "
+        f"Source tree modified: `{provenance['source_tree_dirty']}`.",
+        f"Exact tested source SHA-256: `{provenance['source_sha256']}`.",
+        "Per-file hashes and installed dependency versions are in `results.json`.",
         "",
         "Every figure below is measured by this run. Nothing here is a target.",
         "",
@@ -266,7 +276,7 @@ def write_report(results: list[dict], runs_per: int) -> None:
         lats = sorted(r["latency_ms"] for r in f["runs"] if r.get("latency_ms"))
         med = statistics.median(lats) if lats else 0
         sevs = ", ".join(sorted({r.get("severity", "?") for r in f["runs"]}))
-        mark = "yes" if f["pass_rate"] == 1.0 else f"{f['pass_rate'] * 100:.0f}%"
+        mark = f"{sum(r['ok'] for r in f['runs'])} / {len(f['runs'])}"
         lines.append(f"| {f['id'].split('_')[0]} | {f['id'][3:].replace('_', ' ')} | "
                      f"{f['floor']} | {mark} | {sevs} | {med:.0f} ms |")
 
@@ -284,7 +294,7 @@ def write_report(results: list[dict], runs_per: int) -> None:
                     lines.append(f"- model wrote: _{bad['body']}_")
             lines.append("")
     else:
-        lines += ["", "No fixture failed. ", ""]
+        lines += ["", "No fixture failed.", ""]
 
     lines += [
         "## How to reproduce",
@@ -307,11 +317,15 @@ def write_report(results: list[dict], runs_per: int) -> None:
         "sample. It is designed to catch a prompt change that breaks the floor, "
         "the evidence gate, or the tone — not to estimate real-world recall.",
         "- Latency here excludes the SAM pass, which dominates end-to-end time.",
+        "- These assertions inspect the policy-validated decision. They do not "
+        "prove that the raw model alone enforces the safety floor, or measure "
+        "model lift over the deterministic policy.",
         "",
     ]
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text("\n".join(lines), encoding="utf-8")
-    RESULTS.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    RESULTS.write_text(json.dumps({"provenance": provenance, "model": "muse-spark-1.3",
+                                  "runs_per_fixture": runs_per, "fixtures": results}, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

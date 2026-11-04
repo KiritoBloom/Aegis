@@ -16,7 +16,7 @@ import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-for sub in (".vendor", "backend"):
+for sub in ("backend",):
     entry = str(ROOT / sub)
     if entry not in sys.path:
         sys.path.insert(0, entry)

@@ -22,7 +22,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-for p in (ROOT / ".vendor", ROOT / "backend"):
+for p in (ROOT / "backend",):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 

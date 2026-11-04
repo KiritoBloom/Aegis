@@ -191,6 +191,7 @@ def test_sam_artifacts_publish_in_order_and_preview_does_not_hold_up_verificatio
     monkeypatch.setattr(api, "parse_sam", lambda _text: [object_])
     monkeypatch.setattr(api.render, "render", render_video)
     monkeypatch.setattr(api.render, "privacy_still", privacy_still)
+    monkeypatch.setattr(api, "_start_motion_comparison", lambda *args: False)
 
     async def scenario():
         try:

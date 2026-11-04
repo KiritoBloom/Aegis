@@ -16,14 +16,15 @@ import argparse
 import hashlib
 import json
 import os
-import subprocess
 import sys
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+from evidence_stamp import stamp
+
 ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT / ".vendor"), str(ROOT / "backend")]
+sys.path[:0] = [str(ROOT / "backend")]
 
 for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines() if (ROOT / ".env").exists() else []:
     if "=" in line and not line.strip().startswith("#"):
@@ -65,11 +66,11 @@ def main() -> None:
 
     result: dict = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "commit": subprocess.run(["git", "rev-parse", "--short", "HEAD"],
-                                 capture_output=True, text=True,
-                                 cwd=ROOT).stdout.strip(),
+        "provenance": stamp(),
         "model": SAM_MODEL,
-        "clip": str(args.clip.relative_to(ROOT)),
+        "clip": args.clip.name,
+        "source_clip_sha256": sha256(args.clip),
+        "sam_input_sha256": sha256(small),
         "clip_seconds": args.seconds,
         "sampled_fps": args.fps,
         "source": {
@@ -84,6 +85,7 @@ def main() -> None:
     try:
         client = MetaClient(os.environ["META_API_KEY"])
         text, usage, nbytes = client.sam_video(small, "person")
+        client.close()
         objects = parse_sam(text)
         features = track_features(objects)
 
@@ -110,7 +112,8 @@ def main() -> None:
             "person_count": features.get("person_count"),
             "frames_present": features.get("frames_present"),
             "latency_ms": usage.latency_ms,
-            "response_bytes": nbytes,
+            "uploaded_bytes": nbytes,
+            "response_bytes": len(text.encode("utf-8")),
         }
         result["masks"] = {
             "total": len(objects),

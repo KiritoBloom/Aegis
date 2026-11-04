@@ -127,13 +127,13 @@ class MetaClient:
             return json.loads(m.group(0)), usage
 
     def vision(self, image_bytes: bytes, prompt: str, schema: dict,
-               effort: str = "low") -> tuple[dict, Usage]:
+               effort: str = "low", *, max_tokens: int = MIN_TOKENS) -> tuple[dict, Usage]:
         b64 = base64.b64encode(image_bytes).decode()
         started = time.time()
         resp = self._post("/responses", {
             "model": SPARK,
             "reasoning": {"effort": effort},
-            "max_output_tokens": MIN_TOKENS,
+            "max_output_tokens": max(MIN_TOKENS, max_tokens),
             "input": [{"type": "message", "role": "user", "content": [
                 {"type": "input_text", "text": prompt},
                 {"type": "input_image", "image_url": f"data:image/jpeg;base64,{b64}"},
@@ -151,22 +151,6 @@ class MetaClient:
         return json.loads(text), usage
 
     # -- SAM 3.1: geometry -----------------------------------------------
-    def sam_image(self, image_bytes: bytes, prompt: str = "person") -> tuple[str, Usage]:
-        b64 = base64.b64encode(image_bytes).decode()
-        started = time.time()
-        resp = self._post("/responses", {
-            "model": SAM,
-            "reasoning": {"effort": "low"},
-            "input": [{"type": "message", "role": "user", "content": [
-                {"type": "input_text", "text": prompt},
-                {"type": "input_image", "image_url": f"data:image/jpeg;base64,{b64}"},
-            ]}],
-        }, retries=1)
-        u = resp.get("usage") or {}
-        usage = Usage(u.get("input_tokens", 0), u.get("output_tokens", 0), 0,
-                      int((time.time() - started) * 1000))
-        return output_text(resp), usage
-
     def sam_video(self, clip_path: str | Path, prompt: str = "person",
                   ) -> tuple[str, Usage, int]:
         """Upload the clip, segment it, delete it. Returns (text, usage, bytes_sent)."""

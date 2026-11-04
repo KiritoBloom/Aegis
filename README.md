@@ -99,6 +99,12 @@ the normal log returns. These are persisted steps, not an animation pretending a
 They survive reconnects and appear in alert detail and the searchable camera
 log. Evidence JSON export omits signed resident and audio links.
 
+**Images versus numbers.** The expanded camera view and **A deeper look** also
+show two independent Muse motion reads: a protected image sequence and SAM
+occupancy encoded as hexadecimal text. Inspect the exact inputs and responses,
+including disagreements. These demo observations do not change the resident-first
+alert decision. [Live integration evidence](evals/motion_integration.md).
+
 **Tracking and inference.** Global association combines motion, overlap and
 appearance, while posture history and down timers belong to individual tracks.
 The on-screen boxes use the same raw observation as the displayed image. Full-frame pose results
@@ -160,9 +166,11 @@ The model may **raise** an alarm, never lower one below the deterministic floor.
   media is not signed. With more than one tracked person, every non-resident is
   blurred using SAM masks; if no redacted copy exists, the visual tool is not
   offered to the model.
-- **The masks are real, not a box blur.** Current-HEAD live probe: 240/240 SAM
-  masks decoded, 7 tracks, 192 mask blurs covering 503,794 pixels across 48
-  frames, zero box fallbacks (`evals/meta/sam_redaction.json`).
+- **Mask redaction is measured.** The live probe records decoded masks, tracks,
+  blurred pixels, box fallbacks, and input/output hashes in
+  [`evals/meta/sam_redaction.json`](evals/meta/sam_redaction.json). Its provenance
+  identifies the exact tested source; a historical run is not proof about a
+  later revision.
 - **Audio is event-only.** A sustained loudness event writes one WAV; only that
   WAV is transcribed. The raw audio and WAV are deleted after the assessment.
   No microphone stream is uploaded.
@@ -190,31 +198,46 @@ The model may **raise** an alarm, never lower one below the deterministic floor.
 
 ## Measured results
 
-All artifacts are in `evals/`. The corpus pilot below describes earlier runs,
-not a rerun of the latest tracker. The pilot is a 110-clip external corpus
+All artifacts are indexed in [`evals/README.md`](evals/README.md). New backend
+and live-model reports include the base commit, whether source was modified,
+SHA-256 hashes of the tested files, and installed package versions. The source
+fingerprint identifies uncommitted work explicitly; it does not call that work
+"current HEAD." The old **271 / 271** claim was a historical vendored-environment
+result and has been withdrawn. Each report below identifies the source and
+checks it covers; the motion integration includes the latest 301-test suite.
+
+| Check | Auditable result | Reproduce |
+|---|---|---|
+| Backend motion integration | [Latest integration checks](evals/motion_integration.md): **301 / 301 passed** | `python -m pytest -q` |
+| Installed dependency origins, before motion integration | [2026-11-04 installed-environment run](evals/verification.json): **293 / 293 passed**, no skips; `pip check` and exact dependency-pin audit passed | `python scripts/verify_submission.py` |
+| Web motion integration | [Current-source run](evals/motion_web_verification.json): **7 / 7** inspection tests and production build/type validation passed; Next **15.5.29**, React **19.1.10**. Uses the lockfile-matched installation from the [fresh-install run](evals/web_verification.json). | `cd web && npm ci && npx tsc --noEmit && node --test tests/inspection.test.cjs && npm run build` |
+| Local tracker replay at 4 fps | [Paired regression](evals/urfd_regression.md): URFD **0→6/6**; external floor candidates **51→53/57**, ADL candidates **3→5/48** | `python evals/experiments/urfd_regression.py` |
+| Muse decision fixtures | [2026-11-04 run](evals/report.md): **90 / 90 passed**, 3 runs on each of 30 fixtures, through Muse plus the policy validator | `python scripts/run_evals.py --runs 3` |
+| SAM mask decoding and production redaction | [2026-11-04 probe](evals/meta/sam_redaction.json): **240 / 240 masks decoded**, 7 tracks, 192 mask blurs, 503,806 blurred pixels, **0 box fallbacks** | `python scripts/probe_redaction.py` |
+| Spark check-in reading on word-list misses | [2026-11-04 probe](evals/checkin_read.json): **6 / 6 raised to help**, 3 runs each on 2 synthetic cases | `python scripts/probe_checkin_read.py --runs 3` |
+
+### Historical corpus and performance measurements
+
+The following pilot describes earlier runs, not a rerun of the latest tracker
+or resident-first response flow. The pilot is a 110-clip external corpus
 (GMDCSA24, three actors/rooms), not a field trial. Labels come from the dataset
 description: 57 floor falls, 5 bed falls, 48 ADL clips.
 
 | Claim | Result | Artifact / command |
 |---|---|---|
-| Backend regression suite | **271 / 271 passed** | `python -m pytest -q` |
-| Web typecheck + production build | **clean** | `npx tsc --noEmit`, `npm run build` |
-| Decision fixtures against Muse Spark | see `evals/report.md` (fresh run) | `python scripts/run_evals.py --runs 1` |
 | Floor falls that produced a wall candidate | **49 / 57** at 2 fps (person-lost recheck; was 45/57) | `evals/fall_pilot_recheck.json` |
 | Floor falls that paged the family after the full SAM + Muse gate | **49 / 57 (86%)**; 45 verified before the recheck, 3 of the 4 rescued verified and 1 failed open on the local floor. All 45 pre-recheck candidates were already escalate. | `evals/gate_pilot.json`, `evals/gate_recheck_rescued.json` |
 | Missed floor falls that produced a candidate at 8 fps | **3 / 12** | `evals/fall_pilot_8fps.json` |
 | ADL clips that paged the family | **2 / 48** after the bed-fall fix (2 of 5 candidates escalated, 3 rejected). Before the fix: 0 / 48. | `evals/gate_targeted_after_fix.json` |
 | Bed-fall clips that paged the family | **2 / 5** after the bed-fall fix (both candidates escalated; 3 had no candidate). Before the fix: 0 / 5. | `evals/gate_targeted_after_fix.json` |
-| SAM mask decode + redaction at current HEAD | **240 / 240 masks, 7 tracks, 192 mask blurs, 503,794 pixels, 0 box fallbacks** | `evals/meta/sam_redaction.json` |
 | Check-in de-escalation suite (real ASR output) | **5 / 5 cases** | `evals/checkin.md` |
-| Spark check-in reading on word-list misses | **2 / 2 raised to help** | `evals/checkin_read.json` |
 | Privacy properties | **10 / 10**; idle egress 0 bytes in 3 s; every ledger row has retention | `evals/privacy.json` |
 | Wall cost, external footage | **91–96 ms/frame** dynamic; reused frame **0.2–0.5 ms median** (first frame pays full inference); 4-feed ceiling **2.6–2.7 fps/feed** in the recorded runs | `evals/performance.md`, `evals/performance.json` |
 | Verification state machine | held rows hidden; release lease retry; late verdict does not re-arm cooldown | `tests/test_verification_lifecycle.py`, `tests/test_wall.py` |
 | Camera watchdog | one urgent incident per outage; never-connected cameras ignored | `tests/test_camera_watchdog.py` |
 | Opt-in stronger recheck (`yolov8m.pt`) | 49 / 57 floor falls (one swapped), but 1 extra ADL candidate that escalates — why the fast recheck is the default | `evals/fall_pilot_yolov8m.json`, `evals/gate_adl08_yolov8m.json` |
 
-Latest refinement: the same 24-frame local benchmark improved from **119.8 to
+The earlier November 4 tracking refinement: the same 24-frame local benchmark improved from **119.8 to
 105.6 ms mean** and **339.3 to 185.8 ms p95**. A separate three-clip tracking
 check retained one identity throughout each clip, found the supplied fall at
 4.4 seconds, and produced no candidates on the two ADL clips. See
@@ -231,6 +254,11 @@ measured rate per feed instead of claiming the backend number.
 
 ## Limitations
 
+- **No demonstrated field impact yet.** The repository does not establish a
+  real-home deployment, real-user outcomes, or delivery to a real phone.
+  Local/in-app delivery and acted footage are engineering evidence, not those
+  outcomes. The historical missed falls and false pages below remain open;
+  packaging fixes and refreshed model probes do not improve those numbers.
 - **Not a medical device and not an emergency service.** It notifies family; it
   does not dispatch anyone, diagnose, or monitor vitals.
 - **The fall pilot is small and not the target study.** It is 110 clips across
@@ -264,9 +292,17 @@ measured rate per feed instead of claiming the backend number.
 
 ## Run it
 
-**Prerequisites:** Python 3.11+, Node 20+, `ffmpeg` on `PATH`, and the YOLO
-weights in the repository root: `yolov8n.pt` and `yolov8n-pose.pt` are
-required. `yolov8m.pt` is optional and only used if you set
+**Prerequisites:** CPython **3.13**, Node **22**, and `ffmpeg` on `PATH`.
+On Debian/Ubuntu also install `ffmpeg libportaudio2 libgl1` through `apt`.
+`requirements.txt` pins runtime, test, and transitive Python dependencies;
+PyTorch uses the CPU wheel index on Windows/Linux. Activate the environment
+for every Python command. Launchers and tests do not import the ignored
+`.vendor` directory.
+
+The setup command below downloads `yolov8n.pt` and `yolov8n-pose.pt` from the
+versioned official Ultralytics `v8.3.0` asset release, verifies their pinned
+SHA-256 hashes, and installs them in the repository root. The weights are not
+included in Git. `yolov8m.pt` is optional and only used if you set
 `AEGIS_RECHECK_MODEL=yolov8m.pt` for the lost-person recheck; it sees prone
 bodies more confidently but measured one extra ADL false alert on the corpus,
 so it is not the default.
@@ -274,11 +310,12 @@ so it is not the default.
 ```bash
 cp .env.example .env              # set META_API_KEY; add VAPID keys for push
 python -m venv .venv && . .venv/bin/activate    # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
+python scripts/fetch_weights.py   # versioned downloads; verifies existing files too
 python scripts/serve.py           # API on 127.0.0.1:8000
 
 cd web
-npm install
+npm ci
 npm run dev                       # console on 127.0.0.1:3000
 ```
 
@@ -300,9 +337,22 @@ reads `FOOTAGE_ROOT` (default `data/new-footage`).
 
 ### Tests and evidence
 
+Use a **new** venv installed from the submitted manifest for a reproducibility
+check. `verify_submission.py` checks dependency origins, runs `pip check` and
+the full suite, and derives counts from pytest's JUnit output. Tests need no
+Meta credentials or licensed footage. The model-load check additionally needs
+the two downloadable weights.
+
+GitHub Actions in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) defines
+fresh-install backend checks on Windows and Ubuntu, a CPU model-load check,
+and lockfile-based frontend typecheck, tests and production build. A workflow
+definition is not a passing hosted run; inspect its actual results on GitHub.
+
 ```bash
-python -m pytest -q
-cd web && npx tsc --noEmit && npm run build && cd ..
+python scripts/verify_submission.py
+cd web && npm ci && npx tsc --noEmit && node --test tests/inspection.test.cjs && npm run build && cd ..
+python scripts/run_evals.py --runs 3  # live Muse; requires META_API_KEY
+python scripts/probe_checkin_read.py --runs 3  # live Muse
 python scripts/privacy_tests.py
 python scripts/bench_wall.py --mode dynamic --frames 24
 python scripts/probe_redaction.py     # live SAM, requires META_API_KEY
@@ -311,7 +361,9 @@ python scripts/run_gate_pilot.py --pilot evals/fall_pilot.json --out evals/gate_
 ```
 
 See `evals/README.md` for what each artifact measures, when it was generated,
-and which artifacts depend on live model calls.
+and which artifacts depend on live model calls. Live probes use the provider
+and may incur charges. The SAM/corpus probes require the separately obtained,
+licensed source clips; their hashes identify the input without redistributing it.
 
 ## Repository map
 

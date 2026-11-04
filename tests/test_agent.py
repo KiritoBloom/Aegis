@@ -12,7 +12,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / ".vendor"))
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app.agent import EvidenceAgent, FOLLOWUP_PROMPT, PLAN_PROMPT  # noqa: E402

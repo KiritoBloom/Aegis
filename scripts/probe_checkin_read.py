@@ -9,16 +9,18 @@ as `other` or `affirmative`, with a resident on the floor, handed to
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
-import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from evidence_stamp import stamp
+
 ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT / ".vendor"), str(ROOT / "backend")]
+sys.path[:0] = [str(ROOT / "backend")]
 
 for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines() if (ROOT / ".env").exists() else []:
     if "=" in line and not line.strip().startswith("#"):
@@ -38,11 +40,18 @@ CASES = [
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--runs", type=int, default=3)
+    args = parser.parse_args()
+    if args.runs < 1:
+        parser.error("--runs must be at least 1")
     if not os.environ.get("META_API_KEY"):
         raise SystemExit("META_API_KEY is not set")
+    provenance = stamp()
     client = MetaClient(os.environ["META_API_KEY"])
     rows = []
-    for expected, transcript, why in CASES:
+    for iteration, (expected, transcript, why) in enumerate(CASES * args.runs):
+        run_number = iteration // len(CASES) + 1
         classifier = policy.classify_transcript(transcript)
         context = {
             "incident": {"type": "fall_suspected", "zone": "hallway",
@@ -59,8 +68,14 @@ def main() -> None:
             "audio": {}, "media": {},
         }
         started = time.time()
-        raw, usage = client.decide(context, CHECKIN_READ_PROMPT,
-                                   CHECKIN_READ_SCHEMA, "low")
+        try:
+            raw, usage = client.decide(context, CHECKIN_READ_PROMPT,
+                                       CHECKIN_READ_SCHEMA, "low")
+        except Exception as exc:  # record provider failures, never inherit an old green result
+            rows.append({"case": expected, "run": run_number, "transcript": transcript,
+                         "ok": False, "error": f"{type(exc).__name__}: {str(exc)[:200]}"})
+            print(f"{expected} run={run_number} failed: {rows[-1]['error']}")
+            continue
         read = {
             "class": str(raw.get("class") or "other"),
             "read": str(raw.get("read") or "")[:200],
@@ -77,6 +92,7 @@ def main() -> None:
             merged = classifier
         rows.append({
             "case": expected,
+            "run": run_number,
             "transcript": transcript,
             "why": why,
             "classifier_class": classifier,
@@ -85,19 +101,19 @@ def main() -> None:
             "model_lift": merged != classifier,
             "ok": merged == "help",
         })
-        print(f"{expected:<12} rules={classifier:<12} model={read['class']:<12} "
+        print(f"{expected:<12} run={run_number} rules={classifier:<12} model={read['class']:<12} "
               f"merged={merged:<12} ok={rows[-1]['ok']}")
     output = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "commit": subprocess.run(["git", "rev-parse", "--short", "HEAD"],
-                                 capture_output=True, text=True,
-                                 cwd=ROOT).stdout.strip(),
+        "provenance": provenance,
+        "runs_per_case": args.runs,
         "model": SPARK_MODEL,
         "prompt": "CHECKIN_READ_PROMPT",
         "cases": rows,
         "passed": sum(1 for r in rows if r["ok"]),
         "total": len(rows),
     }
+    client.close()
     out = ROOT / "evals" / "checkin_read.json"
     out.write_text(json.dumps(output, indent=2), encoding="utf-8")
     print(f"wrote {out}")

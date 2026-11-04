@@ -1,4 +1,4 @@
-"""Start the backend with the repo's env and vendor path.
+"""Start the backend with the repo's env and active Python environment.
 
 `set -a; source .env` is bash; on Windows the env file has to be read explicitly
 or the API key silently arrives empty. This is the one command that starts the
@@ -26,7 +26,7 @@ def load_env(path: Path) -> None:
 
 def main() -> None:
     load_env(ROOT / ".env")
-    for sub in (".vendor", "backend"):
+    for sub in ("backend",):
         p = str(ROOT / sub)
         if p not in sys.path:
             sys.path.insert(0, p)

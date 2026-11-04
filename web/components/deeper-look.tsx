@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useConsole } from "./console-provider";
 import { LiveFeed } from "./live-feed";
+import { MuseComparison } from "./muse-comparison";
 import { Icon } from "./icons";
 import { useApi } from "@/lib/useApi";
 import { INSPECTION_STAGES, inspectionJobs, inspectionMedia, inspectionStage, inspectionLiveStage, inspectionVideoState, record,
@@ -23,7 +24,7 @@ const WAITING: Record<InspectionStage, string> = {
   clip: "The event recording appears here as soon as the evidence window is collected.",
   sam: "The video sent to SAM appears first. Playable segmentation appears as soon as its returned masks are rendered.",
   privacy: "The protected image and blurred video appear here as soon as local processing finishes.",
-  muse: "Only a protected still is offered to Muse. This view will show the exact image if its visual tool is called.",
+  muse: "The safety review can inspect a protected still. The demo comparison above shows the independent image-sequence and hex-only requests.",
   checkin: "The resident's question and the recorded outcome appear here when the evidence review finishes.",
 };
 
@@ -53,7 +54,7 @@ export function DeeperLook({ feedId }: { feedId: string }) {
         <option value="">Latest investigation{events[0] ? ` · ${clock(feedRows.find((row) => row.incident_id === events[0])?.created_at ?? new Date().toISOString())}` : " · waiting for an event"}</option>
         {events.map((id) => <option value={id} key={id}>{clock(feedRows.find((row) => row.incident_id === id)?.created_at ?? new Date().toISOString())} · {id.slice(-8)}</option>)}
       </select></label>
-      <p><Icon name="privacy" size={16} />Demo inspection includes private evidence. Nothing extra is sent to the cloud.</p>
+      <p><Icon name="privacy" size={16} />Private demo evidence. Two independent Muse reads compare protected images with text-only motion.</p>
     </div>
     {!active ? <div className={styles.notice}>Monitoring is paused. You can explore saved steps, or start a new live walkthrough.
       <button className={styles.button} disabled={switching} onClick={() => void setActive(true)}>{switching ? "Starting…" : "Start monitoring"}</button></div> : null}
@@ -132,6 +133,7 @@ function Walkthrough({ feedId, rows, media, followLatest, loading, evidenceError
         </button>;
       })}
     </nav>
+    <MuseComparison rows={rows} />
     <div className={styles.layout}>
       <section className={styles.evidence} aria-label="Evidence viewer">
         <header className={styles.panelHead}><div><h2>{stageInfo.label}</h2><p>{stageInfo.note}</p></div>

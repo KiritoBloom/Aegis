@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from . import auth
 from . import audio as audio_util
 from . import clip as clip_util
-from . import db, notify, policy, privacy, render, setup as setup_service, tts, wall, watch
+from . import db, motion_review, notify, policy, privacy, render, setup as setup_service, tts, wall, watch
 from .demo import router as demo_router
 from .push_routes import router as push_router
 from .session_routes import router as session_router
@@ -3216,6 +3216,9 @@ def diagnostics(limit: int = Query(200, ge=1, le=500), feed_id: str | None = Non
 # those must continue to hide held/rejected candidates and seal private raw clips.
 # These /api routes inherit the household-session middleware, never signed links.
 INSPECTION_MEDIA = {
+    "motion_image.jpg": ("image", "Image review input", "Chronological frames with human appearance blurred; sent to the independent image review", "blurred"),
+    "motion_masks.png": ("image", "Decoded hex silhouettes", "Local visualization of exactly the bitmaps encoded in the hex packet; not sent to the text-only review", "data"),
+    "motion_hex.txt": ("text", "Exact hex request data", "32 × 18 occupancy, timestamps and mask availability only; no image or previous verdict", "data"),
     "clip.mp4": ("video", "Event recording", "Local event window", "raw"),
     "still.jpg": ("image", "Local evidence frame", "Not sent to Muse", "raw"),
     "sam_input.mp4": ("video", "Video sent to SAM", "Exact prepared SAM input; audio removed", "raw"),
@@ -3249,7 +3252,95 @@ def inspection(incident_id: str):
         raise HTTPException(404, "investigation not found")
     return JSONResponse({"items": db.pipeline_steps(500, incident_id=incident_id),
                          "media": _inspection_media(incident_id)},
-                        headers={"Cache-Control": "no-store"})
+                         headers={"Cache-Control": "no-store"})
+
+
+_MOTION_TASKS: dict[str, asyncio.Task] = {}
+
+
+def _start_motion_comparison(incident_id: str, src: Path, objects, target_id: int) -> bool:
+    if incident_id in _MOTION_TASKS:
+        return False
+    completed = {row["metrics"].get("phase") for row in db.pipeline_steps(500, incident_id=incident_id)
+                 if row["stage"] == "muse" and row["status"] == "done"}
+    modes = [mode for mode in ("image", "hex") if f"compare_{mode}" not in completed]
+    if not modes:
+        return False
+    task = asyncio.create_task(_compare_motion(incident_id, src, objects, target_id, modes))
+    _MOTION_TASKS[incident_id] = task
+    task.add_done_callback(lambda _task: _MOTION_TASKS.pop(incident_id, None))
+    return True
+
+
+@app.post("/api/diagnostics/{incident_id}/compare")
+async def compare_motion(incident_id: str):
+    incident_id = valid_incident_id(incident_id)
+    incident = db.get_incident(incident_id)
+    if not incident:
+        raise HTTPException(404, "investigation not found")
+    if privacy.paused_state().get("paused"):
+        raise HTTPException(409, "Resume monitoring before sending evidence to Muse")
+    folder = MEDIA_ROOT / incident_id
+    src = folder / "sam_input.mp4"
+    if not src.exists():
+        src = folder / "clip.mp4"
+    response = folder / "sam_response.txt"
+    if not src.exists() or not response.exists():
+        raise HTTPException(409, "This investigation has no saved SAM masks and video to compare")
+    objects = parse_sam(await asyncio.to_thread(response.read_text, encoding="utf-8"))
+    features = track_features(objects, (incident.get("track") or {}).get("box")
+                              or (incident.get("sensors") or {}).get("person_box"))
+    target = features.get("primary_track_id")
+    if target is None:
+        raise HTTPException(409, "No SAM target is available for comparison")
+    started = _start_motion_comparison(incident_id, src, objects, target)
+    return {"ok": True, "started": started, "running": incident_id in _MOTION_TASKS}
+
+
+async def _compare_motion(incident_id: str, src: Path, objects, target_id: int, modes: list[str]) -> None:
+    """Ancillary reviews publish independently; neither can affect alert release."""
+    async def event(mode, status, detail, **metrics):
+        await pipeline_step(incident_id, "muse", status,
+                            "Muse · image motion review" if mode == "image" else "Muse · hexadecimal motion review",
+                            detail, phase=f"compare_{mode}", model=SPARK_MODEL, **metrics)
+    try:
+        for mode in modes:
+            await event(mode, "running", "Preparing the same event for two independent observations.")
+        bundle = await asyncio.to_thread(motion_review.build_evidence, src, objects, target_id, MEDIA_ROOT / incident_id)
+    except Exception as exc:  # noqa: BLE001
+        for mode in modes:
+            await event(mode, "failed", f"Comparison unavailable: {type(exc).__name__}: {str(exc)[:160]}")
+        return
+
+    async def review(mode):
+        prompt = motion_review.IMAGE_PROMPT if mode == "image" else motion_review.HEX_PROMPT
+        request = {"instructions": prompt, "schema": motion_review.SCHEMA, "effort": "low",
+                   "frames": bundle["frames"], "observed_frames": bundle["observed_frames"],
+                   "image_attachments": int(mode == "image"), "video_attachments": 0, "tools": 0}
+        if mode == "hex":
+            request.update(packet=bundle["packet"], binary_occupancy_bytes=bundle["binary_bytes"],
+                           json_input_bytes=bundle["json_bytes"], sha256=bundle["hex_sha256"])
+        else:
+            request.update(image="motion_image.jpg", bytes=len(bundle["image"]), sha256=bundle["image_sha256"])
+        media = _inspection_media(incident_id, *( ["motion_image.jpg"] if mode == "image" else ["motion_masks.png", "motion_hex.txt"]))
+        try:
+            if privacy.paused_state().get("paused") or not db.get_incident(incident_id):
+                raise ValueError("Monitoring paused or evidence deleted before the model request")
+            await event(mode, "running", "Sending protected chronological images." if mode == "image" else
+                        "Sending hexadecimal occupancy only: zero images, videos or tools.",
+                        destination="api.meta.ai", request=request, media=media)
+            if mode == "image":
+                raw, usage = await asyncio.wait_for(asyncio.to_thread(meta().vision, bundle["image"], prompt, motion_review.SCHEMA, "low", max_tokens=2500), 65)
+            else:
+                raw, usage = await asyncio.wait_for(asyncio.to_thread(meta().decide, bundle["packet"], prompt, motion_review.SCHEMA, "low"), 65)
+            db.add_outbound(incident_id, "api.meta.ai", f"demo_motion_{mode}",
+                            len(bundle["image"]) if mode == "image" else bundle["json_bytes"], usage.output_tokens,
+                            "30d", False, latency_ms=usage.latency_ms, model=SPARK_MODEL, contains_image=mode == "image")
+            await event(mode, "done", str(raw.get("observation") or "Review returned."),
+                        destination="api.meta.ai", response=raw, duration_ms=usage.latency_ms, media=media)
+        except Exception as exc:  # noqa: BLE001
+            await event(mode, "failed", f"Review unavailable: {type(exc).__name__}: {str(exc)[:160]}", media=media)
+    await asyncio.gather(*(review(mode) for mode in modes))
 
 
 @app.get("/api/diagnostics/{incident_id}/media/{name}")
@@ -3480,6 +3571,8 @@ async def _sam_features_for_clip(incident_id: str, clip: str | Path,
                         response={**features, "objects_returned": len(objects),
                                   "mask_bytes": sum(o.mask_bytes for o in objects)},
                         media=_inspection_media(incident_id, "sam_response.txt"))
+    if features.get("primary_track_id") is not None:
+        _start_motion_comparison(incident_id, input_path, objects, features["primary_track_id"])
     if objects:
         await pipeline_step(incident_id, "sam", "running", "SAM · preparing segmentation playback",
                             "Rendering the returned masks over the same video SAM received.", phase="render")
@@ -3540,7 +3633,7 @@ async def _sam_features_for_clip(incident_id: str, clip: str | Path,
 async def _render_inspection_preview(incident_id: str, src: Path, objects, resident_box) -> None:
     try:
         await pipeline_step(incident_id, "privacy", "running", "Preparing the blurred video",
-                            "Local demo preview; Muse receives a still only if its visual tool is called.", phase="video")
+                            "Local video preview. The safety review can request a protected still; demo motion reads appear separately.", phase="video")
         protected = await asyncio.to_thread(
             render.render, src, MEDIA_ROOT / incident_id / "privacy.mp4", objects,
             trail=False, annotate=False, resident_box=resident_box, blur_all=True,

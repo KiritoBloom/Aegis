@@ -8,7 +8,6 @@ import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / ".vendor"))
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app import api, render  # noqa: E402

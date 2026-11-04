@@ -8,7 +8,6 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / ".vendor"))
 sys.path.insert(0, str(ROOT / "edge"))
 
 from aegis_edge.audio_monitor import AudioMonitor, LoudnessGate, dbfs  # noqa: E402

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT / ".vendor"), str(ROOT / "backend")]
+sys.path[:0] = [str(ROOT / "backend")]
 for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines():
     if "=" in line and not line.strip().startswith("#"):
         k, v = line.split("=", 1)

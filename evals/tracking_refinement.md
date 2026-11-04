@@ -67,7 +67,11 @@ real-home accuracy study. It does not establish bystander/occlusion performance.
 - Persistent, camera-attributed pipeline steps, including partial model progress,
   tool questions, durations, check-in deadlines and delivery outcomes.
 
-## Verification
+## Historical verification (before the deeper-look inspector)
+
+These are the earlier refinement run's results, not the current submitted
+environment. The 271-test run used the local vendored dependency set. Current
+installed-environment counts and package provenance are in `verification.json`.
 
 - **271 backend tests passed**, including per-track timing, global association,
   collapse continuity, bounded rechecks, evidence retention, SAM target selection,
@@ -80,5 +84,5 @@ real-home accuracy study. It does not establish bystander/occlusion performance.
   errors. Browser model/API responses were fixtures; local footage evaluation
   above used the real local vision models.
 
-There is no dedicated demonstration route. Cameras, alert details and Logs all
-use the same evidence trail that monitoring produces.
+At the time of this run there was no dedicated demonstration route. The later
+`/deeper-look/[feedId]` inspector now exposes that same live evidence trail.

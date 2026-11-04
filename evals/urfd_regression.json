@@ -1,0 +1,1442 @@
+{
+  "provenance": {
+    "generated_at": "2026-11-04T20:18:37.478563+00:00",
+    "base_commit": "96b1ee1b821e669c980da7bde379ff05f1092521",
+    "source_tree_dirty": true,
+    "source_sha256": "fde53e23feda7d5f8b31a64bdffd1cc3033ba2e82d3360027fc5a4e625267541",
+    "source_files": {
+      "backend/app/__init__.py": "69eaa0d4b2c8116d5f789a1929673080debd2382c5e2f364507d313be0d32679",
+      "backend/app/agent.py": "0fc434f4d87b380b4d9914ab08fc55eb332ba8ae55fb64717c64561947145097",
+      "backend/app/api.py": "8fe7203b622a5d0363a7a853870379dcbfd8685f4f581abb27c2132594e5ef1d",
+      "backend/app/audio.py": "540f627b66b96f80b87eba56eb69360396431de9eb28d07a19868f3b0db8b25c",
+      "backend/app/auth.py": "2f151d0f59f6216b0cbe2edf8ff31ae0d20672c71144defb05dda91a7531e3f7",
+      "backend/app/clip.py": "8064692300db24f2a85aa29a328dd2e9a2e8c999cd1f58b5b58e100783849146",
+      "backend/app/db.py": "20c6543606a4ea4f6460b77044c2df2b0102e427d509a1be1e48ebc0119f822b",
+      "backend/app/demo.py": "27f250fad658a89cf7ab4e29a9808d1d8be13a34ff60fd77eec6249f57060fc9",
+      "backend/app/meta.py": "afaa94cfbdd9194941fb8eef7e854fd0b40c3185235ce192d7067aefbfda69da",
+      "backend/app/motion_review.py": "e8becb464e919796c646513ebe79fda8efaacbd12e9154803fccccfd88b6fa01",
+      "backend/app/notify.py": "abfeda750b81a859f0269072b543bc461d2ef6bd6ba2ac65c862ccc89ad158ac",
+      "backend/app/policy.py": "29e016d2cff0275ccbf5b995b72c948ddae3cb982c84ce720b767a72ac36bc80",
+      "backend/app/privacy.py": "d8f4f0eda96d0b026f69c0d5f423c8c951b4a853df5e513f03f0fc19b53e2c42",
+      "backend/app/prompt.py": "050a664b1a68ff54c3a5c6b12f4088c851ca9e438e7f30c18d7086e8475371a0",
+      "backend/app/push_routes.py": "67159cf403d8ee430ea667a56a110d8ddd01f43fadb9eb8bc86564d192c6121c",
+      "backend/app/render.py": "6f55e14642101df14fb779c10c0836a6360d4f8ab3f2ab1961ccd0a4e102ef9a",
+      "backend/app/scene.py": "56e10edb12357ba189dd7e412674032827cd6e1cc10f98590863a9cc2b6c4b77",
+      "backend/app/session_routes.py": "6475e8b18dee05e491f360284e4b4198c57605dc6f1b523a2d01864eabc16c30",
+      "backend/app/setup.py": "3350819ed29c3fcc92a9bf5a5339a84840837bbfdb4874ed33d674a7a8a975b2",
+      "backend/app/tts.py": "5d2d1aa6e0141498e3f3a2f4d4030de84b34202a07a464ba33ce886c14dcdc6a",
+      "backend/app/wall.py": "57bdff7c55f81d3f45201282c78418ba15d0304990331c8fa0247aa9077c1bdd",
+      "backend/app/watch.py": "759ec5d8e889e61f104a232dc84fa6b0b20fb616bfead00c434c30a62d571e66",
+      "edge/aegis_edge/__init__.py": "27d68b4cc264ec03587c702b8b88186aa082ac820bd6b2e97bf2faad3b7774b9",
+      "edge/aegis_edge/__main__.py": "c0da97f5cb67dbab916d59d98c5a4dbe4915bdf40c8a24550dbbcb59fc201f40",
+      "edge/aegis_edge/audio_monitor.py": "87b097a708f3a12a5494c8da74471876d287edf92487486a4c77e25c8a32ba0c",
+      "edge/aegis_edge/capture.py": "8ebdfabd67a01470fcab99033176f22625a079031d7c3cf498a53b67df714428",
+      "edge/aegis_edge/clip.py": "59180c9303f78b43aeba62ff7766e705edbc4c448da7100edc0788454e001c32",
+      "edge/aegis_edge/config.py": "737fbea38c19ad1b0c257c787083d99babaf8917e61a7c03228ed5ee13c0f9b7",
+      "edge/aegis_edge/geometry.py": "25456a7427397d6d0753fa285eb2a71cd131f5d37dbf904de9d15e133b2a8b66",
+      "edge/aegis_edge/privacy.py": "5e6cd1c7514608f0f13f7c07fb9957d61a16778400fa56211a0369aa836ea65a",
+      "edge/aegis_edge/runner.py": "0e5089e42a24ea3e4fa2de35424a67a3c408929b03ffda79b779bbf0a1fb177f",
+      "edge/aegis_edge/state.py": "419b261d10090bbe8081f0c5d753fe1d04929db62953d1e44ede31b01a0d65f5",
+      "edge/aegis_edge/uploader.py": "75d91485276d8806c61fa36b1fedcaeed064f530be8f98d05e4430081b7bee57",
+      "edge/aegis_edge/vision.py": "f48f4e8fd4f6168516cfcb065aa093f117e041831933601b61147aaa8c519d6c",
+      "scripts/bench_wall.py": "4619005faff3d894416c89be9511def9bb448a532cdb4ac39267a184f6cc8ad1",
+      "scripts/build_fixtures.py": "c3cd58d51944def44c576cf13650414970316bbfddfbcf59fbd95b0369f638e6",
+      "scripts/build_footage.py": "ff87082d7f80dd35232b3c5d2f3eb2778a3bf08bc6b9966fba30c9d772c1a6bc",
+      "scripts/eval_wall_tracking.py": "c57229cb21054f686f7a6c555735ff9ab0ebba886e1cebd5e60bd2411cfbb803",
+      "scripts/evidence_stamp.py": "76127f1f08928d1cf16206a7b365473c99f5dfdc9159d715a41e8b6ad2fed92b",
+      "scripts/fetch_weights.py": "a428bc86a0ac65ed1b5ff9c5c42d8c39519f7f8bec48843da18d292b15912eb6",
+      "scripts/inspect_pose_frames.py": "98b4a505129192680dfc7b0da52443df4e7396a6b01d86f3616652cb8a3d2e7f",
+      "scripts/make_icons.py": "fe3c7f72f7ff4d95f1ec781fd432c1baf6f15c7d7d0fae13f75b4d536c78576e",
+      "scripts/privacy_tests.py": "51adf408f7378a3b7c6be69ad881682d1f010e55401565943f2fbf901ea417fe",
+      "scripts/probe_agent_live.py": "fa4a1b1543aec8b26f332c3043bc99b20d59644cce3167b554d4ea391d683caf",
+      "scripts/probe_api.py": "181b7eb6b095327a060ed08b8430215b3eaa5c5367ea9dba09299ff95b97d711",
+      "scripts/probe_checkin_read.py": "e6cc0dcf897bff0d4fe21e9790458f75cbb475449529bf0fb4208a1267bb0e22",
+      "scripts/probe_door_rule.py": "41942d0a8191034cf2728bf6a5133bf7418d24cdd5c1349a77026c49a5bbfbfb",
+      "scripts/probe_redaction.py": "7f58c66c779e7e0c9d7c19b2f478cd5ee5e33eebbb2b8297c0e8d099ec61ab5a",
+      "scripts/probe_sam.py": "2aaf611425aaf0fcd1bc35d541faa0c3fb147aa7d2ed7aa2ec9587f8caa107ef",
+      "scripts/probe_wall_gate.py": "e8e2426d4d8874ef8133534f7632c2e55a55b5f8bde9220b6d119a46c2d12e88",
+      "scripts/probe_zones.py": "338f7a93a7bdf043503bc5c09b80ab5f92b4007e73f3c79bef26668f5e922d2c",
+      "scripts/replay.py": "61aea13a44976760b41d6f9b278081f721fb21de1bac4c1dca74991ae5b7e8c2",
+      "scripts/run_checkin_evals.py": "2d158cb9fbb9f0a1e40fd9aacde2523dfc26925cf021105d6f9edb037c3da8e7",
+      "scripts/run_evals.py": "3e79629678d4853e80acf6b827b37234a966536a246f4c0713d5b1d85adea58c",
+      "scripts/run_fall_pilot.py": "8d370b2955ede5ffe37b625dca409bf5e4c056e1beab3013449bf61d4b4d859c",
+      "scripts/run_gate_pilot.py": "09f78b7c1edd96675ef62ff7a94c02fa39c579fff42b26b7726c48ba254c0521",
+      "scripts/run_perception.py": "5d5322b1b2896a30cac5ff30578fcd101a2a3b2faaba50e8919c9a4bd3f0530a",
+      "scripts/seed_demo.py": "4b9c91c5af0e71e34c6b0908dc756ccaa691606ca05f1637004f9fc51bf59872",
+      "scripts/serve.py": "a7e3dd09b2e5094f1deb1ebd56f9ed7f93e9d1605d70c0d8d7182323b34c5a7a",
+      "scripts/verify_submission.py": "9cb239ad6c055321e75bc6a054c1f72c7a46eda45ae5bfc1997cba54599fcca1",
+      "scripts/worker.py": "34da06c9ff57feaa8c15d22384439086c720cdffc453e365958a2d749e193f0d",
+      "tests/conftest.py": "a00bd8dd20ab96f8d4c2458b1952d922f163f00ed969611602f9c1bf46178307",
+      "tests/test_activity_consistency.py": "81aea481aec29af5e00c654c6acffc5116bf13a8740c89efd84dd1bff2b468ae",
+      "tests/test_agent.py": "0a57d091161565cc50edaf72f31d55282dbb5f6a5d4476a421ff67e04939e0fc",
+      "tests/test_audio.py": "744af7eeed5213aba8168a608ea2448eecd983cbe9e9092b8405ffd26395b9c6",
+      "tests/test_auth.py": "8c112011aaa049b03c6e8836daeb03e764ccf9bbad1ed2de45db5049b7024eb8",
+      "tests/test_camera_watchdog.py": "df8081bcf6738fc5c74fb4108535fef4b92fa1952bf4a0fdc8757756fefed300",
+      "tests/test_checkin_state.py": "5c1b70a6eeff7a56c5fd343720a73d674cedfa2841966bd1d0b0d91c3170d43b",
+      "tests/test_checkin_text.py": "905bf796538e3f5a944dcc799ecb02e8ed67ba36a1905f6e870aef028a7927b6",
+      "tests/test_edge_recovery.py": "5e8efa3c69712a6b40e4a914285ef6b2fab43e69aab4e9879f796e352e49d228",
+      "tests/test_escalation.py": "6a104ea63ffcf00862e66aa35f10b613e06cd074f7ea11ef5ba5661cfeeaabbf",
+      "tests/test_fixtures_current.py": "c0fe8e9b5c17c47a9d339fc547a30c274ede85f3ca8ab2cab0d2cf934acf933b",
+      "tests/test_inspection.py": "d24c6527cb60665ca3a0bb7781a5e10f68a9fedad06f3164da4f08c9af68e7a9",
+      "tests/test_lease.py": "7babc8d4150e588d468fb8aebec9077b24230976a96513b07943d33365777046",
+      "tests/test_motion_review.py": "fed0e81a979f56df10c73956822bb3579db42639b425f18e9ba72c0b46ebc7f5",
+      "tests/test_night.py": "e5949bd283845430e7009287c49ff969077ec4e4090ed592cac3227a91cb9a41",
+      "tests/test_notify.py": "49ee45051a1219f538a729432880028bfcf3aa0af848a34d48024df5571cd856",
+      "tests/test_perf_guard.py": "071ee710605e142b17c62b84ed4871c1b75d90cd921b8d39c81bee0c1f50537d",
+      "tests/test_policy.py": "33a65350d3fafd2e14cfa0a85ea4159ab36b33e90a9e4d5889d0fad450861b32",
+      "tests/test_pose_alignment.py": "8860027459e29c6d295b389f83a63102139424d0c773efbb6608d7e3e8f7a0ab",
+      "tests/test_push_unsubscribe.py": "636aeae57e9a558e09af100da900f7e698792d7488fe969b9f8e8567c4d12d8b",
+      "tests/test_render.py": "00d6b457874d930d20365eb8d0d97bdc1d199a26264509f184abd50f0923361f",
+      "tests/test_resident_gate.py": "1b7ea367046376ba1f04b10b6c9796b6f5c749fc362b8a7af7de86794e98fa5a",
+      "tests/test_resident_link.py": "10addd9136d0fcab59783f827383e286ab5ae608bd0ed665ed86bc2ae1dd4b8f",
+      "tests/test_restlessness.py": "c7bd10dee9b0f9c3bf85bc2942b49d11dd09db3862b5a3b930f171ecfcfa6037",
+      "tests/test_sam_masks.py": "635d9f78d9418e7dd1a6ea51d559396b3806b073f9b0b6accf5ae521d8b37577",
+      "tests/test_scene.py": "1c67e7499e358ccd350110a9a861f2b1e564dca4239fdb5169f6f657dee28c4e",
+      "tests/test_security_gates.py": "578ff77dd061fc0b783ff392a7fcf5874c213c4b1177e8296a78c8e709d62f9c",
+      "tests/test_security_headers.py": "5a565959d890d64acaab5856087fdab7a0084b17b5a6b43249ca10bbe23b26e0",
+      "tests/test_session_gate.py": "ba71ca88bd86293fe5ee41a7756548da042f3e762d0089cfc069b7e7822ba87f",
+      "tests/test_severity.py": "06371237d492691c5fc52544d06b76d771315ae7ba9a969adc0097b80878d48a",
+      "tests/test_tracking_pipeline.py": "acc62ede8f99e71571b13b0acd067dc36b23c3b359a81ce02a8230a34f3fceae",
+      "tests/test_upload_signatures.py": "2222fef471177c98d993957079e6f7b3641b9bc69468f5e5a355dccbf99c7e9d",
+      "tests/test_verification_lifecycle.py": "2cae8ad793c4e740d1e8cd1ee650005a474f8b9341c69a69dd5bcdbfaf1e0df3",
+      "tests/test_wall.py": "728c6e524adf8553d84ac30d7b37e444079b4326ff09489cefa231f3c18e9d25",
+      "tests/test_wall_route.py": "1b4a6ddab5fbc1eee12ad9c8527d7cfe7995759a60e535a790f3ff9a68c69fa1",
+      "tests/test_watch.py": "51999df3cd6b3319d47b79eff05be6c535170bcb8723aee057c69f07d414d8c3",
+      "tests/test_zones.py": "69a599938157954146fbcc306431fbe63092a3c41972d78cd998e2b137c99a82",
+      "requirements.txt": "8ecfdd4a9887cb603fd8a6ebd71611e49f02de519d2bbc3276e197aed2b1055c",
+      "pytest.ini": "3e2e1ef3678452eeb6f1bb74db0b218796ef65164526ee83cfe40e775f688b29",
+      "evals/fixtures/01_night_door_dementia.json": "500d37828b249cd0332f38a079db5dce261331488d1038b66b3ab35f9102faa6",
+      "evals/fixtures/02_night_door_no_flag.json": "3deff2c898807b715c4365b0151adc67c7182b4ab656bf5f0ec31f030969f340",
+      "evals/fixtures/03_daytime_door_no_flag.json": "67071525f1d28f0d9035e7e35e9148954d9f02a380306f6ef351005bd81b8398",
+      "evals/fixtures/04_fall_no_recovery.json": "fdd9d8ca3e530230c075d6aaa9858fb161b132046e30388634a5e946204d1d72",
+      "evals/fixtures/05_fall_recovered.json": "7a3149fa2b153caccc8d2a9edab5166fa84457baff6b24be76c64ff18a0d7ded",
+      "evals/fixtures/06_fall_second_person.json": "312f0634b1c61bd36af960efea24276f7cd083051ebd5c572da82e7cbb7b3def",
+      "evals/fixtures/07_prayer_zone_sujud.json": "32c05398013d45dc67ee95f8dc2e7d3fb9148adf436766843c6fbd57410e8b5d",
+      "evals/fixtures/08_stove_6min.json": "f48ad5fa9426af0e23693835e5b09af24bd42cb061552acb8d73e3cf568b28c2",
+      "evals/fixtures/09_stove_12min_smoke.json": "dc7ae42be094082ed9ee7be2407dc733608594236075f74125406e1c832b4274",
+      "evals/fixtures/10_camera_offline.json": "0d29f5592ca2ad98f7a3ff942339013e21a4f5fd44b4bea603fc67f8be875bd1",
+      "evals/fixtures/11_two_at_door_caregiver.json": "747e2d354bc88bde05badfebb091f2f05b88d1694fedec686c888dc0c5a0ef1c",
+      "evals/fixtures/12_track_unavailable_door.json": "d34f07a3a31fc8182ca961fad5777292198ac25615cefc42489bfcf09e6d0848",
+      "evals/fixtures/13_conflicting_signals.json": "94b175ee2530163b546435bcaa0594a5bdb08eb62d91a18cbd18859e80a5b4dc",
+      "evals/fixtures/14_prompt_injection.json": "13b61058ac8db6453ac764978e9c4ede0032ba694391de2244517fc927c6041e",
+      "evals/fixtures/15_missing_profile.json": "bc3e711471ba97d4e8511e21d8168e32796b1e7e18206ed5edabd50820b417fd",
+      "evals/fixtures/16_device_offline.json": "196945499fefc3036ed902b0a6a467e71a75a7835f955d43a82f6d7ac5d63768",
+      "evals/fixtures/17_false_alarm_history.json": "2ecd9f9c18fa965364cc362fec9c41770e7a38a309303490e21a39e6862970a5",
+      "evals/fixtures/18_quiet_hours_watch.json": "65d021f33aeef874f7534d34ca105a2ac88b14eef63e8a1e0a32c3cfe362895e",
+      "evals/fixtures/19_body_near_limit.json": "eff91569e02715e69698d7ef3d21a19a6b65a2e9ea34ee072464c3142fc191f4",
+      "evals/fixtures/20_non_english_name.json": "7cc5cda246e9fb1a2cf841349dd4ebccde921eaa91e32e50ff0b31169b8a95d4",
+      "evals/fixtures/21_mobility_aid_night_door.json": "0aa23fe1506b7b1f261dbf47c2b565227442ac3a2c512b06eb58c19b8896ad80",
+      "evals/fixtures/22_anticoagulant_fall.json": "1dc9b7940e9648711994877bef39dfa8f36e09d373b15ff30e0787c0c518b6f9",
+      "evals/fixtures/23_door_left_open.json": "8262c17c19432f81e554c28b748c80db6f105f83071e39d1f2072b9d0b9493cd",
+      "evals/fixtures/24_pet_motion.json": "b3452e41b10e83300bed985c3ee53d40de3ae15452fed7426b678e6cc2f9b425",
+      "evals/fixtures/25_still_30min.json": "9f32f519da94d489c56f8ab31bcb9d7d9f4730513dade3259b373ec4dd6213cb",
+      "evals/fixtures/26_two_cameras_disagree.json": "bee059e06a746be3883f9b7e13afdd0d56b5539046027c5358499b9030382218",
+      "evals/fixtures/27_sam_zero_matches.json": "7800a9c94c50abd35d8328f29c58822f837dea0ed6a273224e9a2d3209644016",
+      "evals/fixtures/28_api_timeout_degraded.json": "f0d540ac3c432e0069c24734a360c0d3523e774cc0a6b1b41ea9a11d4caec41a",
+      "evals/fixtures/29_door_approach_gentle.json": "b05070351b7552305fb77d0156e02e84253c3f5f10a90e3476207afa11dd3b7b",
+      "evals/fixtures/30_caregiver_present_fall.json": "f06663e978e8bdf83dd06380528c8730c458189c6eefaa1b5fb0a9ef461f0765"
+    },
+    "python": "3.13.3",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "virtual_environment": true,
+    "packages": {
+      "Jinja2": "3.1.6",
+      "MarkupSafe": "3.0.4",
+      "PyYAML": "6.0.3",
+      "aiohappyeyeballs": "2.7.1",
+      "aiohttp": "3.14.5",
+      "aiosignal": "1.4.0",
+      "annotated-doc": "0.0.5",
+      "annotated-types": "0.8.0",
+      "anyio": "4.16.0",
+      "attrs": "26.1.0",
+      "certifi": "2026.10.23",
+      "cffi": "2.1.1",
+      "charset-normalizer": "3.5.2",
+      "click": "8.5.0",
+      "colorama": "0.4.6",
+      "contourpy": "1.4.0",
+      "cryptography": "50.0.2",
+      "cycler": "0.12.1",
+      "fastapi": "0.162.0",
+      "filelock": "4.2.8",
+      "fonttools": "4.68.0",
+      "frozenlist": "1.8.0",
+      "fsspec": "2026.9.0",
+      "h11": "0.16.0",
+      "http_ece": "1.2.1",
+      "httpcore": "1.0.9",
+      "httptools": "0.9.0",
+      "httpx": "0.28.1",
+      "idna": "3.20",
+      "iniconfig": "2.3.1",
+      "kiwisolver": "1.5.1",
+      "matplotlib": "3.11.2",
+      "meta-sam-parser": "0.1.0",
+      "mpmath": "1.3.0",
+      "multidict": "7.2.1",
+      "networkx": "3.7",
+      "numpy": "2.5.4",
+      "nvidia-ml-py": "13.615.71",
+      "opencv-python": "5.0.0.93",
+      "opentelemetry-api": "1.45.2",
+      "packaging": "26.3",
+      "pillow": "13.0.0",
+      "pip": "25.0.1",
+      "pluggy": "1.7.0",
+      "polars": "2.1.0",
+      "polars-runtime-32": "2.1.0",
+      "propcache": "0.5.4",
+      "psutil": "7.2.2",
+      "py-vapid": "1.9.6",
+      "pycparser": "3.12",
+      "pydantic": "2.14.2",
+      "pydantic_core": "2.50.2",
+      "pyparsing": "3.3.3",
+      "pytest": "8.3.5",
+      "pytest-asyncio": "0.24.0",
+      "python-dateutil": "4.0.0",
+      "python-dotenv": "1.2.4",
+      "python-multipart": "0.0.33",
+      "pywebpush": "2.5.0",
+      "requests": "2.34.2",
+      "setuptools": "84.2.1",
+      "sounddevice": "0.5.6",
+      "starlette": "1.10.0",
+      "sympy": "1.14.0",
+      "torch": "2.15.0+cpu",
+      "torchvision": "0.29.2+cpu",
+      "typing-inspection": "0.4.5",
+      "typing_extensions": "4.16.0",
+      "tzdata": "2026.6",
+      "ultralytics": "8.4.202",
+      "ultralytics-platform": "0.1.102",
+      "ultralytics-thop": "2.2.5",
+      "urllib3": "2.8.0",
+      "uvicorn": "0.54.0",
+      "watchfiles": "1.3.0",
+      "websockets": "17.4",
+      "yarl": "1.25.1"
+    }
+  },
+  "script_sha256": "40c399fd7de14a7ddcb948ea4a4bf7813c1a122131c1efad7a04136168fa3e8c",
+  "sample_fps": 4,
+  "scope": "Local candidates, not verified falls or family notifications. Reels duplicate originals.",
+  "corpus_manifest_sha256": "7d2c4bc6ac1ad1c86445de3a00f8d8aa894e686603787b33d5a6adf3e7a6a5b6",
+  "expected_cases": 120,
+  "complete": true,
+  "cases": [
+    {
+      "path": "data/footage/urfd/fall-01.mp4",
+      "source_sha256": "eb7184265b66c95f2998eb526ece3c83667bfc747bcef805af8e0621c7913849",
+      "duration": 5.333333333333333,
+      "samples": 22,
+      "baseline": [],
+      "fixed": [
+        4.5
+      ]
+    },
+    {
+      "path": "data/footage/urfd/fall-02.mp4",
+      "source_sha256": "aaba2c0b7e540c404f0d2da545df342be52de08966d9a7bd136417270b5ef8aa",
+      "duration": 3.6666666666666665,
+      "samples": 15,
+      "baseline": [],
+      "fixed": [
+        2.0
+      ]
+    },
+    {
+      "path": "data/footage/urfd/fall-03.mp4",
+      "source_sha256": "c033783409b0ca60ac686352e45b4d7fa1467a2402662b19a0e13c55c20e6a65",
+      "duration": 7.166666666666667,
+      "samples": 29,
+      "baseline": [],
+      "fixed": [
+        3.25
+      ]
+    },
+    {
+      "path": "data/footage/urfd/fall-04.mp4",
+      "source_sha256": "ed29339120f253ec2031345187d1d8eded3d6a959242e3d0d6cc1b53b90cc905",
+      "duration": 3.2,
+      "samples": 13,
+      "baseline": [],
+      "fixed": [
+        1.5
+      ]
+    },
+    {
+      "path": "data/footage/urfd/fall-05.mp4",
+      "source_sha256": "0b02b8390845ee454f01b10b6829b4e1b338bfb306266a62fea484468c12992a",
+      "duration": 5.033333333333333,
+      "samples": 21,
+      "baseline": [],
+      "fixed": [
+        4.5
+      ]
+    },
+    {
+      "path": "data/footage/urfd/fall-06.mp4",
+      "source_sha256": "6a6e0b741061672b20a1fe0c2a430204bca3c86b4c57a161e24df6e2c4c4f566",
+      "duration": 3.3333333333333335,
+      "samples": 14,
+      "baseline": [],
+      "fixed": [
+        2.0
+      ]
+    },
+    {
+      "path": "data/reels/urfd_fall-01.mp4",
+      "source_sha256": "cfd4e008abe7b20014ca73e351bf23203ca424a3c18f546792cdc2f2ecf74e87",
+      "duration": 5.333333333333333,
+      "samples": 22,
+      "baseline": [],
+      "fixed": [
+        4.75
+      ]
+    },
+    {
+      "path": "data/reels/urfd_fall-02.mp4",
+      "source_sha256": "98e570a8d5d38b5b765fce90cbf7badb5999b983e3c6f9e83024602fcce55ecb",
+      "duration": 3.6,
+      "samples": 15,
+      "baseline": [
+        2.0
+      ],
+      "fixed": [
+        1.5
+      ]
+    },
+    {
+      "path": "data/reels/urfd_fall-03.mp4",
+      "source_sha256": "da31431286fec6cb9ac5738386a914cb3c4871204a8368405ff853f279f437cb",
+      "duration": 7.2,
+      "samples": 29,
+      "baseline": [
+        2.75
+      ],
+      "fixed": [
+        2.75
+      ]
+    },
+    {
+      "path": "data/reels/urfd_fall-04.mp4",
+      "source_sha256": "112f4f8e0692a9c407fb61f58928f50eb9fd222ba166d14aeba8989602625dda",
+      "duration": 3.2,
+      "samples": 13,
+      "baseline": [
+        1.0
+      ],
+      "fixed": [
+        1.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-01.mp4",
+      "source_sha256": "700b8e5e81952f83d62ec0016555d2f8a3d38a9d62ebd1e6c907e12b14aa8d20",
+      "duration": 11.393666666666666,
+      "samples": 46,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-02.mp4",
+      "source_sha256": "3f989365e56fe66b8664b12d2134e50c9f604d49f822a2c70b71fbe09edc2056",
+      "duration": 11.7934,
+      "samples": 48,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-03.mp4",
+      "source_sha256": "df03bbbb1cb6c2fb7a91c61671e1722f1514a584bd226f7fa38b7f26767cd930",
+      "duration": 11.937333333333333,
+      "samples": 48,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-04.mp4",
+      "source_sha256": "af4e5edb1e1d7240522e92863240b9b84a076afd071bab622c37ff86685be52a",
+      "duration": 7.8415333333333335,
+      "samples": 32,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-05.mp4",
+      "source_sha256": "b0dc3773042a1ae0f9c131e25a9463be25e566be58813d06c425294e605f0be8",
+      "duration": 10.817533333333333,
+      "samples": 44,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-06.mp4",
+      "source_sha256": "578943abf6c5a86aaf942c8d64946d8f1a87535e49a1574ac63a03e4853862f2",
+      "duration": 10.753400000000001,
+      "samples": 43,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-07.mp4",
+      "source_sha256": "75d01033fa0e56d2ad6ee06a59b583d920b3167c8e7aabee6098ff550019a316",
+      "duration": 12.9934,
+      "samples": 52,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-08.mp4",
+      "source_sha256": "ef58c25c6d49708af13033c18623abc977215f2866ca8afcd42e6fd2f73679d8",
+      "duration": 13.6656,
+      "samples": 55,
+      "baseline": [],
+      "fixed": [
+        2.75,
+        7.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-09.mp4",
+      "source_sha256": "1df8fb1ff892699b0382b60a55fcf4dbd497892082b8ec7edaf6eb44fab07d6b",
+      "duration": 10.960466666666667,
+      "samples": 44,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-10.mp4",
+      "source_sha256": "120c9fa62a1dcf39388c776485635bd556b47ea3bcc71e7fc900b9bdd0b00aca",
+      "duration": 7.568033333333333,
+      "samples": 31,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-11.mp4",
+      "source_sha256": "85e226a74c71553cf5f71eede28d1348d37764fcbf2baa0436f157c68652c970",
+      "duration": 9.9853,
+      "samples": 40,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-12.mp4",
+      "source_sha256": "24559694cceadbcf1bb34f217967c233e412b97e25f9dd9be3f733f4e16067df",
+      "duration": 7.601533333333333,
+      "samples": 31,
+      "baseline": [
+        5.0
+      ],
+      "fixed": [
+        5.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-13.mp4",
+      "source_sha256": "d231d21a135524718e384bd6a148e4f6f3ad7dbe3e4ced1dbb8f0cdd548e979d",
+      "duration": 4.8483,
+      "samples": 20,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-14.mp4",
+      "source_sha256": "5cf456ef4e1efb3aa3e0e7a8aa3e58a5d58a87f4fc73f6b832276839af65e358",
+      "duration": 11.057566666666666,
+      "samples": 45,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-15.mp4",
+      "source_sha256": "0591cd980d8f4c0e82bd9712873ea126ac64614b733a1d1b05d64483b54c25ef",
+      "duration": 11.9214,
+      "samples": 48,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-adl-16.mp4",
+      "source_sha256": "35a994e3139f1be2ec1dec4d835a404d1b1133d3a02dfb49d20f6d5dfe163305",
+      "duration": 11.537466666666667,
+      "samples": 47,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-01.mp4",
+      "source_sha256": "0448c122dbfdffc423cc6e282cb54f60d801fc1c741de9aafca3f051db7c1abb",
+      "duration": 6.3681,
+      "samples": 26,
+      "baseline": [
+        2.75
+      ],
+      "fixed": [
+        2.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-02.mp4",
+      "source_sha256": "a8825d89c0955f6817c74438f4900b022988a43aca7b99ccab34c086fc14b429",
+      "duration": 8.447899999999999,
+      "samples": 34,
+      "baseline": [
+        6.75
+      ],
+      "fixed": [
+        6.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-03.mp4",
+      "source_sha256": "c73bb07da0e58e21153f19ec13cd8edd403736f529066ddbdff3d90be32f8fd9",
+      "duration": 7.041566666666667,
+      "samples": 29,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-04.mp4",
+      "source_sha256": "f249125e2c270bcdc71b09c34dfa4d398ae027fd00e9304bc6f41d1e5cd2663b",
+      "duration": 10.209633333333333,
+      "samples": 41,
+      "baseline": [
+        6.0
+      ],
+      "fixed": [
+        6.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-05.mp4",
+      "source_sha256": "0642f50a3c83bbc9bb7028d142caee036a6cc0b9a5b42b2b2bf8ebe3098290d3",
+      "duration": 4.528133333333334,
+      "samples": 19,
+      "baseline": [
+        2.75
+      ],
+      "fixed": [
+        2.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-06.mp4",
+      "source_sha256": "96d7b3948ba6ab7cf5cff2ee6623d277e8c7ed24cc4fa37b591cbc00aba264d5",
+      "duration": 6.496066666666667,
+      "samples": 26,
+      "baseline": [
+        4.0
+      ],
+      "fixed": [
+        4.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-07.mp4",
+      "source_sha256": "a41af24b14a91697f78824c40ee7a4d83e8a2d9b91ebdc4808656462afae847d",
+      "duration": 4.528066666666667,
+      "samples": 19,
+      "baseline": [
+        2.75
+      ],
+      "fixed": [
+        2.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-08.mp4",
+      "source_sha256": "29dc2c60ff92bbe3c3cad75590a4146d094aca6a6ec2d813b18061afe857deb2",
+      "duration": 6.064333333333333,
+      "samples": 25,
+      "baseline": [
+        4.0
+      ],
+      "fixed": [
+        4.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-09.mp4",
+      "source_sha256": "e31a4a6e9cbb4682bfa61e890aa3f2c7129f3ef29eeb2855165f67f83ccf61cc",
+      "duration": 5.6001666666666665,
+      "samples": 23,
+      "baseline": [
+        3.5
+      ],
+      "fixed": [
+        3.25
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-10.mp4",
+      "source_sha256": "c6821089a5b26053216925ce9c83bb94cb50ed5affd0d31a5ce742aa79318f73",
+      "duration": 11.137500000000001,
+      "samples": 45,
+      "baseline": [
+        8.5
+      ],
+      "fixed": [
+        8.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-11.mp4",
+      "source_sha256": "ed166a2dd711c893c14ebd0c6b38213684317783df9b2dc42489bb1c5dc266ca",
+      "duration": 10.593333333333332,
+      "samples": 43,
+      "baseline": [
+        7.75
+      ],
+      "fixed": [
+        7.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-12.mp4",
+      "source_sha256": "627ad7248c4d9549addf5b0e1ca3fe75b2ffd62cb460151daf9214c005ae0381",
+      "duration": 12.2574,
+      "samples": 50,
+      "baseline": [
+        8.5
+      ],
+      "fixed": [
+        8.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-13.mp4",
+      "source_sha256": "1d98ea500dd2d74e281d4e60f23d882d122dad868d7a8db5113b24c01c99ef7e",
+      "duration": 8.896,
+      "samples": 36,
+      "baseline": [
+        4.25
+      ],
+      "fixed": [
+        4.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-14.mp4",
+      "source_sha256": "8302abcc99e491cff4e413b6bd41a901d14a67cea47a453cf24f0a3345c9fda2",
+      "duration": 11.201433333333332,
+      "samples": 45,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-15.mp4",
+      "source_sha256": "4f288257071fb98f363a771c40a24a0088100c4b9b15b770d95b4a0ef599fa63",
+      "duration": 11.6653,
+      "samples": 47,
+      "baseline": [],
+      "fixed": [
+        9.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-16.mp4",
+      "source_sha256": "4e19ffd1a9e975c21fd22a31b4a26ed773e3647b296f41af5bf801c22ecb3a69",
+      "duration": 4.0174666666666665,
+      "samples": 17,
+      "baseline": [
+        2.0
+      ],
+      "fixed": [
+        2.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-17.mp4",
+      "source_sha256": "6dac7d85d2cca8c4ca334b416fbe1e52c059ae71769a5aa72c0671beb58c45fa",
+      "duration": 6.497366666666666,
+      "samples": 26,
+      "baseline": [
+        3.5
+      ],
+      "fixed": [
+        3.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-18.mp4",
+      "source_sha256": "d054cb5088994ed1da5f66781a34a9a55a225271960eba43016c4d927dc437bc",
+      "duration": 11.553533333333332,
+      "samples": 47,
+      "baseline": [
+        11.25
+      ],
+      "fixed": [
+        11.25
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-19.mp4",
+      "source_sha256": "92b7789b30b1cd1381263a582f5292296060d5929b45dee2396271b8711d2b3e",
+      "duration": 15.521299999999998,
+      "samples": 63,
+      "baseline": [
+        9.0
+      ],
+      "fixed": [
+        9.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-20.mp4",
+      "source_sha256": "2c50d5e3b8dc82baf8246bab4b86273fb93375ceea287f1d334a7bc56342fa36",
+      "duration": 11.457633333333334,
+      "samples": 46,
+      "baseline": [
+        9.25
+      ],
+      "fixed": [
+        9.25
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-21.mp4",
+      "source_sha256": "e71633817f5f578b928496f6247262b431a1e68ac8bad423f03362f46071cb0b",
+      "duration": 9.489700000000001,
+      "samples": 38,
+      "baseline": [
+        7.5
+      ],
+      "fixed": [
+        7.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-22.mp4",
+      "source_sha256": "e59c664c3d2411413611626156367dd28d55e6b5e89e2b839ba248176fa39f40",
+      "duration": 5.201333333333333,
+      "samples": 21,
+      "baseline": [
+        2.5
+      ],
+      "fixed": [
+        2.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-23.mp4",
+      "source_sha256": "7c9d0973f9a1561e93ec4c8b29208a9884a0dd09033ddb412fbac56d0ed409d1",
+      "duration": 7.537833333333333,
+      "samples": 31,
+      "baseline": [
+        4.75
+      ],
+      "fixed": [
+        4.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-24.mp4",
+      "source_sha256": "23a5d10a0186988424efae79e133f380d71974b5b057491a954f932a4f46d6bd",
+      "duration": 7.137300000000001,
+      "samples": 29,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub2-fall-25.mp4",
+      "source_sha256": "fafe0e19c418fd99bc56df0e590547dbb11059be2532fe698021b70d4870bb29",
+      "duration": 7.2979,
+      "samples": 30,
+      "baseline": [
+        4.5
+      ],
+      "fixed": [
+        4.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-01.mp4",
+      "source_sha256": "17c8df7c792a8b48707003971c9b2a44dd2a75a227b8060570600a263baf7c85",
+      "duration": 8.7535,
+      "samples": 35,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-02.mp4",
+      "source_sha256": "ccfd632e5b6422672be2f068f13394b9b120eb861cec9d06ba8b85d84e26e10d",
+      "duration": 9.137533333333332,
+      "samples": 37,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-03.mp4",
+      "source_sha256": "f587753621be201cf3a4f00521d99e7869471de47df3d73ec2270efb4bdd0d76",
+      "duration": 9.921766666666667,
+      "samples": 40,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-04.mp4",
+      "source_sha256": "6fa12e415b47769e2a27e99a0efcb57393bb01cc88c58da3ad752aeda0a09ed3",
+      "duration": 10.0495,
+      "samples": 41,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-05.mp4",
+      "source_sha256": "8353ad735c66f1806a77dce2e235e481414023b2dd37a60c6f395f99fca5ac0b",
+      "duration": 5.1693,
+      "samples": 21,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-06.mp4",
+      "source_sha256": "1953d8a5305e7d8da22ac3dd2f6ca1128c63f3671aaf71761d9dbf9e4f82b971",
+      "duration": 8.9454,
+      "samples": 36,
+      "baseline": [],
+      "fixed": [
+        4.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-07.mp4",
+      "source_sha256": "aefbdc248f169ec30bdfb0e81a39fec11b63e315fea6e5be2057615ffecb2c2f",
+      "duration": 3.3455,
+      "samples": 14,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-08.mp4",
+      "source_sha256": "b383bb83a22b286cfc65fdd934137ee8b29e84aef7be0b540271d7c69d10fa8b",
+      "duration": 4.896166666666667,
+      "samples": 20,
+      "baseline": [
+        2.25
+      ],
+      "fixed": [
+        2.25
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-09.mp4",
+      "source_sha256": "5100230c1f7d22a400ca810b9eef7162853cb556484648bf5c9fbf1844df618d",
+      "duration": 7.775966666666666,
+      "samples": 32,
+      "baseline": [
+        1.75
+      ],
+      "fixed": [
+        1.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-10.mp4",
+      "source_sha256": "145f29516fa6c06ecec6f47d024b86898e930fe95286d136a607084d90b64a1d",
+      "duration": 12.433566666666666,
+      "samples": 50,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-11.mp4",
+      "source_sha256": "051da841f946496acf7192f32a363109c5a69a3532d31cf82464e72a2f558345",
+      "duration": 12.0815,
+      "samples": 49,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-12.mp4",
+      "source_sha256": "1ac3eb88b6993bb5bad420c69633e83dab3bf79604d03955b7d1343501ffc47c",
+      "duration": 10.673333333333334,
+      "samples": 43,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-13.mp4",
+      "source_sha256": "cc8847e582cc3644e745628bf14c66ca11efb235c5a3aef9d5a11355b4cdca9b",
+      "duration": 8.6415,
+      "samples": 35,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-14.mp4",
+      "source_sha256": "4f8d1eb75dc0286a6b99687e25b9adb00f847c9c5b2480d64850dd865b6f2e29",
+      "duration": 8.865633333333333,
+      "samples": 36,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-15.mp4",
+      "source_sha256": "b3fb82289131f8d363fb731f05576c9138c9425d2f18412cbd1dc758646506a5",
+      "duration": 7.665233333333333,
+      "samples": 31,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-adl-16.mp4",
+      "source_sha256": "387dbf91bc617efd2fdbeab9de155f2a0522240075077796070e7f37c52ab420",
+      "duration": 10.257266666666666,
+      "samples": 41,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-01.mp4",
+      "source_sha256": "89ed574427ac26e03bc951a43fd98bd9e57cf85d55335fa359b0632050365864",
+      "duration": 3.8095,
+      "samples": 16,
+      "baseline": [],
+      "fixed": [
+        2.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-02.mp4",
+      "source_sha256": "6d9539cbb137c9de305f05d2d4b49dc45217aaae711ee26ca72da58718eeaf38",
+      "duration": 6.5617,
+      "samples": 27,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-03.mp4",
+      "source_sha256": "267abab9b0ca7f4ef8425e2bfb2272ffeae1165fc2e3523ca1a6e0a62046b912",
+      "duration": 5.601633333333334,
+      "samples": 23,
+      "baseline": [
+        3.0
+      ],
+      "fixed": [
+        3.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-04.mp4",
+      "source_sha256": "a90c5a6f8c2c1bb899bf01f20615b896f67492e4267d2483cdbeacd71db62c92",
+      "duration": 5.457533333333333,
+      "samples": 22,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-05.mp4",
+      "source_sha256": "efbb2c6c4721df503426918056b5ed3f233f77b55595b70dce9f9d68c48e650f",
+      "duration": 10.049366666666668,
+      "samples": 41,
+      "baseline": [
+        4.75
+      ],
+      "fixed": [
+        4.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-06.mp4",
+      "source_sha256": "c76b7b74f56b344c11a8cdae0e7f5e01e6ab89af048ba220c1a4687891d15f34",
+      "duration": 5.553633333333334,
+      "samples": 23,
+      "baseline": [
+        1.0
+      ],
+      "fixed": [
+        1.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-07.mp4",
+      "source_sha256": "86a20851a1d3bfacbe11d8977972f95a256893b80cd4de66dc7bb224a4dca55b",
+      "duration": 9.025400000000001,
+      "samples": 37,
+      "baseline": [
+        3.5
+      ],
+      "fixed": [
+        3.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-08.mp4",
+      "source_sha256": "39c2bcd61f24ebf38e05fc00cd680cad60688c5a5ad43f642e2ea5833b83da32",
+      "duration": 6.3373,
+      "samples": 26,
+      "baseline": [
+        1.0
+      ],
+      "fixed": [
+        0.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-09.mp4",
+      "source_sha256": "a3149bb1c897d47f7354e33db312ff6ca8e51bfbd702191c03a7b08ac82143e8",
+      "duration": 6.224233333333333,
+      "samples": 25,
+      "baseline": [
+        5.0
+      ],
+      "fixed": [
+        5.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-10.mp4",
+      "source_sha256": "c757966a85eca4190186ed897c0cab13e6242abf6fe78af925d6eddb8cb5a6df",
+      "duration": 4.385566666666667,
+      "samples": 18,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-11.mp4",
+      "source_sha256": "d6651bf5f65931f583b48d6a3275c0d42b6d0f21a1db70e1c7ec4bdea24ac789",
+      "duration": 8.945500000000001,
+      "samples": 36,
+      "baseline": [
+        6.25
+      ],
+      "fixed": [
+        6.25
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-12.mp4",
+      "source_sha256": "0448a84525101056e14e3ec4b88c596a6c47f2f6aa559bdccefe693c97a8949e",
+      "duration": 4.256166666666666,
+      "samples": 17,
+      "baseline": [
+        3.25
+      ],
+      "fixed": [
+        3.25
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-13.mp4",
+      "source_sha256": "295489f450694ee828a8be2a4d441b4c1c44961c9548205edf67fa992701871b",
+      "duration": 4.048233333333333,
+      "samples": 17,
+      "baseline": [
+        2.25
+      ],
+      "fixed": [
+        2.25
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-14.mp4",
+      "source_sha256": "6bd447b9c5a7aeda59da7fa8c1c070f153559afc7e07b1bdf687f7dfcb3f70bf",
+      "duration": 12.3056,
+      "samples": 50,
+      "baseline": [
+        10.5
+      ],
+      "fixed": [
+        10.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-15.mp4",
+      "source_sha256": "4b94ca9f0c8f3c80ad187e8d3fb3363b69f5c8e17492bbfa3c90f9e57d598f8f",
+      "duration": 5.649633333333334,
+      "samples": 23,
+      "baseline": [
+        5.5
+      ],
+      "fixed": [
+        5.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-16.mp4",
+      "source_sha256": "28c03494de00d7aefc6baa5b976da66ef51962e6157f84e16caffc03279972fa",
+      "duration": 6.0803,
+      "samples": 25,
+      "baseline": [
+        3.0
+      ],
+      "fixed": [
+        3.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-17.mp4",
+      "source_sha256": "de6400042b58e6bd23e5c18bc1d276b91230a806d573368b8f718649d27d4acf",
+      "duration": 8.513366666666666,
+      "samples": 34,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-18.mp4",
+      "source_sha256": "abaced84cd40b09fa0a31dddad8d947247bf3a717878fb423c1cc4de782a6a86",
+      "duration": 11.8736,
+      "samples": 48,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-19.mp4",
+      "source_sha256": "2cb5a9c8e383a5b8646e59c79ca48586d1ff701f2f5addc5969cdb690fc7017e",
+      "duration": 5.713666666666667,
+      "samples": 23,
+      "baseline": [
+        3.75
+      ],
+      "fixed": [
+        3.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-20.mp4",
+      "source_sha256": "a923f3fac2304a8c4e5345b927c89e32569e0f02ab6677f7331a79b22603aaaf",
+      "duration": 6.2414000000000005,
+      "samples": 25,
+      "baseline": [
+        3.0
+      ],
+      "fixed": [
+        3.25
+      ]
+    },
+    {
+      "path": "data/footage/external/gmd-sub3-fall-21.mp4",
+      "source_sha256": "3db7463e737831e8e97971e903664c787044341c8531c3519e30388473bd7abe",
+      "duration": 9.169633333333334,
+      "samples": 37,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-01.mp4",
+      "source_sha256": "781f8a2ec152ba27c2d405b15af5f4a28f453c6e839b61ed3f4f5e2aa9a19aa4",
+      "duration": 8.273533333333333,
+      "samples": 34,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-02.mp4",
+      "source_sha256": "8fe5e2a87c3d72b6f178788909d11a0cebe3f9db17c27ea3b44aa24841038791",
+      "duration": 6.689533333333333,
+      "samples": 27,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-03.mp4",
+      "source_sha256": "ad6360ea3513d0f5222e34810f119b0e471012164ddc94ca234f30cf92715ae6",
+      "duration": 6.689433333333334,
+      "samples": 27,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-04.mp4",
+      "source_sha256": "c336f1f81cfa647a77ae351ef02fa4e1716639d60d599c7ddec98aac2e3b969a",
+      "duration": 5.8092999999999995,
+      "samples": 24,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-05.mp4",
+      "source_sha256": "2b963e9a1be9d1b1c9ae9807f07d8c65b6760f24b0006c7d5538c0e5574e242a",
+      "duration": 10.5456,
+      "samples": 43,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-06.mp4",
+      "source_sha256": "71fb19f5127a0b073e5e1856a092721b04fbc1d651d1f92f1c2c040d7e30581c",
+      "duration": 12.2255,
+      "samples": 49,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-07.mp4",
+      "source_sha256": "6c0ffeb02a74d64e36c6b572e85864f987cecd89a616126ff15ea26b7e41d2fb",
+      "duration": 7.537233333333333,
+      "samples": 31,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-08.mp4",
+      "source_sha256": "b8b4f8846e66c82c7bd5867fe24c6811fb2b31e0dc5a295ac2954b523e903bec",
+      "duration": 6.289433333333333,
+      "samples": 26,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-09.mp4",
+      "source_sha256": "7f1800614831c51d57b50bf7688f602b6be51ebef657fac4844a75720386cea6",
+      "duration": 4.9936,
+      "samples": 20,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-10.mp4",
+      "source_sha256": "16ac74ad3be67e66bb1ee23a86c55a9dcef3f51264a7b546a0dd8f5d2f985e4a",
+      "duration": 3.9212333333333333,
+      "samples": 16,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-11.mp4",
+      "source_sha256": "cb12602e5cd5d3e2ed9b6f9026926bb6609cb06428e07dce916e5527a9b2e5e9",
+      "duration": 9.313533333333334,
+      "samples": 38,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-12.mp4",
+      "source_sha256": "ba4b775bbccd031d588f065dba1812a3befd46f6eccbf1a9f6a130a3c50a6a94",
+      "duration": 7.329533333333333,
+      "samples": 30,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-13.mp4",
+      "source_sha256": "406dd142be0bf973302caabf38f1109d939b5f0154ef88158b3adc5a50859d51",
+      "duration": 6.3056,
+      "samples": 26,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-14.mp4",
+      "source_sha256": "3cc5f533745761a6a87f7b97b075d2c7cc3e21ff31f7317fa9ea2155ccb9f00d",
+      "duration": 5.857666666666667,
+      "samples": 24,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-15.mp4",
+      "source_sha256": "2cf0d421cfd8e34280bf02afc67a4f1d1abee3cd87a23f11e69ef393fedc6fdb",
+      "duration": 7.169233333333334,
+      "samples": 29,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-adl-16.mp4",
+      "source_sha256": "e4e8574c3f9da325757a17f123807ff2ffe31abca4bbbb146a67e5d5f82dad77",
+      "duration": 3.5214000000000003,
+      "samples": 15,
+      "baseline": [],
+      "fixed": []
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-01.mp4",
+      "source_sha256": "9807eb2335544fc18df2438aa4b5a9df6cd01b3d92bc813339dd4fa29306ee6b",
+      "duration": 6.8655333333333335,
+      "samples": 28,
+      "baseline": [
+        4.5
+      ],
+      "fixed": [
+        4.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-02.mp4",
+      "source_sha256": "3baad9ad4ebfaa971bf7e2799fe1519524f68146e93c7819776752d7acd0a7fd",
+      "duration": 6.3694999999999995,
+      "samples": 26,
+      "baseline": [
+        2.5
+      ],
+      "fixed": [
+        2.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-03.mp4",
+      "source_sha256": "b17c5217c0050c959c45f7ead8ce80fa1c459d62109f25ea72461ac729d5307c",
+      "duration": 5.921633333333333,
+      "samples": 24,
+      "baseline": [
+        3.5
+      ],
+      "fixed": [
+        3.25
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-04.mp4",
+      "source_sha256": "a5563045241b462989867ea7973cf08cf5a4684ed43d47e104de1f4964794d5d",
+      "duration": 4.9613,
+      "samples": 20,
+      "baseline": [
+        3.25
+      ],
+      "fixed": [
+        3.25
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-05.mp4",
+      "source_sha256": "1aad4e2ee93b5498283fdc4a0478a5913dffc2ac8e2538574cd821ffb1b485f1",
+      "duration": 5.857633333333333,
+      "samples": 24,
+      "baseline": [
+        2.75
+      ],
+      "fixed": [
+        2.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-06.mp4",
+      "source_sha256": "00f5e6f80632f9ba8cb054755c0a8d40afc66eca705ed14ad5f2c34a6822424f",
+      "duration": 5.697233333333333,
+      "samples": 23,
+      "baseline": [
+        3.75
+      ],
+      "fixed": [
+        3.25
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-07.mp4",
+      "source_sha256": "e584c98e13100befb24fa1854987d8adb50324e0f73dd6278661a8887b428b86",
+      "duration": 5.153499999999999,
+      "samples": 21,
+      "baseline": [
+        2.25
+      ],
+      "fixed": [
+        2.25
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-08.mp4",
+      "source_sha256": "db2f0ead5f8daf17df4b9fbad5ed30debeffd37ec451eb72ec004e1e8972fbb9",
+      "duration": 4.353433333333333,
+      "samples": 18,
+      "baseline": [
+        2.0
+      ],
+      "fixed": [
+        2.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-09.mp4",
+      "source_sha256": "9bae374ba45c8dc7e30e93445d5d8d130479f16708875b39c5994fe0a984923c",
+      "duration": 4.481533333333333,
+      "samples": 18,
+      "baseline": [
+        2.75
+      ],
+      "fixed": [
+        2.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-10.mp4",
+      "source_sha256": "93a5b6e7410bf6638890e3b48c5721955b12db56a31eb225ea0a8ae6f00e5f1b",
+      "duration": 4.4974,
+      "samples": 18,
+      "baseline": [
+        3.0
+      ],
+      "fixed": [
+        2.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-11.mp4",
+      "source_sha256": "c25e4fc9b669cb588b6145d2cfd94f2d403083293c08bc85fa863111372bfea7",
+      "duration": 6.0973999999999995,
+      "samples": 25,
+      "baseline": [
+        2.75
+      ],
+      "fixed": [
+        2.75
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-12.mp4",
+      "source_sha256": "2354ba6441e0fc2173e283ed34cb2a75a08a45b01144882f8db5291cfb113851",
+      "duration": 6.8334,
+      "samples": 28,
+      "baseline": [
+        3.5
+      ],
+      "fixed": [
+        3.5
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-13.mp4",
+      "source_sha256": "955a1e53161fc84b53604815fed71ea872cc18fba0473e4e184c85bf3fe59a67",
+      "duration": 4.3213333333333335,
+      "samples": 18,
+      "baseline": [
+        2.0
+      ],
+      "fixed": [
+        2.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-14.mp4",
+      "source_sha256": "ae112e7e05ca62ed4383f3a426c0616d29557a2df808a3020d0f0d7cd6185c75",
+      "duration": 5.697333333333334,
+      "samples": 23,
+      "baseline": [
+        3.0
+      ],
+      "fixed": [
+        3.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-15.mp4",
+      "source_sha256": "c428eb70c50a1ba819ee074add3b5389f6494273eec8228c697a807fc48445bb",
+      "duration": 6.001566666666666,
+      "samples": 24,
+      "baseline": [
+        2.75
+      ],
+      "fixed": [
+        3.0
+      ]
+    },
+    {
+      "path": "data/footage/external/gmdcsa24-fall-16.mp4",
+      "source_sha256": "ba99029162ed00d1eeb4021320e70b116141a37f1f1150d13304a9d3d78d09a0",
+      "duration": 6.0973,
+      "samples": 25,
+      "baseline": [
+        4.0
+      ],
+      "fixed": [
+        4.0
+      ]
+    }
+  ],
+  "baseline_sha256": "9538edf68d35160f259682f2414b974238959061c25acc0ff63889a905f4276e"
+}

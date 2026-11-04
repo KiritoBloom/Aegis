@@ -23,7 +23,8 @@ export function FeedContext({ frame, steps, logs, error }: {
   const closed = CLOSED.has(matchingAlert?.verification?.status ?? "") || rows.some((step) =>
     ["response", "recovery", "recovered", "rejected", "acknowledged", "stopped", "paused"].includes(step.stage)
     || CLOSED.has(step.metrics.verdict ?? "") || step.metrics.resolution === "self_recovered");
-  const pending = Boolean(eventId && !closed && (rows.length || matchingAlert?.active));
+  const comparison = rows.some((step) => step.metrics.phase?.startsWith("compare_"));
+  const pending = Boolean(eventId && (comparison || !closed && (rows.length || matchingAlert?.active)));
   const [presentedId, setPresentedId] = useState<string | null>(pending ? eventId! : null);
   const [visible, setVisible] = useState(pending);
   const investigationRef = useRef<HTMLDivElement>(null);

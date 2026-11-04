@@ -4,7 +4,7 @@ import json
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT / ".vendor"), str(ROOT / "backend")]
+sys.path[:0] = [str(ROOT / "backend")]
 import cv2
 from app import scene
 

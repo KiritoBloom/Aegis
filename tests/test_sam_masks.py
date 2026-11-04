@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-for path in (ROOT / ".vendor", ROOT / "backend"):
+for path in (ROOT / "backend",):
     entry = str(path)
     if entry not in sys.path:
         sys.path.insert(0, entry)

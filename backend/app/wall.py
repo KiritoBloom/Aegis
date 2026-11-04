@@ -16,10 +16,9 @@ from . import scene
 
 LYING_ALERT_S = 1.0
 LYING_ALERT_SAMPLES = 2
-# A body reported as lying must also look horizontal: its box at least this
-# wide relative to its height. Pose alone calls a seated lean "lying", and that
-# misread on a standing body is the false positive that pages a family.
-LYING_MIN_ASPECT = 0.85
+# Judge physical width / height. The body must be wider than tall; padding or
+# side-by-side camera views must not change that judgment.
+LYING_MIN_ASPECT = 1.0
 # A body that fell toward the camera runs off the bottom of the frame, so its
 # visible box is shorter than the body and reads less horizontal than it is.
 # These bodies are only held to a looser bar. It is a narrow relaxation on
@@ -27,7 +26,7 @@ LYING_MIN_ASPECT = 0.85
 # floor reads "lying" with aspect 0.62-0.70 and a tall box, while a genuinely
 # prone body reads 0.93-1.5 with a flat one. A looser bar here pages a family
 # for someone doing stretches.
-LYING_MIN_ASPECT_TRUNCATED = 0.80
+LYING_MIN_ASPECT_TRUNCATED = 0.95
 POSTURE_GRACE_S = 1.2
 RESOLVE_S = 2.0
 # One local situation, one incident. A person can stay on the floor for
@@ -104,6 +103,25 @@ def decode(data: bytes) -> np.ndarray:
 
 def _area(box: list[float]) -> float:
     return max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
+
+
+def _inverted_body(person: dict) -> bool:
+    """An overhead prone body can run vertically down the image.
+
+    Require both observed legs above the hips and hips above the shoulders.
+    A normal forward bend has feet below the hips and does not qualify.
+    This is evidence for a sustained candidate, never an automatic alert.
+    """
+    kp = person.get("skeleton") or []
+    if len(kp) < 17 or any(kp[i][2] < .65 for i in (5, 6, 11, 12, 13, 14, 15, 16)):
+        return False
+    height = max(1e-6, person["box"][3] - person["box"][1])
+    shoulders = (kp[5][1] + kp[6][1]) / 2
+    hips = (kp[11][1] + kp[12][1]) / 2
+    return (shoulders - hips > height * .12
+            and all(kp[knee][1] < kp[hip][1] - height * .06
+                    and kp[ankle][1] < kp[hip][1] - height * .15
+                    for hip, knee, ankle in ((11, 13, 15), (12, 14, 16))))
 
 
 @dataclass
@@ -574,6 +592,7 @@ class FeedState:
             else:
                 fps = 0.0
             persons = det.get("persons") or []
+            pixel_ratio = det["width"] / max(1, det["height"])
             count = len(persons)
             if count:
                 self.person_samples += 1
@@ -581,18 +600,24 @@ class FeedState:
             self._assign_tracks(persons, now, descriptors)
             self._recall_support(persons, now)
 
-            # Pose is the fallible input here, and it fails in both directions:
-            # it calls a horizontal body "upright" when knees are occluded, and
-            # it calls a standing body "lying" when it reads a seated lean as a
-            # shoulder-to-hip horizontal. The box does not have that ambiguity,
-            # so a "lying" verdict is only believable when the body is at least
-            # roughly as wide as it is tall. Measured on the external ADL
-            # corpus, every pose false positive had a box taller than wide.
+            # Corroborate the initial pose with physical box geometry or a
+            # confidently inverted full body. Once corroborated, keep following
+            # that same lying track as it turns; an overhead body need not stay
+            # horizontal in image coordinates. Losing the track or observing a
+            # different posture ends that continuity.
             def _credible_lying(p: dict) -> bool:
                 box = p.get("box") or [0, 0, 0, 0]
                 height = max(1e-6, box[3] - box[1])
                 width = max(1e-6, box[2] - box[0])
-                aspect = width / height
+                aspect = width / height * pixel_ratio
+                if _inverted_body(p):
+                    return True
+                track = self.tracks.get(int(p.get("track_id") or 0))
+                if (p.get("track_id") == self._lying_track_id
+                        and self._lying_since is not None
+                        and now - self._last_lie <= POSTURE_GRACE_S
+                        and track is not None and track.posture == "lying"):
+                    return True
                 # A body falling toward the camera is cut off by the bottom of
                 # the frame, so the box understates its length and a real fall
                 # looks less horizontal than it is. Judge a truncated box on a
@@ -615,7 +640,9 @@ class FeedState:
                 box = person.get("box") or [0, 0, 0, 0]
                 height = max(1e-6, box[3] - box[1])
                 width = max(1e-6, box[2] - box[0])
-                aspect = width / height
+                # Geometry thresholds were calibrated on 16:9 frames. Compare
+                # physical image proportions, not normalized canvas fractions.
+                aspect = width / height * pixel_ratio / (16 / 9)
                 track = self.tracks.get(int(person.get("track_id") or 0))
                 if track is None:
                     continue

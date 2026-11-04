@@ -15,7 +15,7 @@ export TMPDIR="$PWD/.tmp"
 export TEMP="$PWD/.tmp"
 export TMP="$PWD/.tmp"
 export PIP_CACHE_DIR="$PWD/.pip-cache"
-export PYTHONPATH="$PWD/.vendor:$PWD/backend:$PWD/edge"
+export PYTHONPATH="$PWD/backend:$PWD/edge"
 
 # --- secrets ----------------------------------------------------------------
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
@@ -50,7 +50,7 @@ Aegis
   ./scripts/run.sh edge [clip] [--rt]   edge over a clip (default data/reels/hallway.mp4)
   ./scripts/run.sh probe [name]         API smoke tests: models|text|schema|vision|sam|asr
 
-First run downloads yolov8n weights into the repo and takes ~30s.
+Setup: python -m pip install -r requirements.txt && python scripts/fetch_weights.py
 EOF
     ;;
 esac

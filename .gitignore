@@ -47,3 +47,4 @@ Thumbs.db
 *.onnx
 .pytest_cache/
 .qoder/
+.playwright-mcp/
